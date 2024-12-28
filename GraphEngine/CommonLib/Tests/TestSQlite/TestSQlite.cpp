@@ -2,7 +2,9 @@
 //
 
 #include <iostream>
+#include <malloc.h>
 #include "../../CommonLib.h"
+
 #include "../../sqlitelib/Database.h"
 #include "../../crypto/EmptyDataCipher.h"
 #include "../../str/str.h"

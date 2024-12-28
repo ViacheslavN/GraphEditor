@@ -1,4 +1,4 @@
-# Install script for directory: F:/work/Project/Monitoring/loadingmonitor/systemmonitor/CommonLib/Tests/TestStr
+# Install script for directory: F:/work/MyProject/GraphEditor/GraphEngine/CommonLib/Tests/TestStr
 
 # Set the install prefix
 if(NOT DEFINED CMAKE_INSTALL_PREFIX)

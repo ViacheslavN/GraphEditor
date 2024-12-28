@@ -1,7 +1,7 @@
 #pragma once
 
 #include <memory>
-#include "CommonLib.h"
+#include "../CommonLib.h"
 
 #ifdef WIN32
 	#include "WinThread.h"

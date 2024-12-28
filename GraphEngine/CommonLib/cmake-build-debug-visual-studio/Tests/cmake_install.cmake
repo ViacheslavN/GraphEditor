@@ -1,4 +1,4 @@
-# Install script for directory: F:/work/Project/Monitoring/loadingmonitor/systemmonitor/CommonLib/Tests
+# Install script for directory: F:/work/MyProject/GraphEditor/GraphEngine/CommonLib/Tests
 
 # Set the install prefix
 if(NOT DEFINED CMAKE_INSTALL_PREFIX)
@@ -34,16 +34,11 @@ endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for the subdirectory.
-  include("F:/work/Project/Monitoring/loadingmonitor/systemmonitor/CommonLib/cmake-build-debug-visual-studio/Tests/TestCrypto/cmake_install.cmake")
+  include("F:/work/MyProject/GraphEditor/GraphEngine/CommonLib/cmake-build-debug-visual-studio/Tests/TestCrypto/cmake_install.cmake")
 endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for the subdirectory.
-  include("F:/work/Project/Monitoring/loadingmonitor/systemmonitor/CommonLib/cmake-build-debug-visual-studio/Tests/TestSQlite/cmake_install.cmake")
-endif()
-
-if(NOT CMAKE_INSTALL_LOCAL_ONLY)
-  # Include the install script for the subdirectory.
-  include("F:/work/Project/Monitoring/loadingmonitor/systemmonitor/CommonLib/cmake-build-debug-visual-studio/Tests/TestStr/cmake_install.cmake")
+  include("F:/work/MyProject/GraphEditor/GraphEngine/CommonLib/cmake-build-debug-visual-studio/Tests/TestStr/cmake_install.cmake")
 endif()
 

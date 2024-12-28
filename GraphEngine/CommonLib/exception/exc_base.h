@@ -1,8 +1,8 @@
 #pragma once
 #include <exception>
-#include "synch/thread.h"
-#include "str/StringEncoding.h"
-#include "str/str.h"
+#include "../synch/thread.h"
+#include "../str/StringEncoding.h"
+#include "../str/str.h"
 
 namespace CommonLib
 {

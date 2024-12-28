@@ -4,6 +4,7 @@ project(graphengine)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_VERBOSE_MAKEFILE ON)
 set(VCPKG_INSTALL_OPTIONS "--allow-unsupported")
+add_compile_definitions(SQLITE_WITHOUT_MSIZE)
 
 macro(set_static_cxx_flags)
     string(REPLACE "/MD" "/MT" CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE}")
