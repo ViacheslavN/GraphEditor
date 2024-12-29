@@ -287,6 +287,15 @@ set(COMMON_SOURCE_FILES
 		Serialize/SerializeXML.h
 		Serialize/SerializeXML.cpp
 		data/PodVector.h
+		SpatialData/GeoShape.h
+		SpatialData/GeoShape.cpp
+		SpatialData/IGeoShape.h
+		SpatialData/IGeoShape.cpp
+		data/blob.h
+		data/blob.cpp
+		SpatialData/Units.h
+		SpatialData/Units.cpp
+		utils/delegate.h
 )
 
 set(STATIC_LIBS

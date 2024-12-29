@@ -145,7 +145,8 @@ namespace GraphEngine
 		{
 			try
 			{
-				pObj->AddPropertyInt32U(name, m_rgba);
+                CommonLib::ISerializeObjPtr pColorNode = pObj->CreateChildNode(name);
+                pColorNode->AddPropertyInt32U("RGBA", m_rgba);
 			}
 			catch (std::exception& exc)
 			{
@@ -157,7 +158,8 @@ namespace GraphEngine
 		{
 			try
 			{
-				m_rgba = pObj->GetPropertyInt32U(name, m_rgba); 
+                CommonLib::ISerializeObjPtr pColorNode = pObj->GetChild(name);
+				m_rgba = pColorNode->GetPropertyInt32U("RGBA", m_rgba);
 			}
 			catch (std::exception& exc)
 			{

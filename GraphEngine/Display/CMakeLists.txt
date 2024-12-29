@@ -53,6 +53,12 @@ set(COMMON_SOURCE_FILES
         GraphTypes/img/ReadPng.cpp
         GraphTypes/img/ReadJPG.h
         GraphTypes/img/ReadJPG.cpp
+        GraphTypes/Font.h
+        GraphTypes/Font.cpp
+        GraphTypes/Brush.h
+        GraphTypes/Brush.cpp
+        Graphics.h
+        DisplayTypes.h
 )
 
 set(LINUX_SOURCE_FILES
@@ -65,7 +71,8 @@ set(WINDOWS_SOURCE_FILES)
 IF (WIN32)
     set(SOURCE_FILES ${COMMON_SOURCE_FILES} ${WINDOWS_SOURCE_FILES} ${AGG_SOURCE_FILES})
 ELSE()
-    set(SOURCE_FILES ${COMMON_SOURCE_FILES} ${LINUX_SOURCE_FILES} ${AGG_SOURCE_FILES})
+    set(SOURCE_FILES ${COMMON_SOURCE_FILES} ${LINUX_SOURCE_FILES} ${AGG_SOURCE_FILES}
+            ../GisGeometry/Geometry.h)
 ENDIF()
 
 add_library(${PROJECT_NAME} ${SOURCE_FILES})

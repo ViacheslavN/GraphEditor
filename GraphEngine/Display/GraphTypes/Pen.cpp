@@ -110,6 +110,7 @@ namespace GraphEngine
             try
             {
                 CommonLib::ISerializeObjPtr pPenNode = pObj->CreateChildNode(name);
+
                 pPenNode->AddPropertyInt16U("PenType", uint16_t(m_type));
                 pPenNode->AddPropertyInt16U("JoinType", uint16_t(m_joinType));
                 pPenNode->AddPropertyDouble("Width", m_nWidth);
