@@ -257,6 +257,19 @@ set(COMMON_SOURCE_FILES
 		system/Environment.cpp
 		stream/StdLineInOut.cpp
 		stream/StdLineInOut.h
+
+
+		SpatialData/BoundaryBox.h
+		SpatialData/BoundaryBox.cpp
+
+		xml/XMLDoc.cpp
+		xml/XMLNode.cpp
+		xml/XMLUtils.cpp
+
+		Serialize/SerializeObj.h
+		Serialize/SerializeXML.h
+		Serialize/SerializeXML.cpp
+		data/PodVector.h
 )
 
 set(STATIC_LIBS
@@ -379,13 +392,15 @@ set(WINDOWS_SOURCE_FILES
 		system/win/WinPipe.h
 		system/win/PipeWriteRead.cpp
 		system/win/PipeWriteRead.h
+
 )
 
 IF (WIN32)
         set(SOURCE_FILES ${COMMON_SOURCE_FILES} ${WINDOWS_SOURCE_FILES})
 		add_definitions(-DUNICODE -D_UNICODE)
 ELSE()
-        set(SOURCE_FILES ${COMMON_SOURCE_FILES} ${POSIX_SOURCE_FILES})
+        set(SOURCE_FILES ${COMMON_SOURCE_FILES} ${POSIX_SOURCE_FILES}
+				)
         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -static-libstdc++ -static-libgcc -fPIC -fvisibility=hidden")
 ENDIF()
 

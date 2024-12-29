@@ -47,10 +47,10 @@ public:
 	virtual void Create(size_t nSize) = 0;
 	virtual void Resize(size_t nSize) = 0;
 
-	virtual size_t Size() const = 0;
+
 	virtual void Seek(size_t position, enSeekOffset offset) = 0;
 	virtual bool SeekSafe(size_t position, enSeekOffset offset) = 0;
-	virtual size_t Pos() const = 0;
+
 	virtual void Reset() = 0;
 	virtual bool IsEnoughSpace(size_t size) const = 0;
 };
@@ -62,6 +62,9 @@ public:
 	
 	IWriteStream(){}
 	virtual ~IWriteStream() {}
+
+    virtual size_t Size() const = 0;
+    virtual size_t Pos() const = 0;
 
 	virtual std::streamsize WriteBytes(const byte_t* buffer, size_t size) = 0;
 	virtual std::streamsize WriteInverse(const byte_t* buffer, size_t size) = 0;
@@ -148,7 +151,8 @@ public:
 
 	virtual std::streamsize ReadBytes(byte_t* dst, size_t size) = 0;
 	virtual std::streamsize ReadInverse(byte_t* buffer, size_t size) = 0;
-
+    virtual size_t Size() const = 0;
+    virtual size_t Pos() const = 0;
 	 
 
 

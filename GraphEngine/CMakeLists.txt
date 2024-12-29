@@ -18,6 +18,8 @@ endif()
 
 
 add_subdirectory(CommonLib)
+add_subdirectory(Display)
+add_subdirectory(ThirdParty)
 
 
 set(ignoreMe "${CMAKE_TOOLCHAIN_FILE}")

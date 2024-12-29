@@ -372,4 +372,78 @@ namespace CommonLib
 
 		return ret;
 	}
+
+    template<>
+    bool str_utils::AStr2TVal<bool>(const astr& val)
+    {
+        return AStr2Bool(val);
+    }
+
+    template<>
+    int8_t str_utils::AStr2TVal<int8_t>(const astr& val)
+    {
+        return AStr2Int8(val);
+    }
+
+    template<>
+    uint8_t str_utils::AStr2TVal<uint8_t>(const astr& val)
+    {
+        return AStr2Uint8(val);
+    }
+
+    template<>
+    int16_t str_utils::AStr2TVal<int16_t>(const astr& val)
+    {
+        return AStr2Int16(val);
+    }
+
+    template<>
+    uint16_t str_utils::AStr2TVal<uint16_t>(const astr& val)
+    {
+        return AStr2Uint16(val);
+    }
+
+    template<>
+    int32_t str_utils::AStr2TVal<int32_t>(const astr& val)
+    {
+        return AStr2Int32(val);
+    }
+
+    template<>
+    uint32_t str_utils::AStr2TVal<uint32_t>(const astr& val)
+    {
+        return AStr2Uint32(val);
+    }
+
+    template<>
+    int64_t str_utils::AStr2TVal<int64_t>(const astr& val)
+    {
+        return AStr2Int64(val);
+    }
+
+    template<>
+    uint64_t str_utils::AStr2TVal<uint64_t>(const astr& val)
+    {
+        return AStr2Uint64(val);
+    }
+
+    template<>
+    float str_utils::AStr2TVal<float>(const astr& val)
+    {
+        return AStr2Float(val);
+    }
+
+    template<>
+    double str_utils::AStr2TVal<double>(const astr& val)
+    {
+        return AStr2Double(val);
+    }
+
+    template<>
+    astr str_utils::AStr2TVal<astr>(const astr& val)
+    {
+        return val;
+    }
+
+
 }
