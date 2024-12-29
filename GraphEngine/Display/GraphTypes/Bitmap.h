@@ -12,20 +12,16 @@ namespace GraphEngine
 
 		class CBitmap
 		{
+        public:
 			CBitmap(CommonLib::IAllocPtr pAlloc = CommonLib::IAllocPtr());
 			CBitmap(CommonLib::IReadStream *pStream, CommonLib::IAllocPtr pAlloc = CommonLib::IAllocPtr());
 			CBitmap(size_t width, size_t height, eBitmapFormatType type, CommonLib::IAllocPtr pAlloc = CommonLib::IAllocPtr());
 			CBitmap(unsigned char* bits, size_t width, size_t height,
 				eBitmapFormatType type, Color* palette = 0, bool release = false, CommonLib::IAllocPtr pAlloc = CommonLib::IAllocPtr());
 			CBitmap(const CBitmap& bmp);
-			~CBitmap(void);
+			~CBitmap();
 			CBitmap& operator=(const CBitmap& bmp);
 
-            void Save(CommonLib::IWriteStream *pStream) const;
-            void Load(CommonLib::IReadStream *pStream);
-
-			void Save(CommonLib::ISerializeObjPtr pObj, const astr& name) const;
-			void Load(CommonLib::ISerializeObjPtr pObj, const astr& name);
 
 		public:
 			size_t                 Height() const;
@@ -43,6 +39,14 @@ namespace GraphEngine
 			CBitmap*               Transform(double xScale, double yScale, double angle = 0);
  
 			void Init(size_t width, size_t height, eBitmapFormatType type);
+
+
+            void Save(CommonLib::IWriteStream *pStream) const;
+            void Load(CommonLib::IReadStream *pStream);
+
+            void Save(CommonLib::ISerializeObjPtr pObj, const astr& name) const;
+            void Load(CommonLib::ISerializeObjPtr pObj, const astr& name);
+
 		private:
 			unsigned char*   m_pBuf;
 			size_t           m_nWidth;

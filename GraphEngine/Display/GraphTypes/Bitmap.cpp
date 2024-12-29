@@ -415,8 +415,6 @@ namespace GraphEngine
 			}
 		}
 
-
-
 		void CBitmap::Attach(unsigned char* bits, size_t width, size_t height, eBitmapFormatType type, Color* palette, bool release)
 		{
 			m_pBuf = bits;
@@ -470,7 +468,7 @@ namespace GraphEngine
 			typedef agg::image_accessor_clone<agg::pixfmt_bgra32> img_accessor_type;
 			img_accessor_type ia(pattern_rgba32_);
 
-			double pol[8] = { 0, 0, newWidth, 0, newWidth, newHeight, 0, newHeight };
+			double pol[8] = { 0, 0, (double)newWidth, 0, (double)newWidth, (double)newHeight, 0, (double)newHeight };
 
 			rasterizer_.reset();
 			agg::trans_affine mtx2(pol, 0, 0, w, h);
@@ -489,9 +487,9 @@ namespace GraphEngine
 			span_gen_type sg(ia, interpolator, 255);
 
 			rasterizer_.move_to_d(0, 0);
-			rasterizer_.line_to_d(newWidth, 0);
-			rasterizer_.line_to_d(newWidth, newHeight);
-			rasterizer_.line_to_d(0, newHeight);
+			rasterizer_.line_to_d((double)newWidth, 0);
+			rasterizer_.line_to_d((double)newWidth, (double)newHeight);
+			rasterizer_.line_to_d(0, (double)newHeight);
 			rasterizer_.line_to_d(0, 0);
 
 			agg::scanline_p8 scanline_;
