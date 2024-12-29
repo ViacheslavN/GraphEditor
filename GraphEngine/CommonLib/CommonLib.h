@@ -69,4 +69,9 @@ typedef uint8_t byte_t;
 	typedef int thread_id_t;
 #else
 	typedef pthread_t thread_id_t;
+    	typedef struct tagSIZE
+	{
+		long        cx;
+		long        cy;
+	} SIZE, *PSIZE, *LPSIZE;
 #endif

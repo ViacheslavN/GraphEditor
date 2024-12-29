@@ -49,6 +49,10 @@ set(COMMON_SOURCE_FILES
 
         DisplayMath.h
         DisplayMath.cpp
+        GraphTypes/img/ReadPng.h
+        GraphTypes/img/ReadPng.cpp
+        GraphTypes/img/ReadJPG.h
+        GraphTypes/img/ReadJPG.cpp
 )
 
 set(LINUX_SOURCE_FILES
@@ -69,6 +73,7 @@ add_library(${PROJECT_NAME} ${SOURCE_FILES})
 
 target_link_libraries(${PROJECT_NAME} PUBLIC CommonLib)
 target_link_libraries(${PROJECT_NAME} PUBLIC FreeType)
+target_link_libraries(${PROJECT_NAME} PUBLIC Jpeg)
 
 target_include_directories(${PROJECT_NAME} PRIVATE ./)
 

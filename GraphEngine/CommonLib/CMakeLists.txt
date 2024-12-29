@@ -55,6 +55,23 @@ set(COMMON_SOURCE_FILES
 		compress/zlib/ZStream.h
 		compress/zlib/zutil.c
 		compress/zlib/zutil.h
+#PNG
+		ThirdParty/Png/png.c
+		ThirdParty/Png/pngerror.c
+		ThirdParty/Png/pngget.c
+		ThirdParty/Png/pngmem.c
+		ThirdParty/Png/pngpread.c
+		ThirdParty/Png/pngread.c
+		ThirdParty/Png/pngrio.c
+		ThirdParty/Png/pngrtran.c
+		ThirdParty/Png/pngrutil.c
+		ThirdParty/Png/pngset.c
+		ThirdParty/Png/pngtest.c
+		ThirdParty/Png/pngtrans.c
+		ThirdParty/Png/pngwio.c
+		ThirdParty/Png/pngwrite.c
+		ThirdParty/Png/pngwtran.c
+		ThirdParty/Png/pngwutil.c
 
 		compress/zstd/ZstdCompressionStream.cpp
 		compress/zstd/ZstdCompressionStream.h
@@ -407,6 +424,7 @@ ENDIF()
 add_library(CommonLib ${SOURCE_FILES})
 target_link_libraries(CommonLib PRIVATE ${STATIC_LIBS})
 target_include_directories(CommonLib PUBLIC .)
+target_include_directories(CommonLib PUBLIC ./compress/zlib)
 target_link_libraries(CommonLib PRIVATE OpenSSL::SSL OpenSSL::Crypto)
 
 
