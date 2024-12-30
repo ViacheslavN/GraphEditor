@@ -1,1 +1,2 @@
 add_subdirectory(TestGraphicsAgg)
+add_subdirectory(TestGraphicsWTL)

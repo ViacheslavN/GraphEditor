@@ -66,7 +66,7 @@ set(COMMON_SOURCE_FILES
 		ThirdParty/Png/pngrtran.c
 		ThirdParty/Png/pngrutil.c
 		ThirdParty/Png/pngset.c
-		ThirdParty/Png/pngtest.c
+		#ThirdParty/Png/pngtest.c
 		ThirdParty/Png/pngtrans.c
 		ThirdParty/Png/pngwio.c
 		ThirdParty/Png/pngwrite.c
@@ -429,6 +429,17 @@ ELSE()
 				)
         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -static-libstdc++ -static-libgcc -fPIC -fvisibility=hidden")
 ENDIF()
+
+if (WIN32)
+
+	set (CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -MTd")
+	set (CMAKE_CXX_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -MTd")
+	set (CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -MT")
+	set (CMAKE_CXX_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -MT")
+
+endif()
+
+
 
 add_library(CommonLib ${SOURCE_FILES})
 target_link_libraries(CommonLib PRIVATE ${STATIC_LIBS})

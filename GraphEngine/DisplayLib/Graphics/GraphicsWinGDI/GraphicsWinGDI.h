@@ -1,0 +1,8 @@
+//
+// Created by Viacheslav on 12/30/2024.
+//
+
+#ifndef GRAPHENGINE_GRAPHICSWINGDI_H
+#define GRAPHENGINE_GRAPHICSWINGDI_H
+
+#endif //GRAPHENGINE_GRAPHICSWINGDI_H

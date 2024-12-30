@@ -73,6 +73,8 @@ set(LINUX_SOURCE_FILES
 )
 
 set(WINDOWS_SOURCE_FILES
+        Graphics/GraphicsWinGDI/GraphicsWinGDI.h
+        Graphics/GraphicsWinGDI/GraphicsWinGDI.cpp
 
 )
 
