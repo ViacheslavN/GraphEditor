@@ -1,5 +1,5 @@
 #pragma once
-#include "CommonLib.h"
+#include "../CommonLib/CommonLib.h"
 
 namespace GraphEngine
 {

@@ -348,7 +348,7 @@ namespace GraphEngine
 		};
 
 		template <typename T>
-		bool clip_ring_op(GPoint** points, int* pointCount, const T& op_, size_t slot, CClipRectAlloc *pAlloc)
+		bool clip_ring_op(GPoint** points, int* pointCount, const T& op_, uint32_t slot, CClipRectAlloc *pAlloc)
 		{
 			if(op_.all_in(*points, *pointCount))
 				return true;

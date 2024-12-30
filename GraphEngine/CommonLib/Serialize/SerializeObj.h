@@ -1,5 +1,5 @@
 #pragma once
-#include "CommonLib.h"
+#include "../CommonLib.h"
 #include "../data/ByteArray.h"
 
  namespace CommonLib

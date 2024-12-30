@@ -55,7 +55,7 @@ namespace GraphEngine
         typedef CommonLib::delegate1_t<IDisplayTransformation*>         OnVisibleBoundsChanged;
 
 
-        struct IDisplayTransformation
+        class IDisplayTransformation
         {
         public:
             IDisplayTransformation(){}
@@ -148,7 +148,7 @@ namespace GraphEngine
             virtual void        SetClipRgn(const GPoint* lpPoints, const int *lpPolyCounts, int nCount) = 0;
             virtual void        RemoveClip() = 0;
             virtual void        Erase(const Color& color, const GRect *rect = 0) = 0;
-            virtual IGraphics*   CreateCompatibleGraphics(GUnits width, GUnits height) = 0;
+            virtual IGraphicsPtr   CreateCompatibleGraphics(GUnits width, GUnits height) = 0;
             virtual void        Copy(IGraphics* src, const GPoint& srcPoint, const GRect& dstRect, bool bBlend = true) = 0;
 
             virtual void DrawPoint(const CPen* pPen, const CBrush*  pBbrush, const GPoint& Pt) = 0;
@@ -200,6 +200,11 @@ namespace GraphEngine
 
             virtual void Lock() = 0;
             virtual void UnLock() = 0;
+
+
+           static IGraphicsPtr  CreateCGraphicsAgg(unsigned char* buf, GUnits  width, GUnits height, bool bRelease, bool flipY = false);
+           static IGraphicsPtr  CreateCGraphicsAgg( GUnits  width, GUnits height, bool flipY = false);
+
 
 #ifdef _WIN32
             virtual HDC GetDC() const = 0;

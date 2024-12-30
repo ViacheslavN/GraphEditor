@@ -1,6 +1,6 @@
-cmake_minimum_required(VERSION 3.22)
-project(Dislay)
-set(LIB_NAME Dislay)
+cmake_minimum_required(VERSION 3.17)
+project(DisplayLib)
+
 
 set(AGG_SOURCE_FILES
         Agg/agg_arc.cpp
@@ -30,6 +30,7 @@ set(AGG_SOURCE_FILES
         Agg/agg_vpgen_clip_polyline.cpp
         Agg/agg_vpgen_segmentator.cpp
         Agg/polygon_clipper.cpp
+        Agg/sin_cos_table.cpp
 )
 
 set(COMMON_SOURCE_FILES
@@ -59,23 +60,30 @@ set(COMMON_SOURCE_FILES
         GraphTypes/Brush.cpp
         Graphics.h
         DisplayTypes.h
+        Graphics/GraphicsAgg/GraphicsAgg.h
+        Graphics/GraphicsAgg/GraphicsAgg.cpp
+        Graphics/GraphicsAgg/VertexSrc.h
+        Graphics/GraphicsAgg/VertexSrc.cpp
+        Graphics/GraphicsAgg/ConvOffset.h
+        Graphics/GraphicsAgg/ConvOffset.cpp
 )
 
 set(LINUX_SOURCE_FILES
 
 )
 
-set(WINDOWS_SOURCE_FILES)
+set(WINDOWS_SOURCE_FILES
+
+)
 
 
 IF (WIN32)
     set(SOURCE_FILES ${COMMON_SOURCE_FILES} ${WINDOWS_SOURCE_FILES} ${AGG_SOURCE_FILES})
 ELSE()
-    set(SOURCE_FILES ${COMMON_SOURCE_FILES} ${LINUX_SOURCE_FILES} ${AGG_SOURCE_FILES}
-            ../GisGeometry/Geometry.h)
+    set(SOURCE_FILES ${COMMON_SOURCE_FILES} ${LINUX_SOURCE_FILES} ${AGG_SOURCE_FILES} )
 ENDIF()
 
-add_library(${PROJECT_NAME} ${SOURCE_FILES})
+add_library(DisplayLib ${SOURCE_FILES})
 
 
 target_link_libraries(${PROJECT_NAME} PUBLIC CommonLib)
@@ -84,6 +92,4 @@ target_link_libraries(${PROJECT_NAME} PUBLIC Jpeg)
 
 target_include_directories(${PROJECT_NAME} PRIVATE ./)
 
-
-
-#add_subdirectory(Tests)
+add_subdirectory(Tests)
