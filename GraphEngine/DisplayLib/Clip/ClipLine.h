@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Display.h"
+#include "DisplayLib.h"
 #include "../GraphTypes/Point.h"
 #include "../GraphTypes/Rect.h"
 

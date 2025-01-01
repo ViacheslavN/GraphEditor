@@ -8,6 +8,8 @@ namespace GraphEngine
 {
     namespace  Display
     {
+        typedef std::shared_ptr<class CFont> FontPtr;
+
         class CFont
         {
         public:

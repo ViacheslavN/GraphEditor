@@ -63,4 +63,16 @@
          virtual bool  GetPropertyBool(const astr& name) const = 0;
          virtual astr GetPropertyString(const astr& name) const = 0;
      };
+
+
+     class ISerialize
+     {
+     public:
+         ISerialize() {}
+         virtual ~ISerialize() {}
+
+         virtual void Save(CommonLib::ISerializeObjPtr pObj) const = 0;
+         virtual void Load(CommonLib::ISerializeObjPtr pObj) = 0;
+
+     };
  }

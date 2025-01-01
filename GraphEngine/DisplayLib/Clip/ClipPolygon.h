@@ -1,5 +1,5 @@
 #pragma once
-#include "Display.h"
+#include "DisplayLib.h"
 #include "../GraphTypes/Rect.h"
 
 namespace GraphEngine
@@ -120,13 +120,13 @@ namespace GraphEngine
 
 					void BeginPolygon()
 					{
-						m_nBeginPolygonPos = m_pDest->size();
+						m_nBeginPolygonPos = (uint32_t)m_pDest->size();
 					}
 
 					void CheckOut(bool bisInClockwise)
 					{
 
-                        uint32_t nEndPos = m_pDest->size();
+                        uint32_t nEndPos = (uint32_t)m_pDest->size();
 						if (m_nBeginPolygonPos != nEndPos)
 						{
 							auto &ptFirst = (*m_pDest)[m_nBeginPolygonPos];
@@ -141,7 +141,7 @@ namespace GraphEngine
 							if (bisInClockwise != bisOutClockwise)
 							{
                                 uint32_t nSize = nEndPos - m_nBeginPolygonPos;
-								for (int i = 0; i < nSize / 2; i++)
+								for (int i = 0; i < (int)nSize / 2; i++)
 								{
 									GPoint tmp = (*m_pDest)[m_nBeginPolygonPos + i];
 									(*m_pDest)[i] = (*m_pDest)[nEndPos - 1 - i];

@@ -1,7 +1,7 @@
 #ifndef GIS_ENGINE_DISPLAY_RECT_CLIP_H_
 #define GIS_ENGINE_DISPLAY_RECT_CLIP_H_
 
-#include "../Display.h"
+#include "../DisplayLib.h"
 #include "../GraphTypes/Point.h"
 #include "Clip.h"
  

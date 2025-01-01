@@ -39,7 +39,7 @@ set(COMMON_SOURCE_FILES
         Clip/ClipPolygon.cpp
         Clip/ClipLine.cpp
         Clip/PointsBuffer.cpp
-        Display.h
+        DisplayLib.h
 
         GraphTypes/GraphTypes.h
         GraphTypes/Bitmap.cpp
@@ -66,6 +66,28 @@ set(COMMON_SOURCE_FILES
         Graphics/GraphicsAgg/VertexSrc.cpp
         Graphics/GraphicsAgg/ConvOffset.h
         Graphics/GraphicsAgg/ConvOffset.cpp
+        Symbols.h
+        Transformation/DisplayTransformation2D.h
+        Transformation/DisplayTransformation2D.cpp
+        Transformation/Matrix4.h
+        Transformation/Vector3d.h
+        Display/Display.cpp
+        Display/Display.h
+        Symbols/SymbolBase.h
+        Symbols/SymbolFillBase.h
+        Symbols/SymbolsLoader.h
+        Symbols/SymbolsLoader.cpp
+        Symbols/SimpleLineSymbol.h
+        Symbols/SimpleLineSymbol.cpp
+        Symbols/MarkerSymbolBase.h
+        Symbols/SimpleFillSymbol.cpp
+        Symbols/SimpleFillSymbol.h
+        Symbols/SimpleMarketSymbol.h
+        Symbols/SimpleMarketSymbol.cpp
+        DisplayUtils.h
+        DisplayUtils.cpp
+        Symbols/TextSymbol.h
+        Symbols/TextSymbol.cpp
 )
 
 set(LINUX_SOURCE_FILES
@@ -82,7 +104,9 @@ set(WINDOWS_SOURCE_FILES
 IF (WIN32)
     set(SOURCE_FILES ${COMMON_SOURCE_FILES} ${WINDOWS_SOURCE_FILES} ${AGG_SOURCE_FILES})
 ELSE()
-    set(SOURCE_FILES ${COMMON_SOURCE_FILES} ${LINUX_SOURCE_FILES} ${AGG_SOURCE_FILES} )
+    set(SOURCE_FILES ${COMMON_SOURCE_FILES} ${LINUX_SOURCE_FILES} ${AGG_SOURCE_FILES}
+
+    )
 ENDIF()
 
 add_library(DisplayLib ${SOURCE_FILES})

@@ -9,6 +9,8 @@
 namespace GraphEngine {
     namespace Display {
 
+        typedef std::shared_ptr<class CBrush> BrushPtr;
+
         class CBrush
         {
         public:

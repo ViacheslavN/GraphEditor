@@ -28,7 +28,7 @@ namespace GraphEngine {
         typedef  std::shared_ptr<class IEnvelope> IEnvelopePtr;
 
 
-        class ISpatialReference
+        class ISpatialReference : CommonLib::ISerialize
         {
         public:
             ISpatialReference(){};
@@ -49,8 +49,6 @@ namespace GraphEngine {
 
             virtual CommonLib::Units GetUnits() const = 0;
 
-            virtual void Save(CommonLib::ISerializeObjPtr pObj, const std::string& name) const = 0;
-            virtual void Load(CommonLib::ISerializeObjPtr pObj, const std::string& name)= 0;
         };
 
 

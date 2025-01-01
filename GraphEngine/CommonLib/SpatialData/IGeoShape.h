@@ -175,6 +175,10 @@ namespace CommonLib
         virtual patch_type&       PartType(size_t idx) = 0;
         virtual const patch_type& partType(size_t idx) const = 0;
 
+        virtual uint32_t NextPart(uint32_t nIdx) const = 0;
+        virtual GisXYPoint NextPoint(uint32_t nIdx) const = 0;
+        virtual bool NextPoint(uint32_t nIdx, GisXYPoint& pt) const = 0;
+
 
         virtual GisXYPoint* GetPoints() = 0;
         virtual const GisXYPoint* GetPoints() const = 0;
@@ -200,6 +204,7 @@ namespace CommonLib
         virtual void CalcBB() = 0;
         virtual bbox GetBB() const = 0;
 
+        virtual eShapeType GeneralType() const = 0;
 
         virtual void Create(eShapeType shapeType) = 0;
         virtual void Create(eShapeType shapeType, size_t npoints, size_t nparts = 1, size_t ncurves = 0, size_t mpatchSpecificSize = 0) = 0;

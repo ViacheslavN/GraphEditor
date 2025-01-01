@@ -121,7 +121,7 @@ namespace CommonLib
         static eShapeType GetGeneralType(eShapeType type);
 
         uint32_t  Size() const;
-        eShapeType GeneralType() const;
+        virtual eShapeType GeneralType() const;
         bool       HasZs() const;
         bool       HasMs() const;
         bool       HasCurves() const;

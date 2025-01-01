@@ -29,8 +29,10 @@ namespace GraphEngine {
         {
 
             size_t line_size =  4 * (((size_t)width * 32 + 31) / 32);
-            m_surface.Attach(buf, size_t(width), size_t(height), BitmapFormatType32bppARGB, 0, bRelease);
-            m_rbuf.attach(m_surface.Bits(), (uint32_t)width, (uint32_t)height, flipY ? (int)line_size : -1 *(int)line_size);
+            m_ptrSurface = std::make_shared<CBitmap>();
+
+            m_ptrSurface->Attach(buf, size_t(width), size_t(height), BitmapFormatType32bppARGB, 0, bRelease);
+            m_rbuf.attach(m_ptrSurface->Bits(), (uint32_t)width, (uint32_t)height, flipY ? (int)line_size : -1 *(int)line_size);
             m_renderer.attach(m_renderer_base);
             m_renderer_base.attach(this->m_rendering_buffer);
 
@@ -74,7 +76,7 @@ namespace GraphEngine {
             bitmapInfo.bmiHeader.biPlanes = 1;
             bitmapInfo.bmiHeader.biBitCount = 32;
             bitmapInfo.bmiHeader.biCompression = BI_RGB;
-            bitmapInfo.bmiHeader.biSizeImage = img_size;
+            bitmapInfo.bmiHeader.biSizeImage = (DWORD)img_size;
             bitmapInfo.bmiHeader.biXPelsPerMeter = 0;
             bitmapInfo.bmiHeader.biYPelsPerMeter = 0;
             bitmapInfo.bmiHeader.biClrUsed = 0;
@@ -84,14 +86,15 @@ namespace GraphEngine {
             unsigned char* buf;
             HBITMAP bitmap = ::CreateDIBSection(m_dc, &bitmapInfo, DIB_RGB_COLORS, (void**)&buf, 0, 0);
             m_oldBitmap = (HBITMAP)::SelectObject(m_dc, bitmap);
-            m_surface.Attach(buf, size_t(width), size_t(height), BitmapFormatType32bppARGB);
-            m_rbuf.attach(m_surface.Bits(), (int)width, (int)height, flipY ? (int)line_size : -1 *(int)line_size);
+            m_ptrSurface = std::make_shared<CBitmap>();
+            m_ptrSurface->Attach(buf, size_t(width), size_t(height), BitmapFormatType32bppARGB);
+            m_rbuf.attach(m_ptrSurface->Bits(), (int)width, (int)height, flipY ? (int)line_size : -1 *(int)line_size);
 #else
 
             int nBufSize = (int)line_size* height;
 			unsigned char* pBuf = new unsigned char[nBufSize];
-			m_surface.attach(pBuf, size_t(width), size_t(height),BitmapFormatType32bppARGB, 0, true);
-			m_rbuf.attach(m_surface.bits(), (int)width, (int)height, (int)(flipY ? line_size : -line_size));
+			m_ptrSurface->Attach(pBuf, size_t(width), size_t(height),BitmapFormatType32bppARGB, 0, true);
+			m_rbuf.attach(m_ptrSurface->Bits(), (int)width, (int)height, (int)(flipY ? line_size : -line_size));
 #endif
 
             m_renderer.attach(m_renderer_base);
@@ -111,6 +114,7 @@ namespace GraphEngine {
         {
             return DeviceTypeDisplay;
         }
+
         void   CGraphicsAgg::StartDrawing(IDisplayTransformationPtr pDT)
         {
             RemoveClip();
@@ -150,8 +154,8 @@ namespace GraphEngine {
         void CGraphicsAgg::RemoveClip()
         {
             m_renderer_base.reset_clipping(true);
-            m_rasterizer.clip_box(0, 0, GetSurface().Width(), GetSurface().Height());
-            m_ClipRect.Set(0, 0, (GUnits)GetSurface().Width(), (GUnits)GetSurface().Height());
+            m_rasterizer.clip_box(0, 0, (double )GetSurface()->Width(), (double )GetSurface()->Height());
+            m_ClipRect.Set(0, 0, (GUnits)GetSurface()->Width(), (GUnits)GetSurface()->Height());
             m_renderer_base.reset_polygon_clipping();
         }
 
@@ -160,7 +164,7 @@ namespace GraphEngine {
             if(rect == 0)
             {
                 if(color.GetRGBA() == 0)
-                    ::memset(GetSurface().Bits(), 0, 4 * this->m_renderer_base.width() * this->m_renderer_base.height());
+                    ::memset(GetSurface()->Bits(), 0, 4 * this->m_renderer_base.width() * this->m_renderer_base.height());
                 else
                     this->m_renderer_base.clear(agg::rgba8(color.GetR(), color.GetG(), color.GetB(), color.GetA()));
             }
@@ -229,7 +233,7 @@ namespace GraphEngine {
 
             }
         }
-        void CGraphicsAgg::Copy(IGraphics* pSrc, const GPoint& srcPt, const GRect& dstRC, bool bBlend)
+        void CGraphicsAgg::Copy(IGraphicsPtr pSrc, const GPoint& srcPt, const GRect& dstRC, bool bBlend)
         {
             GPoint srcPoint = srcPt;
             srcPoint.x += m_org.x;
@@ -239,9 +243,9 @@ namespace GraphEngine {
             dstRect.xMax += m_org.x;
             dstRect.yMin += m_org.y;
             dstRect.yMax += m_org.y;
-            if(pSrc == this)
+            if(pSrc.get() == this)
                 InCopy(srcPoint, dstRect);
-            else if (CGraphicsAgg * pGraphicsAgg = dynamic_cast<CGraphicsAgg*>(pSrc))
+            else if (CGraphicsAgg * pGraphicsAgg = dynamic_cast<CGraphicsAgg*>(pSrc.get()))
             {
                 agg::rect_i rect((int)srcPoint.x, (int)srcPoint.y, (int)(srcPoint.x + dstRect.Width() - 1), (int)(srcPoint.y + dstRect.Height() - 1));
                 m_renderer_base.blend_from(pGraphicsAgg->m_rendering_buffer, &rect, (int)(dstRect.xMin - srcPoint.x), (int)(dstRect.yMin - srcPoint.y));
@@ -249,7 +253,7 @@ namespace GraphEngine {
             copy(pSrc, srcPoint, dstRect);
         }
 
-        void CGraphicsAgg::copy(IGraphics* pSrc, const GPoint& srcPoint, const GRect& dstRect, bool bBlend)
+        void CGraphicsAgg::copy(IGraphicsPtr pSrc, const GPoint& srcPoint, const GRect& dstRect, bool bBlend)
         {
             agg::rect_i rect((int)srcPoint.x, (int)srcPoint.y, (int)(srcPoint.x + dstRect.Width() - 1), (int)(srcPoint.y + dstRect.Height() - 1));
             for(int y = (int)srcPoint.y, dsty = (int)dstRect.yMin; y < (int)(srcPoint.y + dstRect.Height()); y++, dsty++)
@@ -265,12 +269,12 @@ namespace GraphEngine {
             }
         }
 
-        void CGraphicsAgg::DrawPoint(const CPen* pPen, const CBrush*  pBrush, const GPoint& Pt)
+        void CGraphicsAgg::DrawPoint(const PenPtr pPen, const BrushPtr  pBrush, const GPoint& Pt)
         {
             DrawPoint(pPen, pBrush, Pt.x, Pt.y);
         }
 
-        void CGraphicsAgg::DrawPoint(const CPen* pPen, const CBrush*  pBrush, GUnits dX, GUnits dY)
+        void CGraphicsAgg::DrawPoint(const PenPtr pPen, const BrushPtr pBrush, GUnits dX, GUnits dY)
         {
 
 
@@ -280,14 +284,14 @@ namespace GraphEngine {
             // int nIndex = dY * rbuf_.width() * 4 + dX * 4;
 
             // *(Color::ColorType*)&m_surface.bits()[nIndex] = color.GetRGBA();
-            this->m_rendering_buffer.blend_pixel(X, Y, agg::rgba8(color.GetR(), color.GetG(), color.GetB(),  (uint32_t)color.GetA()), 255);
+            this->m_rendering_buffer.blend_pixel((int)X, (int)Y, agg::rgba8(color.GetR(), color.GetG(), color.GetB(),  (uint32_t)color.GetA()), 255);
         }
 
-        void CGraphicsAgg::DrawLineSeg(const CPen* pPen, const GPoint& P1, const GPoint& P2)
+        void CGraphicsAgg::DrawLineSeg(const PenPtr pPen, const GPoint& P1, const GPoint& P2)
         {
             DrawLineSeg(pPen, P1.x, P1.y, P2.x, P2.y);
         }
-        void CGraphicsAgg::DrawLineSeg(const CPen* pPen, GUnits dX1, GUnits dY1, GUnits dX2, GUnits dY2)
+        void CGraphicsAgg::DrawLineSeg(const PenPtr pPen, GUnits dX1, GUnits dY1, GUnits dX2, GUnits dY2)
         {
             GPoint points[2];
             points[0].x = dX1;
@@ -297,7 +301,7 @@ namespace GraphEngine {
             DrawLine(pPen, points, 2);
         }
 
-        void CGraphicsAgg::DrawLine(const CPen* pPen, const GPoint* pPoints, int nNumPoints)
+        void CGraphicsAgg::DrawLine(const PenPtr pPen, const GPoint* pPoints, int nNumPoints)
         {
             if(pPen == 0 || pPen->GetPenType() == PenTypeNull)
                 return;
@@ -327,7 +331,7 @@ namespace GraphEngine {
             }
         }
         template <typename Stroke>
-        void AppendPen(const CPen* pPen, Stroke& stroke)
+        void AppendPen(const PenPtr pPen, Stroke& stroke)
         {
             switch(pPen->GetCapType())
             {
@@ -355,7 +359,7 @@ namespace GraphEngine {
             }
         }
 
-        void CGraphicsAgg::draw_line(const CPen* pPen)
+        void CGraphicsAgg::draw_line(const PenPtr pPen)
         {
             if(pPen->GetPenType() != PenTypeSolid || pPen->GetTemplates().size() > 0)
             {
@@ -428,7 +432,8 @@ namespace GraphEngine {
                                          span_pattern_generator);
             }
         }
-        void CGraphicsAgg::draw_poly_polygon(const CBrush* pBrush, const GPoint& originMin , const GPoint& originMax)
+
+        void CGraphicsAgg::draw_poly_polygon(const BrushPtr pBrush, const GPoint& originMin , const GPoint& originMax)
         {
             BitmapPtr pTexture = pBrush->GetTexture();
             if(pTexture)
@@ -544,7 +549,7 @@ namespace GraphEngine {
                 agg::render_scanlines(this->m_rasterizer, this->m_scanline,
                                       this->m_renderer);
         }
-        void CGraphicsAgg::DrawRoundRect(const CPen* pPen, const CBrush*  pBrush, const GRect& Rect, GUnits radius)
+        void CGraphicsAgg::DrawRoundRect(const PenPtr pPen, const BrushPtr  pBrush, const GRect& Rect, GUnits radius)
         {
             this->m_rounded_rect.init(Rect.xMin, Rect.yMin, Rect.xMax, Rect.yMax, radius);
             this->m_rounded_rect.normalize_radius();
@@ -555,7 +560,7 @@ namespace GraphEngine {
                 draw_line(pPen);
         }
 
-        void CGraphicsAgg::DrawRect(const CPen* pPen, const CBrush*  pBrush, const GRect& Rect)
+        void CGraphicsAgg::DrawRect(const PenPtr pPen, const BrushPtr  pBrush, const GRect& Rect)
         {
             GPoint points[5];
             points[0].x = Rect.xMin;
@@ -576,7 +581,7 @@ namespace GraphEngine {
             DrawPolygon(pPen, pBrush, points, 5);
         }
 
-        void CGraphicsAgg::DrawRect(CPen* pPen, CBrush*  pBrush, const GPoint& LTPoint, const GPoint& RBPoint)
+        void CGraphicsAgg::DrawRect(PenPtr pPen, BrushPtr pBrush, const GPoint& LTPoint, const GPoint& RBPoint)
         {
             GPoint points[5];
             points[0].x = LTPoint.x;
@@ -596,7 +601,8 @@ namespace GraphEngine {
 
             DrawPolygon(pPen, pBrush, points, 5);
         }
-        void CGraphicsAgg::DrawRect(CPen* pPen, CBrush*  pBrush, GUnits dLTX, GUnits dLTY, GUnits dRBX, GUnits dRBY)
+
+        void CGraphicsAgg::DrawRect(PenPtr pPen, BrushPtr  pBrush, GUnits dLTX, GUnits dLTY, GUnits dRBX, GUnits dRBY)
         {
             GPoint points[5];
             points[0].x = dLTX;
@@ -617,7 +623,7 @@ namespace GraphEngine {
             DrawPolygon(pPen, pBrush, points, 5);
         }
 
-        void CGraphicsAgg::DrawRectEx(const CPen* pPen, const CBrush*  pBrush, const GRect& Rect, const GPoint& originMin, const GPoint& originMax)
+        void CGraphicsAgg::DrawRectEx(const PenPtr pPen, const BrushPtr  pBrush, const GRect& Rect, const GPoint& originMin, const GPoint& originMax)
         {
             GPoint points[5];
             points[0].x = Rect.xMin;
@@ -637,15 +643,17 @@ namespace GraphEngine {
             DrawPolygonEx(pPen, pBrush, points, 5, originMin, originMax);
         }
 
-        void CGraphicsAgg::DrawEllipse(const CPen* pPen, const CBrush*  pBrush, const GRect& Rect)
+        void CGraphicsAgg::DrawEllipse(const PenPtr pPen, const BrushPtr  pBrush, const GRect& Rect)
         {
             DrawEllipse(pPen, pBrush, Rect.xMin, Rect.yMin, Rect.xMax, Rect.yMax);
         }
-        void CGraphicsAgg::DrawEllipse(const CPen* pPen, const CBrush*  pBrush, const GPoint& LTPoint, const GPoint& RBPoint)
+
+        void CGraphicsAgg::DrawEllipse(const PenPtr pPen, const BrushPtr  pBrush, const GPoint& LTPoint, const GPoint& RBPoint)
         {
             DrawEllipse(pPen, pBrush, LTPoint.x, LTPoint.y, RBPoint.x, RBPoint.y);
         }
-        void CGraphicsAgg::DrawEllipse(const CPen* pPen, const CBrush*  pBrush, GUnits dLTX, GUnits dLTY, GUnits dRBX, GUnits dRBY)
+
+        void CGraphicsAgg::DrawEllipse(const PenPtr pPen, const BrushPtr  pBrush, GUnits dLTX, GUnits dLTY, GUnits dRBX, GUnits dRBY)
         {
             GUnits width = dRBX - dLTX;
             GUnits height = dRBY - dLTY;
@@ -657,11 +665,11 @@ namespace GraphEngine {
                 draw_line(pPen);
         }
 
-        void CGraphicsAgg::DrawPolygon(const CPen* pPen, const CBrush*  pBrush, const GPoint* pPoints, int nNumPoints)
+        void CGraphicsAgg::DrawPolygon(const PenPtr pPen, const BrushPtr  pBrush, const GPoint* pPoints, int nNumPoints)
         {
             DrawPolyPolygon(pPen, pBrush, pPoints, &nNumPoints, 1);
         }
-        void CGraphicsAgg::DrawPolyPolygon(const CPen* pPen, const CBrush*  pBrush, const GPoint* lpPoints, const int *lpPolyCounts, int nCount)
+        void CGraphicsAgg::DrawPolyPolygon(const PenPtr pPen, const BrushPtr  pBrush, const GPoint* lpPoints, const int *lpPolyCounts, int nCount)
         {
             if(nCount == 0)
                 return;
@@ -678,11 +686,11 @@ namespace GraphEngine {
 
         }
 
-        void CGraphicsAgg::DrawPolygonEx(const CPen* pPen, const CBrush*  pBrush, const GPoint* pPoints, int nNumPoints, const GPoint& originMin, const GPoint& originMax)
+        void CGraphicsAgg::DrawPolygonEx(const PenPtr pPen, const BrushPtr  pBrush, const GPoint* pPoints, int nNumPoints, const GPoint& originMin, const GPoint& originMax)
         {
             DrawPolyPolygonEx(pPen, pBrush, pPoints, &nNumPoints, 1, originMin, originMax);
         }
-        void CGraphicsAgg::DrawPolyPolygonEx(const CPen* pPen, const CBrush*  pBrush, const GPoint* lpPoints, const int *lpPolyCounts, int nCount, const GPoint& originMin, const GPoint& originMax)
+        void CGraphicsAgg::DrawPolyPolygonEx(const PenPtr pPen, const BrushPtr  pBrush, const GPoint* lpPoints, const int *lpPolyCounts, int nCount, const GPoint& originMin, const GPoint& originMax)
         {
             if(nCount == 0)
                 return;
@@ -704,7 +712,7 @@ namespace GraphEngine {
         }
 
 
-        std::string CGraphicsAgg::get_font_path(const CFont* pFont, bool& customDecoration)
+        std::string CGraphicsAgg::get_font_path(const FontPtr pFont, bool& customDecoration)
         {
             std::string fullFontName;
             customDecoration = true;
@@ -761,7 +769,7 @@ namespace GraphEngine {
         }
 
 
-        void CGraphicsAgg::create_font(const CFont* pFont, bool& customDecoration)
+        void CGraphicsAgg::create_font(const FontPtr pFont, bool& customDecoration)
         {
             std::string  fullFontName = get_font_path(pFont, customDecoration);
             m_font_engine.load_font(fullFontName.c_str(), 0, agg::glyph_ren_outline);
@@ -779,10 +787,10 @@ namespace GraphEngine {
             //font_engine_.height(font_engine_.height() * (font->size_ / actualHeight));
         }
 
-        void CGraphicsAgg::QueryTextMetrics(const CFont* pFont, GUnits* height, GUnits* baseLine, GUnits* lineSpacing)
+        void CGraphicsAgg::QueryTextMetrics(const FontPtr pFont, GUnits* height, GUnits* baseLine, GUnits* lineSpacing)
         {
             double oldOrientation = pFont->GetOrientation();
-            const_cast<CFont*>(pFont)->SetOrientation(0);
+            const_cast<CFont*>(pFont.get())->SetOrientation(0);
             bool customDecoration;
             create_font(pFont, customDecoration);
 
@@ -795,9 +803,9 @@ namespace GraphEngine {
             if(lineSpacing)
                 *lineSpacing = (GUnits)m_font_engine.height();
 
-            const_cast<CFont*>(pFont)->SetOrientation(oldOrientation);
+            const_cast<CFont*>(pFont.get())->SetOrientation(oldOrientation);
         }
-        void CGraphicsAgg::QueryTextMetrics(const CFont* pFont, const wchar_t* text, int len, GUnits* width, GUnits* height, GUnits* baseLine)
+        void CGraphicsAgg::QueryTextMetrics(const FontPtr pFont, const wchar_t* text, int len, GUnits* width, GUnits* height, GUnits* baseLine)
         {
             if(len == 0)
             {
@@ -808,7 +816,7 @@ namespace GraphEngine {
             }
 
             double oldOrientation  = pFont->GetOrientation();
-            const_cast<CFont*>(pFont)->SetOrientation(0);
+            const_cast<CFont*>(pFont.get())->SetOrientation(0);
             bool customDecoration;
             create_font(pFont, customDecoration);
 
@@ -840,10 +848,10 @@ namespace GraphEngine {
             double a = m_font_engine.ascender();
             double d = m_font_engine.descender();
 
-            const_cast<CFont*>(pFont)->SetOrientation(oldOrientation);
+            const_cast<CFont*>(pFont.get())->SetOrientation(oldOrientation);
         }
 
-        void CGraphicsAgg::DrawUnderLine(const CFont* pFont, double xNew, double yNew, double x, double y)
+        void CGraphicsAgg::DrawUnderLine(const FontPtr pFont, double xNew, double yNew, double x, double y)
         {
             if(pFont->GetStyle() & FontStyleUnderline)
             {
@@ -860,7 +868,7 @@ namespace GraphEngine {
             }
         }
 
-        void CGraphicsAgg::DrawText(const CFont* pFont, const wchar_t* text, int len, const GPoint& point, int drawFlags)
+        void CGraphicsAgg::DrawText(const FontPtr pFont, const wchar_t* text, int len, const GPoint& point, int drawFlags)
         {
             GUnits layoutWidth = 0;
             GUnits layoutHeight = 0;
@@ -1006,7 +1014,7 @@ namespace GraphEngine {
                 agg::render_scanlines(this->m_rasterizer, this->m_scanline, this->m_renderer);
             }
         }
-        void CGraphicsAgg::DrawTextByLine(const CFont* pFont, const wchar_t* text, int len, const GPoint* pPoints, int nNumPoints)
+        void CGraphicsAgg::DrawTextByLine(const FontPtr pFont, const wchar_t* text, int len, const GPoint* pPoints, int nNumPoints)
         {
             bool customDecorations;
             create_font(pFont, customDecorations);
@@ -1156,7 +1164,7 @@ namespace GraphEngine {
             mtx2 *= agg::trans_affine_translation(-c.x, -c.y);
             mtx2 *= agg::trans_affine_rotation(DEG2RAD(angle));
             mtx2 *= agg::trans_affine_scaling(1 / scale_x, 1 / scale_y);
-            mtx2 *= agg::trans_affine_translation(pBitmap->Width() / 2, pBitmap->Height() / 2);
+            mtx2 *= agg::trans_affine_translation((double)pBitmap->Width() / 2, (double)pBitmap->Height() / 2);
 
             typedef agg::span_interpolator_linear<> interpolator_type;
             interpolator_type interpolator(mtx2);
@@ -1236,13 +1244,14 @@ namespace GraphEngine {
             m_brushOrg = org;
         }
 
-        const CBitmap& CGraphicsAgg::GetSurface() const
+        const BitmapPtr CGraphicsAgg::GetSurface() const
         {
-            return m_surface;
+            return m_ptrSurface;
         }
-        CBitmap& CGraphicsAgg::GetSurface()
+
+        BitmapPtr CGraphicsAgg::GetSurface()
         {
-            return m_surface;
+            return m_ptrSurface;
         }
 
         size_t CGraphicsAgg::GetWidth() const

@@ -6,6 +6,8 @@
 namespace GraphEngine
 {
 	namespace Display {
+        typedef std::shared_ptr<class CPen> PenPtr;
+
         typedef std::vector<std::pair<GUnits, GUnits> > TPenTemplates;
         class CPen
         {
