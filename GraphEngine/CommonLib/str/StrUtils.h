@@ -19,5 +19,11 @@ namespace CommonLib
         static void FromBase64(const std::string& strInBase64, std::string & buffer);
 
         static std::vector<std::string> ArgsStringToArgsVector(const std::string& args);
-	};
+
+        static bool Equals(const std::string& left, const std::string& right, bool caseSensitive = true);
+        static int  Compare(const std::string& left, const std::string& right, bool caseSensitive = true);
+
+        static bool Equals(const std::wstring& left, const std::wstring& right, bool caseSensitive = true);
+        static int  Compare(const std::wstring& left, const std::wstring& right, bool caseSensitive = true);
+    };
 }

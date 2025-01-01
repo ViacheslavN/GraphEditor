@@ -9,7 +9,7 @@
 namespace CommonLib
 {
 
-    class CGeoShape : IGeoShape
+    class CGeoShape : public IGeoShape
     {
     public:
         enum ePramsFlags
@@ -18,7 +18,7 @@ namespace CommonLib
             eInnerParams = 1
         };
 
-        CGeoShape(IAllocPtr pAlloc);
+        CGeoShape(IAllocPtr pAlloc = nullptr);
         CGeoShape(const CGeoShape& geoShp);
         virtual ~CGeoShape();
         void Clear();
@@ -99,7 +99,6 @@ namespace CommonLib
 
         virtual patch_type*       GetPartsTypes();
         virtual const patch_type* GetPartsTypes() const;
-        virtual patch_type        PartType(uint32_t idx);
         virtual const patch_type  PartType(uint32_t idx) const;
 
 
@@ -167,7 +166,7 @@ namespace CommonLib
         double *GetBBoxVals(eShapeType shapeType);
         const double *GetBBoxVals(eShapeType shapeType) const;
 
-
+        virtual void  Add(IGeoShapePtr ptrShap);
 
     private:
         static const uint32_t __minimum_point_ = 10;

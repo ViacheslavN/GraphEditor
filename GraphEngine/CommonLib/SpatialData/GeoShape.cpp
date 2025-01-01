@@ -312,6 +312,7 @@ namespace CommonLib
     CGeoShape::CGeoShape(IAllocPtr  pAlloc) : m_blob(pAlloc)
     {
     }
+
     CGeoShape::CGeoShape(const CGeoShape& geoShp) : m_blob(geoShp.m_blob)
     {}
 
@@ -530,11 +531,6 @@ namespace CommonLib
         return nullptr;
     }
 
-    patch_type   CGeoShape::PartType(uint32_t idx)
-    {
-        return GetPartsTypes()[idx];
-    }
-
     const patch_type CGeoShape::PartType(uint32_t idx) const
     {
         return GetPartsTypes()[idx];
@@ -739,6 +735,11 @@ namespace CommonLib
     const double* CGeoShape::GetMs() const
     {
         return NULL;
+    }
+
+    void  CGeoShape::Add(IGeoShapePtr ptrShap)
+    {
+
     }
 
     ////////////////////////////////////////////////////////

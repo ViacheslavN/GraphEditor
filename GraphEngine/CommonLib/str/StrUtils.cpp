@@ -1,7 +1,7 @@
 #include "stdafx.h"
 #include "StrUtils.h"
 #include <ctype.h>
-
+#include <algorithm>
 
 namespace CommonLib
 {
@@ -409,5 +409,64 @@ namespace CommonLib
         }
 
         return  result;
+    }
+
+
+    bool StringUtils::Equals(const std::string& left, const std::string& right, bool caseSensitive )
+    {
+        return Compare(left, right, caseSensitive) == 0;
+    }
+
+    int  StringUtils::Compare(const std::string& left, const std::string& right, bool caseSensitive )
+    {
+        if(right.empty())
+            return left.empty() ? 0 : 1;
+
+        if(left.empty())
+            return right.empty() ? 0 : -1;
+
+        if(caseSensitive)
+            return strcmp(left.c_str(), right.c_str());
+        else
+        {
+            const char * pLeftStr = left.c_str();
+            const char * pRightStr = right.c_str();
+            for(int c1, c2; *pLeftStr && *pRightStr; ++pLeftStr, ++pRightStr)
+            {
+                c1 = (int)std::toupper(*pLeftStr);
+                c2 = (int)std::toupper(*pRightStr);
+                if(c1 != c2)
+                    return c1 - c2;
+            }
+            return ((int)*pLeftStr) - ((int)*pRightStr);
+        }
+    }
+
+    bool StringUtils::Equals(const std::wstring& left, const std::wstring& right, bool caseSensitive )
+    {
+        return Compare(left, right, caseSensitive) == 0;
+    }
+
+    int  StringUtils::Compare(const std::wstring& left, const std::wstring& right, bool caseSensitive)
+    {
+        if(right.empty())
+            return left.empty() ? 0 : 1;
+
+        if(left.empty())
+            return right.empty() ? 0 : -1;
+
+        if(caseSensitive)
+            return wcscmp(left.c_str(), right.c_str());
+        else {
+            const wchar_t *pLeftStr = left.c_str();
+            const wchar_t *pRightStr = right.c_str();
+            for (int c1, c2; *pLeftStr && *pRightStr; ++pLeftStr, ++pRightStr) {
+                c1 = (int) std::toupper(*pLeftStr);
+                c2 = (int) std::toupper(*pRightStr);
+                if (c1 != c2)
+                    return c1 - c2;
+            }
+            return ((int) *pLeftStr) - ((int) *pRightStr);
+        }
     }
 }

@@ -168,12 +168,11 @@ namespace CommonLib
         virtual uint32_t  GetPartCount() const = 0;
         virtual uint32_t  GetPart(uint32_t idx) const = 0;
         virtual const uint32_t*  GetParts() const = 0;
-
+        virtual uint32_t*  GetParts()= 0;
 
         virtual patch_type*       GetPartsTypes() = 0;
         virtual const patch_type* GetPartsTypes() const = 0;
-        virtual patch_type&       PartType(size_t idx) = 0;
-        virtual const patch_type& partType(size_t idx) const = 0;
+        //virtual const patch_type partType(size_t idx) const = 0;
 
         virtual uint32_t NextPart(uint32_t nIdx) const = 0;
         virtual GisXYPoint NextPoint(uint32_t nIdx) const = 0;
@@ -182,23 +181,23 @@ namespace CommonLib
 
         virtual GisXYPoint* GetPoints() = 0;
         virtual const GisXYPoint* GetPoints() const = 0;
-        virtual void SetPoints(const double *pPoint) = 0; //xy
-        virtual double&       ptX(size_t idx) = 0;
-        virtual const double& ptX(size_t idx) const = 0;
-        virtual double&      ptY(size_t idx) = 0;
-        virtual const double& ptY(size_t idx) const = 0;
+       // virtual void SetPoints(const double *pPoint) = 0; //xy
+        //virtual double&       ptX(size_t idx) = 0;
+        //virtual const double& ptX(size_t idx) const = 0;
+        //virtual double&      ptY(size_t idx) = 0;
+        //virtual const double& ptY(size_t idx) const = 0;
 
 
         virtual double* GetZs() = 0;
-        virtual const double* GetZs() const = 0;
-        virtual double&       ptZ(size_t idx)= 0;
-        virtual const double& ptZ(size_t idx) const= 0;
-        virtual void SetZs(const double *pPoint) = 0; //z
+        //virtual const double* GetZs() const = 0;
+        //virtual double&       ptZ(size_t idx)= 0;
+       // virtual const double& ptZ(size_t idx) const= 0;
+        //virtual void SetZs(const double *pPoint) = 0; //z
 
         virtual double* GetMs() = 0;
-        virtual const double* GetMs() const = 0;
-        virtual double&       ptM(size_t idx)= 0;
-        virtual const double& ptM(size_t idx) const = 0;
+        //virtual const double* GetMs() const = 0;
+        //virtual double&       ptM(size_t idx)= 0;
+        //virtual const double& ptM(size_t idx) const = 0;
         virtual uint32_t GetPointCnt() const= 0;
 
         virtual void CalcBB() = 0;
@@ -207,10 +206,14 @@ namespace CommonLib
         virtual eShapeType GeneralType() const = 0;
 
         virtual void Create(eShapeType shapeType) = 0;
-        virtual void Create(eShapeType shapeType, size_t npoints, size_t nparts = 1, size_t ncurves = 0, size_t mpatchSpecificSize = 0) = 0;
+        virtual void Create(eShapeType shapeType, uint32_t npoints, uint32_t nparts = 1, uint32_t ncurves = 0, uint32_t mpatchSpecificSize = 0) = 0;
+
+        virtual void  Add(IGeoShapePtr ptrShap)  = 0;
 
         static bool IsTypeSimple(eShapeType shapeType);
         static void GetTypeParams(eShapeType shapeType, eShapeType* genType = 0, bool* has_z = 0, bool* has_m = 0, bool* has_curve = 0, bool* has_id = 0);
         static eShapeType GeneralType(eShapeType type);
+
+
     };
 }
