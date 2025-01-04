@@ -5,9 +5,14 @@ set(LIB_NAME ShapeLib)
 
 
 set(SOURCE_FILES
-        dbfopen.cpp
-        safileio.cpp
-        shpopen.cpp)
+        shpopen.c
+        dbfopen.c
+        safileio.c
+        shptree.c
+        sbnsearch.c
+        shapefil.h
+        shapefil_private.h
+        shapelib.def)
 
 
 

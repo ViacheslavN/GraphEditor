@@ -4,6 +4,7 @@
 #include "../GisGeometry/Geometry.h"
 #include "../CommonLib/utils/PropertySet.h"
 #include "../CommonLib/Serialize/SerializeObj.h"
+#include "../CommonLib/exception/exc_base.h"
 
 namespace GraphEngine
 {
@@ -23,7 +24,7 @@ namespace GraphEngine
         {
             dtUndefined    = 0,
             dtTypeTable    = 1,
-            dtSpaseTable = 2,
+            dtSpatialTable = 2,
             dtGroupDataset = 4,
             dtTypeRaster   = 8,
             dtTypeAny      = -1
@@ -75,6 +76,7 @@ namespace GraphEngine
 
 
         typedef std::shared_ptr<class IWorkspace> IWorkspacePtr;
+        typedef std::shared_ptr<class IDatabaseWorkspace> IDatabaseWorkspacePtr;
         typedef std::shared_ptr<class ITransaction> ITransactionPtr;
         typedef std::shared_ptr<class ICursor> ICursorPtr;
         typedef std::shared_ptr<class IInsertCursor> IInsertCursorPtr;
@@ -82,14 +84,16 @@ namespace GraphEngine
         typedef std::shared_ptr<class IDeleteCursor> IDeleteCursorPtr;
         typedef std::shared_ptr<class IDataset> IDatasetPtr;
         typedef std::shared_ptr<class ITable> ITablePtr;
-        typedef std::shared_ptr<class ISpatialTable> ISpatialPtr;
+        typedef std::shared_ptr<class ISpatialTable> ISpatialTablePtr;
         typedef std::shared_ptr<class IRow> IRowPtr;
         typedef std::shared_ptr<class IField> IFieldPtr;
+        typedef std::shared_ptr<class ISpatialField> ISpatialFieldPtr;
         typedef std::shared_ptr<class IOIDSet>  IOIDSetPtr;
         typedef std::shared_ptr<class IFields> IFieldsPtr;
         typedef std::shared_ptr<class IFieldSet> IFieldSetPtr;
         typedef std::shared_ptr<class IQueryFilter> IQueryFilterPtr;
         typedef std::shared_ptr<class IGeometryDefinition> IGeometryDefinitionPtr;
+
 
 
         class ITransaction {
@@ -100,14 +104,15 @@ namespace GraphEngine
             virtual bool Commit() = 0;
             virtual bool Rollback() = 0;
             virtual void GetError(std::string &sText) = 0;
-            virtual IInsertCursorPtr CreateInsertCusor(ITablerPtr pTable, IFieldSetPtr ptrFileds = nullptr) = 0;
-            virtual IUpdateCursorPtr CreateUpdateCusor(ITablerPtr pTable, IFieldSetPtr ptrFileds = nullptr) = 0;
-            virtual IDeleteCursorPtr CreateDeleteCusor(ITablerPtr pTable, IFieldSetPtr ptrFileds = nullptr) = 0;
+            virtual IInsertCursorPtr CreateInsertCusor(ITablePtr pTable, IFieldSetPtr ptrFileds = nullptr) = 0;
+            virtual IUpdateCursorPtr CreateUpdateCusor(ITablePtr pTable, IFieldSetPtr ptrFileds = nullptr, const std::string& whereClause = "") = 0;
+            virtual IDeleteCursorPtr CreateDeleteCusor(ITablePtr pTable, IFieldSetPtr ptrFileds = nullptr) = 0;
+            virtual void Executequery(const std::string& sqlQuery) = 0;
 
         };
 
 
-        class IWorkspace
+        class IWorkspace : public CommonLib::ISerializeObj
         {
         public:
             IWorkspace(){}
@@ -119,6 +124,22 @@ namespace GraphEngine
             virtual void RemoveDataset(IDatasetPtr ptrDataset) = 0;
             virtual int32_t GetID() const = 0;
         };
+
+
+        class IDatabaseWorkspace : public IWorkspace
+        {
+        public:
+            IDatabaseWorkspace(){}
+            virtual ~IDatabaseWorkspace(){}
+            virtual ITransactionPtr StartTransaction(eTransactionType type) = 0;
+
+            virtual ITablePtr CreateTable(const std::string& name, IFieldsPtr ptrFields) = 0;
+            virtual ITablePtr GetTable(const std::string& name) = 0;
+            virtual ITablePtr CreateSpatialTable(const std::string& name, IFieldsPtr ptrFields,const std::string& spatialIndexName = "") = 0;
+            virtual ITablePtr GetSpatialTable(const std::string& name) = 0;
+
+        };
+
 
         class IRow
         {
@@ -376,7 +397,7 @@ namespace GraphEngine
         public:
             IInsertCursor(){}
             virtual ~IInsertCursor(){}
-            virtual int64_t InsertRow(IRow* pRow) = 0;
+            virtual int64_t InsertRow(IRowPtr pRow) = 0;
         };
 
         class  IUpdateCursor : public ICursor
@@ -384,7 +405,7 @@ namespace GraphEngine
         public:
             IUpdateCursor(){}
             virtual ~IUpdateCursor(){}
-            virtual void UpdateRow(IRow* pRow) = 0;
+            virtual void UpdateRow(IRowPtr pRow) = 0;
         };
 
         class IDeleteCursor

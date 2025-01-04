@@ -7,12 +7,13 @@
 namespace GraphEngine
 {
     namespace GeoDatabase {
+
         template<class I>
         class ICursorBase : public I
         {
         public:
 
-            ICursorBase(IQueryFilterPtr ptrFilter, bool recycling, ITablePtr ptrTable) :
+            ICursorBase(IQueryFilterPtr ptrFilter, bool recycling,  IFieldsPtr pSourceFields,  Geometry::ISpatialReferencePtr spatRefSource = nullptr) :
                     m_bRecycling(recycling)
                     , m_spatialRel(srlUndefined)
                     , m_nOidFieldIndex(-1)
@@ -22,7 +23,6 @@ namespace GraphEngine
 
             {
 
-                m_pTable = pTable;
                 m_pFilter = pFilter;
                 m_pFieldSet = pFilter->GetFieldSet();
 
@@ -31,11 +31,8 @@ namespace GraphEngine
                     //TO DO set fields
                 }
 
-                m_pSourceFields = m_pTable->GetFields();
+                m_pSourceFields = pSourceFields;
                 UpdateFields();
-
-
-
 
                 IOIDSetPtr oidSet = m_pFilter->GetOIDSet();
                 oidSet->Reset();
@@ -51,13 +48,9 @@ namespace GraphEngine
                 // Spatial queries
 
 
-                ISpatialTable *pSpatialTable =  dynamic_cast<ISpatialTable *>(m_pTable.get());
-
-                if(pSpatialTable)
+                if(spatRefSource.get() != null)
                 {
                     Geometry::ISpatialReferencePtr spatRefOutput = m_pFilter->GetOutputSpatialReference();
-                    Geometry::ISpatialReferencePtr spatRefSource = pSpatialTable->GetSpatialReference();
-
                     ISpatialFilter *spatFilter = dynamic_cast<ISpatialFilter *>(m_pFilter.get());
                     if(spatFilter)
                     {
@@ -87,8 +80,8 @@ namespace GraphEngine
                         }
                         else
                         {
-                            m_pExtentOutput = std::make_shared<Geometry::CEnvelope>(GisBoundingBox(), spatRefOutput);
-                            m_pExtentSource = std::make_shared<Geometry::CEnvelope>(GisBoundingBox(), spatRefSource);
+                            m_pExtentOutput = std::make_shared<Geometry::CEnvelope>(CommonLib::bbox(), spatRefOutput);
+                            m_pExtentSource = std::make_shared<Geometry::CEnvelope>(CommonLib::bbox(), spatRefSource);
                         }
 
                         m_bNeedTransform = spatRefOutput != NULL
@@ -102,7 +95,7 @@ namespace GraphEngine
 
             }
 
-            ICursorBase(int64_t nOId, IFieldSet *pFieldSet, ITable* pTable) :
+            ICursorBase(int64_t nOId, IFieldSetPtr ptrFieldSet,  IFieldsPtr pSourceFields) :
                     m_bRecycling(false)
                     , m_spatialRel(srlUndefined)
                     , m_nOidFieldIndex(-1)
@@ -110,10 +103,9 @@ namespace GraphEngine
                     , m_nAnnoFieldIndex(-1)
                     , m_bNeedTransform(false)
             {
-                m_pTable = pTable;
-                m_pSourceFields = m_pTable->GetFields();
+                m_pSourceFields = ptrSourceFields;
                 m_vecOids.push_back(nOId);
-                m_pFieldSet = pFieldSet;
+                m_pFieldSet = ptrFieldSet;
                 UpdateFields();
 
             }
@@ -148,7 +140,7 @@ namespace GraphEngine
 
                 if(!m_pFieldSet.get())
                 {
-                    m_pFieldSet = new CFieldSet();
+                    m_pFieldSet = std::make_shared<CFieldSet>();
                     for (int i = 0, sz = m_pSourceFields->GetFieldCount(); i < sz; ++i)
                     {
                         IFieldPtr pField = m_pSourceFields->GetField(i);
@@ -236,7 +228,6 @@ namespace GraphEngine
             std::vector<int>           m_vecFieldsExists;
             std::vector<int>           m_vecActualFieldsIndexes;
             std::vector<eDataTypes>  m_vecActualFieldsTypes;
-            ITablePtr m_pTable;
             IRowPtr   m_pCurrentRow;
             bool m_bRecycling;
             std::vector<int64_t>           m_vecOids;
