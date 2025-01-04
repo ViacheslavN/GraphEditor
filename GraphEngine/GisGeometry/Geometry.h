@@ -62,7 +62,7 @@ namespace GraphEngine {
             virtual CommonLib::IGeoShapePtr AddShapeToIntersect(CommonLib::IGeoShapePtr shape)  = 0;
             virtual CommonLib::IGeoShapePtr ClearIntersect()  = 0;
             virtual CommonLib::IGeoShapePtr Intersect(CommonLib::IGeoShapePtr shape) const = 0;
-            virtual bool  IsIntersection(const CommonLib::IGeoShapePtr pShapeL, const CommonLib::IGeoShapePtr pShapeR, CommonLib::IGeoShapePtr pShapeRes = nullptr) = 0;
+            virtual bool  IsIntersection(const CommonLib::IGeoShapePtr pShapeL, const CommonLib::IGeoShapePtr pShapeR, CommonLib::IGeoShapePtr* pShapeRes = nullptr) = 0;
 
             virtual CommonLib::IGeoShapePtr  Union(CommonLib::IGeoShapePtr shape1, CommonLib::IGeoShapePtr shape2) const = 0;
             virtual CommonLib::IGeoShapePtr  AddShapeToUnion(CommonLib::IGeoShapePtr shape)  = 0;
@@ -104,6 +104,7 @@ namespace GraphEngine {
 
         class  IEnvelope
         {
+        public:
             IEnvelope(){}
             virtual ~IEnvelope(){}
 
@@ -114,8 +115,7 @@ namespace GraphEngine {
             virtual void                       Expand(IEnvelopePtr ptrEnvelope) = 0;
             virtual bool                       Intersect(IEnvelopePtr ptrEnvelope) = 0;
             virtual void                       Project(ISpatialReferencePtr ptrspatRef) = 0;
-
-            virtual IEnvelopePtr				  clone() const = 0;
+            virtual IEnvelopePtr			   Clone() const = 0;
 
         };
     }

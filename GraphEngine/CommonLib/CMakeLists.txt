@@ -4,8 +4,8 @@ project(CommonLib)
 find_library(PTHREAD_LIBRARY pthread)
 find_package(OpenSSL REQUIRED)
 
-set(CMAKE_CXX_STANDARD 14)
 
+set(CMAKE_CXX_STANDARD 17)
 set(COMMON_SOURCE_FILES
         stdafx.cpp
 
@@ -296,6 +296,8 @@ set(COMMON_SOURCE_FILES
 		SpatialData/Units.h
 		SpatialData/Units.cpp
 		utils/delegate.h
+		utils/PropertySet.h
+		utils/PropertySet.cpp
 )
 
 set(STATIC_LIBS

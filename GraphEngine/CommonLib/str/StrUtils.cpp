@@ -469,4 +469,30 @@ namespace CommonLib
             return ((int) *pLeftStr) - ((int) *pRightStr);
         }
     }
+
+    std::string StringUtils::Mid(const std::string& str, size_t first, size_t count)
+    {
+        uint32_t len = (uint32_t)str.length();
+
+        if(count == std::string::npos)
+            count = len - first;
+
+        if(first == 0 && count >= len)
+            return str;
+
+        if(first >= len)
+            return str;
+
+        std::string result;
+        if(first + count > len)
+            count = len - first;
+
+        result.reserve(count + 1);
+        char* p = result.data();
+
+        strncpy(p, str.c_str() + first, len);
+        p[len] = 0;
+
+        return result;
+    }
 }

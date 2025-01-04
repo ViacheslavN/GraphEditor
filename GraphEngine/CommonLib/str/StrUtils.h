@@ -9,6 +9,7 @@ namespace CommonLib
 	public:
 		static std::string Left(const std::string& str, size_t pos);
 		static std::string Right(const std::string& str, size_t pos);
+        static std::string Mid(const std::string& str, size_t first, size_t count = std::string::npos);
 
 		static std::wstring Left(const std::wstring& str, size_t pos);
 		static std::wstring Right(const std::wstring& str, size_t pos);

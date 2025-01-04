@@ -22,7 +22,9 @@ set(SOURCE_FILES
         SpatialReferenceProj4/SpatialReferenceProj4.h
         SpatialReferenceProj4/SpatialReferenceProj4.cpp
         SpatialReferenceProj4/CodeProj.h
-        SpatialReferenceProj4/CodeProj.cpp)
+        SpatialReferenceProj4/CodeProj.cpp
+        Envelope.h
+        Envelope.cpp)
 
 
 
