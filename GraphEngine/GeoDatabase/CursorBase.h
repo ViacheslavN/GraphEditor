@@ -13,234 +13,93 @@ namespace GraphEngine
         {
         public:
 
-            ICursorBase(IQueryFilterPtr ptrFilter, bool recycling,  IFieldsPtr pSourceFields,  Geometry::ISpatialReferencePtr spatRefSource = nullptr) :
-                    m_bRecycling(recycling)
-                    , m_spatialRel(srlUndefined)
-                    , m_nOidFieldIndex(-1)
-                    , m_nShapeFieldIndex(-1)
-                    , m_nAnnoFieldIndex(-1)
-                    , m_bNeedTransform(false)
-
+            ICursorBase(IQueryFilterPtr ptrFilter, Geometry::ISpatialReferencePtr ptrSpatRefSource) :
+             m_spatialRel(srlUndefined)
+            , m_bNeedTransform(false)
+            , m_ptrFilter(ptrFilter)
             {
-
-                m_pFilter = pFilter;
-                m_pFieldSet = pFilter->GetFieldSet();
-
-                if(!m_pFilter->GetWhereClause().empty())
-                {
-                    //TO DO set fields
-                }
-
-                m_pSourceFields = pSourceFields;
-                UpdateFields();
-
-                IOIDSetPtr oidSet = m_pFilter->GetOIDSet();
-                oidSet->Reset();
-
-                int64_t oid;
-                while(oidSet->Next(oid))
-                    m_vecOids.push_back(oid);
-
-                std::sort(m_vecOids.begin(), m_vecOids.end());
-
-                m_RowIDIt = m_vecOids.begin();
-
                 // Spatial queries
-
-
-                if(spatRefSource.get() != null)
+                if(ptrSpatRefSource.get() != nullptr)
                 {
-                    Geometry::ISpatialReferencePtr spatRefOutput = m_pFilter->GetOutputSpatialReference();
-                    ISpatialFilter *spatFilter = dynamic_cast<ISpatialFilter *>(m_pFilter.get());
-                    if(spatFilter)
+                    Geometry::ISpatialReferencePtr ptrSpatRefOutput = m_ptrFilter->GetOutputSpatialReference();
+                    ISpatialFilter *pSpatialFilter = dynamic_cast<ISpatialFilter *>(m_ptrFilter.get());
+                    if(pSpatialFilter)
                     {
-                        m_spatialRel =  srlUndefined;
-                        if(spatFilter)
-                            m_spatialRel = spatFilter->GetSpatialRel();
-
+                        m_spatialRel = pSpatialFilter->GetSpatialRel();
                         if(m_spatialRel != srlUndefined)
                         {
-                            if(spatFilter->GetBB().type == CommonLib::bbox_type_normal)
+                            if(pSpatialFilter->GetBB().type == CommonLib::bbox_type_normal)
                             {
-                                m_pExtentOutput = std::make_shared<Geometry::CEnvelope>(spatFilter->GetBB(), spatRefOutput);
-                                m_pExtentSource = std::make_shared<Geometry::CEnvelope>(spatFilter->GetBB(), spatRefOutput);
-                                m_pExtentOutput->Project(spatRefOutput);
-                                m_pExtentSource->Project(spatRefSource);
+                                m_ptrExtentOutput = std::make_shared<Geometry::CEnvelope>(pSpatialFilter->GetBB(), ptrSpatRefOutput);
+                                m_ptrExtentSource = std::make_shared<Geometry::CEnvelope>(pSpatialFilter->GetBB(), ptrSpatRefOutput);
+
+                                m_ptrExtentOutput->Project(ptrSpatRefOutput);
+                                m_ptrExtentSource->Project(ptrSpatRefSource);
                             }
                             else
                             {
-                                CommonLib::IGeoShapePtr pShape(spatFilter->GetShape());
-                                m_pExtentOutput = std::make_shared<Geometry::CEnvelope>(pShape->GetBB(), spatRefOutput);
-                                m_pExtentSource = std::make_shared<Geometry::CEnvelope>(pShape->GetBB(), spatRefOutput);
+                                CommonLib::IGeoShapePtr pShape = pSpatialFilter->GetShape();
+                                m_ptrExtentOutput = std::make_shared<Geometry::CEnvelope>(pShape->GetBB(), ptrSpatRefOutput);
+                                m_ptrExtentSource = std::make_shared<Geometry::CEnvelope>(pShape->GetBB(), ptrSpatRefOutput);
 
-                                m_pExtentOutput->Project(spatRefOutput);
-                                m_pExtentSource->Project(spatRefSource);
+                                m_ptrExtentOutput->Project(ptrSpatRefOutput);
+                                m_ptrExtentSource->Project(ptrSpatRefSource);
                             }
 
                         }
                         else
                         {
-                            m_pExtentOutput = std::make_shared<Geometry::CEnvelope>(CommonLib::bbox(), spatRefOutput);
-                            m_pExtentSource = std::make_shared<Geometry::CEnvelope>(CommonLib::bbox(), spatRefSource);
+                            m_ptrExtentOutput = std::make_shared<Geometry::CEnvelope>(CommonLib::bbox(), ptrSpatRefOutput);
+                            m_ptrExtentSource = std::make_shared<Geometry::CEnvelope>(CommonLib::bbox(), ptrSpatRefSource);
                         }
 
-                        m_bNeedTransform = spatRefOutput != NULL
-                                           && spatRefSource != NULL
-                                           && !spatRefOutput->IsEqual(spatRefSource);
+                        m_bNeedTransform = ptrSpatRefOutput.get() != nullptr
+                                           && ptrSpatRefSource.get() != nullptr
+                                           && !ptrSpatRefOutput->IsEqual(ptrSpatRefSource);
 
                     }
                 }
-
-
-
             }
 
-            ICursorBase(int64_t nOId, IFieldSetPtr ptrFieldSet,  IFieldsPtr pSourceFields) :
-                    m_bRecycling(false)
-                    , m_spatialRel(srlUndefined)
-                    , m_nOidFieldIndex(-1)
-                    , m_nShapeFieldIndex(-1)
-                    , m_nAnnoFieldIndex(-1)
-                    , m_bNeedTransform(false)
-            {
-                m_pSourceFields = ptrSourceFields;
-                m_vecOids.push_back(nOId);
-                m_pFieldSet = ptrFieldSet;
-                UpdateFields();
 
-            }
+
             virtual ~ICursorBase(){}
-            virtual IFieldSetPtr GetFieldSet() const
-            {
-                return m_pFieldSet;
-            }
-            virtual IFieldsPtr   GetSourceFields() const
-            {
-                return m_pSourceFields;
-            }
-            virtual bool         IsFieldSelected(int index) const
-            {
-                if(index < (int)m_vecFieldsExists.size() && index > -1)
-                    return m_vecFieldsExists[index] == 1;
 
-                return false;
+            virtual IRowPtr GetCurrentRow()
+            {
+                return m_ptrCurrentRow;
+
             }
+
+
 
             void UpdateFields()
             {
 
-                int fieldCount = m_pSourceFields->GetFieldCount();
-                m_vecFieldsExists.resize(fieldCount, 0);
-                //	m_vecActualFieldsIndexes.clear();
-
-
-                m_nOidFieldIndex = -1;
-                m_nShapeFieldIndex = -1;
-                m_nAnnoFieldIndex = -1;
-
-                if(!m_pFieldSet.get())
+                if(!m_ptrFieldsSet.get())
                 {
-                    m_pFieldSet = std::make_shared<CFieldSet>();
-                    for (int i = 0, sz = m_pSourceFields->GetFieldCount(); i < sz; ++i)
+                    m_ptrFieldsSet = std::make_shared<CFieldSet>();
+                    for (int i = 0, sz = m_ptrSourceFields->GetFieldCount(); i < sz; ++i)
                     {
-                        IFieldPtr pField = m_pSourceFields->GetField(i);
-                        m_pFieldSet->Add(pField->GetName());
+                        IFieldPtr pField = m_ptrSourceFields->GetField(i);
+                        m_ptrFieldsSet->Add(pField->GetName());
                     }
                 }
-
-                m_vecFieldInfo.reserve(m_pFieldSet->GetCount());
-
-                m_pFieldSet->Reset();
-                std::string field;
-                int nNum = 0;
-                while(m_pFieldSet->Next(field))
-                {
-                    if(field == "*")
-                    {
-                        //		if(m_pFilter.get())
-                        {
-                            m_pFieldSet->Clear();
-                            for(int i = 0; i < fieldCount; ++i)
-                            {
-                                IFieldPtr field = m_pSourceFields->GetField(i);
-                                m_pFieldSet->Add(field->GetName());
-                            }
-
-                            m_pFieldSet->Reset();
-                            //m_vecActualFieldsIndexes.clear();
-                            //m_vecActualFieldsTypes.clear();
-                            continue;
-                        }
-
-                    }
-
-
-                    int fieldIndex = m_pSourceFields->FindField(field);
-                    IFieldPtr pField = m_pSourceFields->GetField(fieldIndex);
-
-                    m_vecFieldInfo.push_back(sFieldInfo(nNum,  fieldIndex, pField->GetType()));
-
-                    m_vecFieldsExists[fieldIndex] = 1;
-                    //	m_vecActualFieldsIndexes.push_back(fieldIndex);
-                    //	m_vecActualFieldsTypes.push_back(m_pSourceFields->GetField(fieldIndex)->GetType());
-
-                    if((pField->GetType() == dtOid32 || pField->GetType() == dtOid64)  && m_nOidFieldIndex < 0)
-                        m_nOidFieldIndex = fieldIndex;
-                    else if(pField->GetType()== dtGeometry && (m_nShapeFieldIndex < 0 || m_nShapeFieldIndex > fieldIndex))
-                        m_nShapeFieldIndex = fieldIndex;
-                    else if(pField->GetType() == dtAnnotation && (m_nAnnoFieldIndex < 0 || m_nAnnoFieldIndex > fieldIndex))
-                        m_nAnnoFieldIndex = fieldIndex;
-
-                    ++nNum;
-                }
-
-                // Change fieldset to right names (from DB)
-                /*int actualfieldCount = (int)m_vecActualFieldsIndexes.size();
-                IFieldSetPtr fieldSet(new CFieldSet());
-                for(int i = 0; i < actualfieldCount; ++i)
-                    fieldSet->Add(m_pSourceFields->GetField(m_vecActualFieldsIndexes[i])->GetName());
-                fieldSet->Reset();
-                m_pFieldSet = fieldSet;*/
-
-                //m_pFilter->SetFieldSet(m_pFieldSet.get());
             }
 
+
         protected:
-            IQueryFilterPtr m_pFilter;
-            IFieldsPtr      m_pSourceFields;
-            IFieldSetPtr	m_pFieldSet;
+            IRowPtr   m_ptrCurrentRow;
+            IQueryFilterPtr m_ptrFilter;
+            IFieldsPtr      m_ptrSourceFields;
+            IFieldSetPtr      m_ptrFieldsSet;
 
-
-            struct  sFieldInfo
-            {
-                sFieldInfo(){}
-                sFieldInfo(int nRowNum, int nDataSetNum, eDataTypes nType) : m_nRowIndex(nRowNum), m_nDataSetIndex(nDataSetNum), m_nType(nType)
-                {}
-                int m_nRowIndex;
-                int m_nDataSetIndex;
-                eDataTypes m_nType;
-            };
-
-            typedef std::vector<sFieldInfo> TFieldInfo;
-            TFieldInfo m_vecFieldInfo;
-
-
-            std::vector<int>           m_vecFieldsExists;
-            std::vector<int>           m_vecActualFieldsIndexes;
-            std::vector<eDataTypes>  m_vecActualFieldsTypes;
-            IRowPtr   m_pCurrentRow;
-            bool m_bRecycling;
-            std::vector<int64_t>           m_vecOids;
-            std::vector<int64_t>::iterator m_RowIDIt;
-            int m_nOidFieldIndex;
-            int m_nShapeFieldIndex;
-            int m_nAnnoFieldIndex;
-
-
-            Geometry::IEnvelopePtr  m_pExtentOutput;
-            Geometry::IEnvelopePtr  m_pExtentSource;
+            //spatial part
+            Geometry::IEnvelopePtr  m_ptrExtentOutput;
+            Geometry::IEnvelopePtr  m_ptrExtentSource;
             bool m_bNeedTransform;
             eSpatialRel				   m_spatialRel;
+
         };
     }
 }

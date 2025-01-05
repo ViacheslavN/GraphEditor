@@ -172,7 +172,7 @@ namespace CommonLib
         bool has_m;
         bool has_curve;
         bool has_id;
-        getTypeParams(shapeType, &genType, &has_z, &has_m, &has_curve, &has_id);
+        GetTypeParams(shapeType, &genType, &has_z, &has_m, &has_curve, &has_id);
         uint32_t flag_z = has_z ? 1 : 0;
         uint32_t flag_m = has_m ? 1 : 0;
         uint32_t flag_curve = has_curve ? 1 : 0;
@@ -213,7 +213,7 @@ namespace CommonLib
         bool has_id;
         double* dbuf;
 
-        getTypeParams(shapeType, &genType, &has_z, &has_m, &has_curve, &has_id);
+        GetTypeParams(shapeType, &genType, &has_z, &has_m, &has_curve, &has_id);
 
         *buf = (byte)(0); //reserve
         buf += 1;
@@ -780,7 +780,7 @@ namespace CommonLib
         bool has_m;
         bool has_curve;
         bool has_id;
-        getTypeParams(shType, &genType, &has_z, &has_m, &has_curve, &has_id);
+        GetTypeParams(shType, &genType, &has_z, &has_m, &has_curve, &has_id);
 
         if (genType == shape_type_null || shType == shape_type_null || genType == shape_type_general_point)
             return;

@@ -9,7 +9,11 @@ namespace GraphEngine {
         class IDataSetBase : public I
         {
         public:
-            IDataSetBase() : m_DatasetType(dtUndefined)
+            IDataSetBase(eDatasetType datasetType,  std::string sDatasetName,  std::string sDatasetViewName) :
+                    m_DatasetType(dtUndefined)
+                    ,m_sDatasetName(sDatasetName)
+                    ,m_sDatasetViewName(sDatasetViewName)
+
             {
 
             }

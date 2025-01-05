@@ -15,6 +15,14 @@ set(SOURCE_FILES
         shapelib.def)
 
 
+if (WIN32)
+
+    set (CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -MTd")
+    set (CMAKE_CXX_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -MTd")
+    set (CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -MT")
+    set (CMAKE_CXX_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -MT")
+
+endif()
 
 add_library(${PROJECT_NAME} ${SOURCE_FILES})
 

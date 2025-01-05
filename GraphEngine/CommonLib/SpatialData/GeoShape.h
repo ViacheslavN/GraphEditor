@@ -116,7 +116,7 @@ namespace CommonLib
         void SetNull(eShapeType shapeType = shape_type_null);
 
 
-        static void getTypeParams(eShapeType shapeType, eShapeType* pGenType, bool* has_z = nullptr, bool* has_m = nullptr, bool* has_curve = nullptr, bool* has_id = nullptr);
+        //static void getTypeParams(eShapeType shapeType, eShapeType* pGenType, bool* has_z = nullptr, bool* has_m = nullptr, bool* has_curve = nullptr, bool* has_id = nullptr);
         static eShapeType GetGeneralType(eShapeType type);
 
         uint32_t  Size() const;

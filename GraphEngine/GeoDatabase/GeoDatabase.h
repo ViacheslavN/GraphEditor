@@ -41,8 +41,6 @@ namespace GraphEngine
             dtUInteger16,
             dtUInteger32,
             dtUInteger64,
-            dtOid32,
-            dtOid64,
             dtFloat,
             dtDouble,
             dtString,
@@ -92,6 +90,7 @@ namespace GraphEngine
         typedef std::shared_ptr<class IFields> IFieldsPtr;
         typedef std::shared_ptr<class IFieldSet> IFieldSetPtr;
         typedef std::shared_ptr<class IQueryFilter> IQueryFilterPtr;
+        typedef std::shared_ptr<class ISpatialFilter> ISpatialFilterPtr;
         typedef std::shared_ptr<class IGeometryDefinition> IGeometryDefinitionPtr;
 
 
@@ -112,7 +111,7 @@ namespace GraphEngine
         };
 
 
-        class IWorkspace : public CommonLib::ISerializeObj
+        class IWorkspace : public CommonLib::ISerialize
         {
         public:
             IWorkspace(){}
@@ -152,6 +151,7 @@ namespace GraphEngine
             virtual bool ColumnIsNull(int32_t col) const = 0;
             virtual eDataTypes GetColumnType(int32_t col) const = 0;
             virtual int32_t GetColumnBytes(int32_t col) const = 0;
+            virtual int64_t  GetRowId() const = 0;
 
             virtual int8_t ReadInt8(int32_t col) const = 0;
             virtual uint8_t ReadUInt8(int32_t col) const = 0;
@@ -196,7 +196,7 @@ namespace GraphEngine
             virtual const std::string& GetName() const = 0;
             virtual void                 SetName( const std::string& name) = 0;
             virtual  const std::string&  GetAliasName() const = 0;
-            virtual void                 SetAliasName(const  std::string  name) = 0;
+            virtual void                 SetAliasName(const  std::string&  name) = 0;
             virtual bool                 GetIsEditable() const = 0;
             virtual void                 SetIsEditable(bool flag) = 0;
             virtual bool                 GetIsNullable() const = 0;
@@ -247,7 +247,7 @@ namespace GraphEngine
         };
 
 
-        class IDataset : public CommonLib::ISerializeObj
+        class IDataset : public CommonLib::ISerialize
         {
         public:
             IDataset(){}
@@ -272,7 +272,7 @@ namespace GraphEngine
             virtual const std::string&      	 GetOIDFieldName() const = 0;
             virtual void						 SetOIDFieldName(const std::string& sOIDFieldName) = 0;
             virtual IRowPtr						 GetRow(int64_t id) = 0;
-            virtual ICursorPtr					 Search(IQueryFilterPtr filter, bool recycling) = 0;
+            virtual ICursorPtr					 Search(IQueryFilterPtr filter) = 0;
         };
 
         class ISpatialTable : public ITable
@@ -354,13 +354,10 @@ namespace GraphEngine
             IQueryFilter(){}
             virtual ~IQueryFilter(){}
             virtual IFieldSetPtr                        GetFieldSet() const = 0;
-            virtual void                                SetFieldSet(IFieldSetPtr fieldSet) = 0;
             virtual Geometry::ISpatialReferencePtr      GetOutputSpatialReference() const = 0;
             virtual void								SetOutputSpatialReference(Geometry::ISpatialReferencePtr spatRef) = 0;
             virtual const std::string&                  GetWhereClause() const = 0;
             virtual void								SetWhereClause(const std::string& where) = 0;
-            virtual IOIDSetPtr                          GetOIDSet() const = 0;
-            virtual void								SetOIDSet(IOIDSet* oidSet) = 0;
         };
 
         class ISpatialFilter : public IQueryFilter
@@ -369,7 +366,7 @@ namespace GraphEngine
             ISpatialFilter(){}
             virtual ~ISpatialFilter(){}
             virtual const std::string&    GetShapeField() const = 0;
-            virtual void						 SetShapeField(const std::string name) = 0;
+            virtual void						 SetShapeField(const std::string& name) = 0;
             virtual CommonLib::IGeoShapePtr		 GetShape() const = 0;
             virtual void						 SetShape( CommonLib::IGeoShapePtr ptrShape) = 0;
             virtual CommonLib::bbox				 GetBB() const = 0;
@@ -386,11 +383,9 @@ namespace GraphEngine
         public:
             ICursor(){}
             virtual ~ICursor(){}
-            virtual bool NextRow(IRowPtr* row) = 0;
+            virtual bool NextRow() = 0;
+            virtual IRowPtr GetCurrentRow() = 0;
         };
-
-
-
 
         class  IInsertCursor
         {

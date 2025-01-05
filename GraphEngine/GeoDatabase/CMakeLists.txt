@@ -13,7 +13,6 @@ set(COMMON_SOURCE_FILES
         OIDSet.cpp
         GeometryDefinition.h
         GeometryDefinition.cpp
-        CursorBase.h
         InsertCursorBase.h
         InsertCursorBase.cpp
         GeoDatabaseShape/ShapefileUtils.h
@@ -26,6 +25,21 @@ set(COMMON_SOURCE_FILES
         GeoDatabaseShape/ShapeFile.h
         GeoDatabaseShape/ShapeFile.cpp
         GeoDatabaseShape/SHPObject.cpp
+        GeoDatabaseShape/ShapeDBFile.h
+        GeoDatabaseShape/ShapeDBFile.cpp
+        GeoDatabaseShape/ShapefileRowCursor.h
+        GeoDatabaseShape/ShapefileRowCursor.cpp
+        GeoDatabaseShape/ShapeRow.h
+        GeoDatabaseShape/ShapeRow.cpp
+        BaseRow.h
+        GeoDatabaseShape/ShapeTree.h
+        GeoDatabaseShape/ShapeTree.cpp
+        CursorBase.h
+        GeoDatabaseShape/ShapefileSpatialTable.cpp
+        Field.h
+        Field.cpp
+        QueryFilter.h
+        QueryFilter.cpp
 
 )
 
@@ -37,15 +51,8 @@ IF (WIN32)
 
 ELSE()
     set(SOURCE_FILES ${COMMON_SOURCE_FILES}
-            GeoDatabaseShape/ShapeDBFile.h
-            GeoDatabaseShape/ShapeDBFile.cpp
-            GeoDatabaseShape/ShapefileRowCursor.h
-            GeoDatabaseShape/ShapefileRowCursor.cpp
-            GeoDatabaseShape/ShapeRow.h
-            GeoDatabaseShape/ShapeRow.cpp
-            BaseRow.h
-            GeoDatabaseShape/ShapeTree.h
-            GeoDatabaseShape/ShapeTree.cpp
+            Tests/TestShapeFileDatabase/main.cpp
+
 
     )
 
@@ -57,3 +64,4 @@ add_library(GeoDatabase ${SOURCE_FILES})
 target_link_libraries(${PROJECT_NAME} PUBLIC CommonLib)
 target_link_libraries(${PROJECT_NAME} PUBLIC ShapeLib)
 
+add_subdirectory(Tests)

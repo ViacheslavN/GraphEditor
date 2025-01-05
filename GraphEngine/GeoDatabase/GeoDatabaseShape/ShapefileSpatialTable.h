@@ -6,21 +6,25 @@
 namespace GraphEngine
 {
     namespace GeoDatabase {
-        class CShapefileSpatialTable : public ISpatialTableBase<CShapefileSpatialTable>
+
+        class CShapefileSpatialTable : public ISpatialTableBase<ISpatialTable>
         {
         public:
-            typedef  ISpatialTableBase<CShapefileSpatialTable> TBase;
+            typedef  ISpatialTableBase<ISpatialTable> TBase;
 
             CShapefileSpatialTable(const std::string& sPath, const std::string& sName, const std::string& sViewName);
             ~CShapefileSpatialTable();
 
 
             virtual IRowPtr		GetRow(int64_t id);
-            virtual ICursorPtr	Search(IQueryFilterPtr filter, bool recycling);
+            virtual ICursorPtr	Search(IQueryFilterPtr filter);
 
 
             virtual void Save(CommonLib::ISerializeObjPtr pObj) const ;
             virtual void Load(CommonLib::ISerializeObjPtr pObj);
+
+        private:
+            void LoadShapeFile( bool  write);
 
         private:
 

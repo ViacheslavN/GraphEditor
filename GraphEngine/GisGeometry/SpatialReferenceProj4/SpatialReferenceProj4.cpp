@@ -1,5 +1,5 @@
 #include "SpatialReferenceProj4.h"
-#include "../org/ogr_spatialref.h"
+#include "../ogr/ogr_spatialref.h"
 #include "../cpl/cpl_conv.h"
 #include "../../ThirdParty/Proj4/src/projects.h"
 #include "../../ThirdParty/Proj4/src/proj_api.h"

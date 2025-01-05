@@ -12,12 +12,16 @@ namespace GraphEngine
         class CShapeRow : public IRowBase<IRow>
         {
         public:
+
+            typedef IRowBase<IRow> TBase;
+
             CShapeRow(CShapeDBFilePtr ptrDBFile, CShapeFilePtr ptrShapeFile, IFieldsPtr  pFields);
             virtual ~CShapeRow();
 
             void SetRow(int rowId);
+            void SetShape(CommonLib::IGeoShapePtr ptrShape);
 
-
+            virtual int64_t  GetRowId() const;
             virtual int8_t ReadInt8(int32_t col) const;
             virtual uint8_t ReadUInt8(int32_t col) const ;
             virtual int16_t ReadInt16(int32_t col) const ;
@@ -51,13 +55,12 @@ namespace GraphEngine
             virtual void BindShape(int32_t col, CommonLib::IGeoShapePtr ptrShape) ;
 
         private:
-
             CShapeDBFilePtr m_ptrDBFile;
             CShapeFilePtr m_ptrShapeFile;
-            mutable CommonLib::IGeoShapePtr  m_ptrGeoShapeCache;
+            CommonLib::IGeoShapePtr  m_ptrGeoShapeCache;
             int m_rowId;
 
-            IFieldsPtr  m_ptrFields;
+
         };
     }
 }

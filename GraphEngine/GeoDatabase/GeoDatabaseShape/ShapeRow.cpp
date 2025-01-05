@@ -1,13 +1,15 @@
 #include "ShapeRow.h"
-#include "ShapefileUtils.h"
 #include "../../CommonLib/str/StringEncoding.h"
-#include "../../CommonLib/SpatialData/GeoShape.h"
+
 
 namespace GraphEngine {
     namespace GeoDatabase {
 
-        CShapeRow::CShapeRow(CShapeDBFilePtr ptrDBFile, CShapeFilePtr ptrShapeFile, IFieldsPtr  ptrFields) :  m_ptrDBFile(ptrDBFile), m_rowId(-1),
-        m_ptrFields(ptrFields), m_ptrShapeFile(ptrShapeFile)
+        CShapeRow::CShapeRow(CShapeDBFilePtr ptrDBFile, CShapeFilePtr ptrShapeFile, IFieldsPtr  ptrFields ):
+                TBase(ptrFields),
+                m_ptrDBFile(ptrDBFile),
+                m_rowId(-1),
+                m_ptrShapeFile(ptrShapeFile)
         {
 
         }
@@ -22,68 +24,10 @@ namespace GraphEngine {
             m_rowId = rowId;
         }
 
-      /*  int32_t  CShapeRow::ColumnCount() const
+        int64_t  CShapeRow::GetRowId() const
         {
-
-           // return  (int32_t)m_ptrDBFile->GetFieldCount();
+            return (int64_t)m_rowId;
         }
-
-        std::string CShapeRow::ColumnName(int32_t col) const
-        {
-
-
-
-            char name[33];
-            int width;
-            int dec;
-            DBFFieldType shpFieldType = m_ptrDBFile->GetFieldInfo(col, name, &width, &dec);
-            if(shpFieldType == FTInvalid)
-                throw CommonLib::CExcBase("CShapeRow failed to get column name, index: {0}", col);
-
-            return  name;
-
-        }
-
-
-       eDataTypes CShapeRow::GetColumnType(int32_t col) const
-        {
-
-           char name[33];
-            int width;
-            int dec;
-            DBFFieldType shpFieldType = m_ptrDBFile->GetFieldInfo(col, name, &width, &dec);
-            if(shpFieldType == FTInvalid)
-                throw CommonLib::CExcBase("CShapeRow failed to get column type, index: {0}", col);
-
-            eDataTypes fieldType;
-            int length;
-            int precision;
-            int scale;
-            fieldType = CShapefileUtils::SHPFieldInfoToFieldInfo(shpFieldType, width, dec, &length, &precision, &scale);
-
-            return  fieldType;
-
-        }
-
-        int32_t CShapeRow::GetColumnBytes(int32_t col) const
-        {
-
-            /*char name[33];
-            int width;
-            int dec;
-            DBFFieldType shpFieldType = m_ptrDBFile->GetFieldInfo(col, name, &width, &dec);
-            if(shpFieldType == FTInvalid)
-                throw CommonLib::CExcBase("CShapeRow failed to get column type, index: {0}", col);
-
-            eDataTypes fieldType;
-            int length;
-            int precision;
-            int scale;
-            fieldType = CShapefileUtils::SHPFieldInfoToFieldInfo(shpFieldType, width, dec, &length, &precision, &scale);
-
-            return  length;
-
-        }*/
 
         int8_t CShapeRow::ReadInt8(int32_t col) const
         {
@@ -179,14 +123,21 @@ namespace GraphEngine {
 
         CommonLib::IGeoShapePtr CShapeRow::ReadShape(int32_t col) const
         {
-            CSHPObjectPtr ptrObject =  m_ptrShapeFile->ReadObject(col);
+        /*    CSHPObjectPtr ptrObject =  m_ptrShapeFile->ReadObject(m_rowId);
             if(!m_ptrGeoShapeCache.get())
                 m_ptrGeoShapeCache = std::make_shared<CommonLib::CGeoShape>();
 
-            CShapefileUtils::SHPObjectToGeometry(ptrObject, m_ptrGeoShapeCache);
+            CShapefileUtils::SHPObjectToGeometry(ptrObject, m_ptrGeoShapeCache);*/
 
             return m_ptrGeoShapeCache;
         }
+
+        void CShapeRow::SetShape(CommonLib::IGeoShapePtr ptrShape)
+        {
+            m_ptrGeoShapeCache = ptrShape;
+        }
+
+
 
         void CShapeRow::BindInt8(int32_t col, int8_t val)
         {

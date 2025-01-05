@@ -1,6 +1,7 @@
 #pragma once
 
 #include "DataSetBase.h"
+#include "Fields.h"
 
 namespace GraphEngine {
     namespace GeoDatabase {
@@ -10,9 +11,9 @@ namespace GraphEngine {
         public:
             typedef IDataSetBase<I> TBase;
 
-            ITableBase() : TBase()
+            ITableBase(eDatasetType datasetType,  std::string sDatasetName,  std::string sDatasetViewName) : TBase(
+                     datasetType,   sDatasetName,sDatasetViewName)
             {
-                this->m_DatasetType = dtTypeTable;
                 this->m_pFields = std::make_shared<CFields>();
                 this->m_bHashOID = false;
             }
@@ -41,7 +42,7 @@ namespace GraphEngine {
 
             virtual void SetFields(IFieldsPtr ptrFields)
             {
-                m_pFields = pFields;
+                m_pFields = ptrFields;
             }
 
             void SetOIDFieldName(const std::string& sOIDFieldName)

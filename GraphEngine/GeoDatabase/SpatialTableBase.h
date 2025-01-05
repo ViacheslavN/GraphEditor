@@ -11,9 +11,12 @@ namespace GraphEngine
         {
         public:
             typedef ITableBase<I> TBase;
-            ISpatialTableBase() : TBase(), m_ShapeType(CommonLib::shape_type_null), m_bAnnotation(false)
+            ISpatialTableBase(std::string sDatasetName,  std::string sDatasetViewName) :
+            TBase(dtSpatialTable, sDatasetName, sDatasetViewName),
+                m_ShapeType(CommonLib::shape_type_null),
+                m_bAnnotation(false)
             {
-                this->m_DatasetType = dtSpatialTable;
+
             }
 
             virtual ~ISpatialTableBase()
@@ -36,7 +39,7 @@ namespace GraphEngine
                 return m_sShapeFieldName;
             }
 
-            virtual void SetShapeFieldName(const std::string&& sName)
+            virtual void SetShapeFieldName(const std::string& sName)
             {
                 m_sShapeFieldName = sName;
             }
@@ -56,7 +59,7 @@ namespace GraphEngine
                 m_bAnnotation = bAnno;
             }
 
-            virtual void SetAnnoFieldName(const std::string&& sAnnoName)
+            virtual void SetAnnoFieldName(const std::string& sAnnoName)
             {
                 m_sAnnotationName = sAnnoName;
             }
