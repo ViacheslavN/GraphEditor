@@ -17,6 +17,15 @@ namespace GraphEngine
             LoadShapeFile(false);
         }
 
+        CShapefileSpatialTable::CShapefileSpatialTable(const std::string& sPath,const std::string& sName,  const std::string& sViewName, IFieldsPtr ptrFields):
+                TBase(sName,  sViewName),
+                m_sPath(sPath)
+        {
+            m_sPath=  CShapefileUtils::NormalizePath(m_sPath);
+            CreateShapeFile(ptrFields);
+        }
+
+
         CShapefileSpatialTable::~CShapefileSpatialTable()
         {
 
@@ -42,11 +51,14 @@ namespace GraphEngine
 
         }
 
+
         void CShapefileSpatialTable::LoadShapeFile( bool write)
         {
+
+
             try
             {
-                std::string filePathBase = m_sPath + m_sDatasetViewName;
+                std::string filePathBase = m_sPath + m_sDatasetName;
 
 
                 std::string  shpFilePath = filePathBase + ".shp";
@@ -133,7 +145,126 @@ namespace GraphEngine
             }
             catch (std::exception& exc)
             {
-                CommonLib::CExcBase::RegenExc("Failed to load shape file, path: {0}", m_sPath, exc);
+                CommonLib::CExcBase::RegenExc("Failed to load shape file, path: {0}, name: {1}", m_sPath, m_sDatasetName, exc);
+            }
+        }
+
+        void CShapefileSpatialTable::CreateShapeFile(IFieldsPtr ptrFields)
+        {
+            try
+            {
+                std::string filePathBase = m_sPath + m_sDatasetName;
+
+                if(filePathBase.empty())
+                    throw CommonLib::CExcBase("Invalid params, path: {0}, datasetname: {1}", m_sPath, m_sDatasetName);
+
+
+
+                int shapeType = CommonLib::shape_type_null;
+                int fieldCount = ptrFields->GetFieldCount();
+                Geometry::ISpatialReferencePtr pSprefPtr;
+
+
+                for(int i = 0; i < fieldCount; ++i)
+                {
+                    IFieldPtr pField = ptrFields->GetField(i);
+                    switch(pField->GetType())
+                    {
+                        case dtInteger8:
+                        case dtUInteger8:
+                        case dtInteger16:
+                        case dtUInteger16:
+                        case dtInteger32:
+                        case dtUInteger32:
+                        case dtInteger64:
+                        case dtUInteger64:
+                        case dtString:
+                        case dtDate:
+                            break;
+
+                        case dtGeometry:
+                        {
+                            ISpatialFieldPtr pShpField = std::static_pointer_cast<ISpatialField>(pField);
+                            if(pShpField.get() == nullptr)
+                                throw CommonLib::CExcBase("Wrong spatial field");
+
+                            CommonLib::eShapeType gtype = pShpField->GetGeometryDef()->GetGeometryType();
+                            if(gtype == CommonLib::shape_type_point )
+                                shapeType = SHPT_MULTIPOINT;
+                            else if(gtype == CommonLib::shape_type_polyline)
+                            {
+                                shapeType = SHPT_ARC;
+                            }
+                            if(gtype == CommonLib::shape_type_polygon)
+                            {
+                                shapeType = SHPT_POLYGON;
+                            }
+                            if(gtype == CommonLib::shape_type_multipatch)
+                            {
+                                shapeType = SHPT_MULTIPATCH;
+                            }
+                            pSprefPtr = pShpField->GetGeometryDef()->GetSpatialReference();
+                        }
+                        break;
+                    }
+                }
+
+                if(shapeType ==  CommonLib::shape_type_null)
+                    throw CommonLib::CExcBase("Geometry field not found");
+
+                std::string  shpFilePath = filePathBase + ".shp";
+                std::string  dbfFilePath = filePathBase + ".dbf";
+                std::string  prjFileName = filePathBase + ".prj";
+
+
+                m_ptrShp = std::make_shared<CShapeFile>(shpFilePath.c_str(), shapeType);
+                m_ptrDBfile = std::make_shared<CShapeDBFile>(shpFilePath.c_str());
+
+                if(pSprefPtr.get())
+                {
+                    FILE* pFile = fopen(prjFileName.c_str(), "wt");
+                    fputs(pSprefPtr->GetProjectionString().c_str(), pFile);
+                    fclose(pFile);
+                }
+
+                for(int i = 0; i < fieldCount; ++i)
+                {
+                    IFieldPtr pField = ptrFields->GetField(i);
+                    switch(pField->GetType())
+                    {
+                        case dtInteger8:
+                        case dtInteger16:
+                        case dtInteger32:
+                        case dtInteger64:
+                        case dtUInteger8:
+                        case dtUInteger16:
+                        case dtUInteger32:
+                        case dtUInteger64:
+                            m_ptrDBfile->AddField(pField->GetName().c_str(), FTInteger, pField->GetPrecision(), pField->GetScale());
+                            break;
+                        case dtFloat:
+                        case dtDouble:
+                            m_ptrDBfile->AddField(pField->GetName().c_str(), FTDouble, pField->GetPrecision(), pField->GetScale());
+                            break;
+                        case dtString:
+                            m_ptrDBfile->AddField(pField->GetName().c_str(), FTString, pField->GetLength(), 0);
+                            break;
+                        case dtDate:
+                            m_ptrDBfile->AddField(pField->GetName().c_str(), FTDate, pField->GetLength(), 0);
+                            break;
+                       case dtGeometry:
+                            break;
+                        default:
+                            throw CommonLib::CExcBase("Doesn't support type: {0}", (int)pField->GetType());
+                    }
+                }
+
+
+
+            }
+            catch (std::exception& exc)
+            {
+                CommonLib::CExcBase::RegenExc("Failed to load shape file, path: {0}, name: {1}", m_sPath, m_sDatasetName, exc);
             }
         }
 

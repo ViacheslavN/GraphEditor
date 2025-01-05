@@ -40,6 +40,9 @@ set(COMMON_SOURCE_FILES
         Field.cpp
         QueryFilter.h
         QueryFilter.cpp
+        GeoDatabaseShape/ShapefileWorkspace.h
+        GeoDatabaseShape/ShapefileWorkspace.cpp
+        WorkspaceBase.h
 
 )
 
@@ -50,11 +53,7 @@ IF (WIN32)
     set(SOURCE_FILES ${COMMON_SOURCE_FILES} ${WINDOWS_SOURCE_FILES})
 
 ELSE()
-    set(SOURCE_FILES ${COMMON_SOURCE_FILES}
-            Tests/TestShapeFileDatabase/main.cpp
-
-
-    )
+    set(SOURCE_FILES ${COMMON_SOURCE_FILES}    )
 
 ENDIF()
 

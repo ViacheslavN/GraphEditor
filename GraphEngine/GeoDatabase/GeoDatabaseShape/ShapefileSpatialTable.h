@@ -12,7 +12,8 @@ namespace GraphEngine
         public:
             typedef  ISpatialTableBase<ISpatialTable> TBase;
 
-            CShapefileSpatialTable(const std::string& sPath, const std::string& sName, const std::string& sViewName);
+            CShapefileSpatialTable(const std::string& sPath, const std::string& sName, const std::string& sViewName); //open
+            CShapefileSpatialTable(const std::string& sPath, const std::string& name,  const std::string& viewName, IFieldsPtr ptrFields); //create
             ~CShapefileSpatialTable();
 
 
@@ -25,7 +26,7 @@ namespace GraphEngine
 
         private:
             void LoadShapeFile( bool  write);
-
+            void CreateShapeFile(IFieldsPtr ptrFields);
         private:
 
             ISpatialFieldPtr m_pShapeField;

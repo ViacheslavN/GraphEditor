@@ -32,5 +32,6 @@ namespace CommonLib
 		static void DeleteFile(const astr& path);
 		static void FileDelFolder(const astr& path);
 		static void RenameFile(const astr& oldFile, const astr& newFile);
+        static void CreateDirectory(const astr& path);
 	};
 }

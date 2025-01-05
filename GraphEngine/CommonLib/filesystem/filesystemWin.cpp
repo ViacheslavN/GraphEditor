@@ -45,6 +45,12 @@ namespace CommonLib
 			throw CWinExc("Failed to delete folder {0}", StringEncoding::str_w2a_safe(path));
 	}
 
+    void CFileUtils::FileDelFolder(const std::string& path)
+    {
+        if (::RemoveDirectoryA(path.c_str()) == FALSE)
+            throw CWinExc("Failed to delete folder {0}", path);
+    }
+
 	void CFileUtils::RenameFile(const wstr& oldFile, const wstr& newFile)
 	{
 		if(::MoveFileW(oldFile.c_str(), newFile.c_str()) == FALSE)
@@ -114,4 +120,10 @@ namespace CommonLib
 	{
 		RenameFile(StringEncoding::str_a2w_safe(oldFile), StringEncoding::str_a2w_safe(newFile));
 	}
+
+    void CFileUtils::CreateDirectory(const astr& path)
+    {
+        if (::CreateDirectoryA(path.c_str(), NULL) == FALSE)
+            throw CWinExc("Failed to create directory {0}", path);
+    }
 }

@@ -21,6 +21,8 @@ namespace GraphEngine
             int  ReadIntegerAttribute( int iShape, int iField );
             double ReadDoubleAttribute( int iShape, int iField );
             const char * ReadStringAttribute(int iShape, int iField );
+
+            void AddField(const char *pszFieldName,  DBFFieldType eType, int nWidth, int nDecimals);
         private:
             DBFHandle m_dbFile;
         };

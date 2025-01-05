@@ -116,7 +116,7 @@ namespace GraphEngine
         public:
             IWorkspace(){}
             virtual ~IWorkspace(){}
-            virtual eWorkspaceType GetWorkspaceType() const;
+            virtual eWorkspaceType GetWorkspaceType() const = 0;
             virtual uint32_t GetDatasetCount() const = 0;
             virtual IDatasetPtr GetDataset(uint32_t nIdx) const = 0;
             virtual void RemoveDataset(uint32_t nIdx) = 0;
@@ -132,10 +132,10 @@ namespace GraphEngine
             virtual ~IDatabaseWorkspace(){}
             virtual ITransactionPtr StartTransaction(eTransactionType type) = 0;
 
-            virtual ITablePtr CreateTable(const std::string& name, IFieldsPtr ptrFields) = 0;
+            virtual ITablePtr CreateTable(const std::string& name, const std::string& viewName, IFieldsPtr ptrFields) = 0;
             virtual ITablePtr GetTable(const std::string& name) = 0;
-            virtual ITablePtr CreateSpatialTable(const std::string& name, IFieldsPtr ptrFields,const std::string& spatialIndexName = "") = 0;
-            virtual ITablePtr GetSpatialTable(const std::string& name) = 0;
+            virtual ISpatialTablePtr CreateSpatialTable(const std::string& name,  const std::string& viewName, IFieldsPtr ptrFields, const std::string& shapeFiledName, const std::string& spatialIndexName = "") = 0;
+            virtual ISpatialTablePtr GetSpatialTable(const std::string& name) = 0;
 
         };
 

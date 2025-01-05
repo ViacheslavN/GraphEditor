@@ -4,24 +4,47 @@
 #include "../../GeoDatabase.h"
 #include "../../GeoDatabaseShape/ShapefileSpatialTable.h"
 #include "../../QueryFilter.h"
+#include "../../../CommonLib/filesystem/filesystem.h"
+#include "../../GeoDatabaseShape/ShapefileWorkspace.h"
 
 int main()
 {
     try
     {
         std::string path = "F:\\TestData";
-        GraphEngine::GeoDatabase::CShapefileSpatialTable shapeFile(path, "building", "building");
+        std::string pathExport = "F:\\TestData\\Export";
+
+        try
+        {
+            CommonLib::CFileUtils::FileDelFolder(pathExport);
+        }
+        catch(...)
+        {
+
+        }
+
+        CommonLib::CFileUtils::CreateDirectory(pathExport);
+
+        GraphEngine::GeoDatabase::IDatabaseWorkspacePtr ptrSrcWks =
+            std::dynamic_pointer_cast<GraphEngine::GeoDatabase::IDatabaseWorkspace>(GraphEngine::GeoDatabase::CShapfileWorkspace::Open("Test", path.c_str(), 1));
+
+        GraphEngine::GeoDatabase::IDatabaseWorkspacePtr ptrExportWks =
+                std::dynamic_pointer_cast<GraphEngine::GeoDatabase::IDatabaseWorkspace>(GraphEngine::GeoDatabase::CShapfileWorkspace::Open("TestExport", pathExport.c_str(), 2));
+
+        GraphEngine::GeoDatabase::ISpatialTablePtr ptrShapeFile = ptrSrcWks->GetSpatialTable("building");
+
+
+        GraphEngine::GeoDatabase::ISpatialTablePtr ptrExportShapeFile = ptrExportWks->CreateSpatialTable("building", "building", ptrShapeFile->GetFields(), "");
+
         GraphEngine::GeoDatabase::ISpatialFilterPtr ptrFilter = std::make_shared<GraphEngine::GeoDatabase::CQueryFilter>();
 
-        GraphEngine::Geometry::IEnvelopePtr ptrExtent =  shapeFile.GetExtent();
+        GraphEngine::Geometry::IEnvelopePtr ptrExtent =  ptrShapeFile->GetExtent();
 
         ptrFilter->SetBB(ptrExtent->GetBoundingBox());
-        ptrFilter->SetOutputSpatialReference(shapeFile.GetSpatialReference());
+        ptrFilter->SetOutputSpatialReference(ptrShapeFile->GetSpatialReference());
         ptrFilter->SetSpatialRel(GraphEngine::GeoDatabase::srlIntersects);
 
-        GraphEngine::GeoDatabase::ICursorPtr ptrCursor = shapeFile.Search(ptrFilter);
-
-
+        GraphEngine::GeoDatabase::ICursorPtr ptrCursor = ptrShapeFile->Search(ptrFilter);
 
         while (ptrCursor->NextRow())
         {
@@ -59,14 +82,8 @@ int main()
                    case GraphEngine::GeoDatabase::dtGeometry:
                        ptrShape = ptrRow->ReadShape(i);
                        break;
-
-
                }
-
-
            }
-
-
         }
 
     }
