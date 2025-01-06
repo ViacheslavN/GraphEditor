@@ -127,6 +127,16 @@ namespace GraphEngine {
             m_nScale = scale;
         }
 
+        const std::any& CField::GetDefaultValue() const
+        {
+            return m_defValue;
+        }
+
+        void CField::SetIsDefault(const std::any& value)
+        {
+            m_defValue = value;
+        }
+
 
 
 // IShapeField

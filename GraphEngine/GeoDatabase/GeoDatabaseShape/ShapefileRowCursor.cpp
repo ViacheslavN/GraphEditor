@@ -30,6 +30,11 @@ namespace GraphEngine
 
         }
 
+        ISelectRowPtr CShapefileRowCursor::GetCurrentRow()
+        {
+            return m_ptrCurrentRow;
+        }
+
 
         bool CShapefileRowCursor::NextRow()
         {

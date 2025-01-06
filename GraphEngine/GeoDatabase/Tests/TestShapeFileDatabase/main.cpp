@@ -48,7 +48,7 @@ int main()
 
         while (ptrCursor->NextRow())
         {
-            GraphEngine::GeoDatabase::IRowPtr ptrRow = ptrCursor->GetCurrentRow();
+            GraphEngine::GeoDatabase::ISelectRowPtr ptrRow = ptrCursor->GetCurrentRow();
 
            for(int i = 0; i < ptrRow->ColumnCount(); ++i)
            {

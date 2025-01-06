@@ -15,7 +15,6 @@ namespace GraphEngine {
                      datasetType,   sDatasetName,sDatasetViewName)
             {
                 this->m_pFields = std::make_shared<CFields>();
-                this->m_bHashOID = false;
             }
 
             virtual ~ITableBase()
@@ -45,30 +44,8 @@ namespace GraphEngine {
                 m_pFields = ptrFields;
             }
 
-            void SetOIDFieldName(const std::string& sOIDFieldName)
-            {
-                m_sOIDFieldName = sOIDFieldName;
-            }
-
-            virtual bool   HasOIDField() const
-            {
-                return m_bHashOID;
-            }
-
-            virtual void   SetHasOIDField(bool bFlag)
-            {
-                m_bHashOID = bFlag;
-            }
-
-            virtual const std::string&	 GetOIDFieldName() const
-            {
-                return m_sOIDFieldName;
-            }
-
         protected:
             mutable IFieldsPtr         m_pFields;
-            mutable std::string        m_sOIDFieldName;
-            bool					   m_bHashOID;
         };
     }
 }

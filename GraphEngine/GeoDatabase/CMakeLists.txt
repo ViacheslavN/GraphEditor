@@ -43,6 +43,14 @@ set(COMMON_SOURCE_FILES
         GeoDatabaseShape/ShapefileWorkspace.h
         GeoDatabaseShape/ShapefileWorkspace.cpp
         WorkspaceBase.h
+        GeoDatabaseSQlite/SQLiteWorkspace.h
+        GeoDatabaseSQlite/SQLiteWorkspace.cpp
+        GeoDatabaseSQlite/SQLiteTable.h
+        GeoDatabaseSQlite/SQLiteTable.cpp
+        GeoDatabaseSQlite/SQLiteTableBase.h
+        GeoDatabaseSQlite/SQLiteUtils.h
+        GeoDatabaseUtils.h
+        GeoDatabaseUtils.cpp
 
 )
 
@@ -53,7 +61,8 @@ IF (WIN32)
     set(SOURCE_FILES ${COMMON_SOURCE_FILES} ${WINDOWS_SOURCE_FILES})
 
 ELSE()
-    set(SOURCE_FILES ${COMMON_SOURCE_FILES}    )
+    set(SOURCE_FILES ${COMMON_SOURCE_FILES}
+            GeoDatabaseSQlite/SQLiteUtils.cpp)
 
 ENDIF()
 

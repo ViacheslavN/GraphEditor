@@ -9,17 +9,18 @@ namespace GraphEngine
 {
     namespace GeoDatabase {
 
-        class CShapeRow : public IRowBase<IRow>
+        class CShapeRow : public IRowBase<ISelectRow>
         {
         public:
 
-            typedef IRowBase<IRow> TBase;
+            typedef IRowBase<ISelectRow> TBase;
 
             CShapeRow(CShapeDBFilePtr ptrDBFile, CShapeFilePtr ptrShapeFile, IFieldsPtr  pFields);
             virtual ~CShapeRow();
 
             void SetRow(int rowId);
             void SetShape(CommonLib::IGeoShapePtr ptrShape);
+
 
             virtual int64_t  GetRowId() const;
             virtual int8_t ReadInt8(int32_t col) const;
@@ -59,6 +60,7 @@ namespace GraphEngine
             CShapeFilePtr m_ptrShapeFile;
             CommonLib::IGeoShapePtr  m_ptrGeoShapeCache;
             int m_rowId;
+            IRowPtr   m_ptrCurrentRow;
 
 
         };

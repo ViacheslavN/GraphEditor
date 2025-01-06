@@ -65,13 +65,6 @@ namespace GraphEngine
 
             virtual ~ICursorBase(){}
 
-            virtual IRowPtr GetCurrentRow()
-            {
-                return m_ptrCurrentRow;
-
-            }
-
-
 
             void UpdateFields()
             {
@@ -89,7 +82,7 @@ namespace GraphEngine
 
 
         protected:
-            IRowPtr   m_ptrCurrentRow;
+
             IQueryFilterPtr m_ptrFilter;
             IFieldsPtr      m_ptrSourceFields;
             IFieldSetPtr      m_ptrFieldsSet;

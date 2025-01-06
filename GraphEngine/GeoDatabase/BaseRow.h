@@ -88,7 +88,6 @@ namespace GraphEngine
             }
 
         protected:
-            CommonLib::IGeoShapePtr  m_ptrGeoShapeCache;
             IFieldsPtr  m_ptrFields;
         };
 

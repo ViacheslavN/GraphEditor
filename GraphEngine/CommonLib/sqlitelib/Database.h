@@ -9,7 +9,6 @@ namespace CommonLib
 
 		typedef std::shared_ptr<class IDatabase> IDatabasePtr;
 		typedef std::shared_ptr<class IStatment> IStatmentPtr;
-		typedef std::shared_ptr<class IInsertCursor> IInsertCursorPtr;
 		typedef std::shared_ptr<class ITransaction> ITransactionPtr;
 		typedef std::shared_ptr<class ICryptoContext> ICryptoContextPtr;
 		

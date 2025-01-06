@@ -84,6 +84,8 @@ namespace GraphEngine
         typedef std::shared_ptr<class ITable> ITablePtr;
         typedef std::shared_ptr<class ISpatialTable> ISpatialTablePtr;
         typedef std::shared_ptr<class IRow> IRowPtr;
+        typedef std::shared_ptr<class ISelectRow> ISelectRowPtr;
+        typedef std::shared_ptr<class IInsertRow> IInsertRowPtr;
         typedef std::shared_ptr<class IField> IFieldPtr;
         typedef std::shared_ptr<class ISpatialField> ISpatialFieldPtr;
         typedef std::shared_ptr<class IOIDSet>  IOIDSetPtr;
@@ -151,8 +153,18 @@ namespace GraphEngine
             virtual bool ColumnIsNull(int32_t col) const = 0;
             virtual eDataTypes GetColumnType(int32_t col) const = 0;
             virtual int32_t GetColumnBytes(int32_t col) const = 0;
-            virtual int64_t  GetRowId() const = 0;
 
+        };
+
+
+        class ISelectRow : public IRow
+        {
+        public:
+            ISelectRow(){}
+            virtual ~ISelectRow(){}
+
+
+            virtual int64_t  GetRowId() const = 0;
             virtual int8_t ReadInt8(int32_t col) const = 0;
             virtual uint8_t ReadUInt8(int32_t col) const = 0;
             virtual int16_t ReadInt16(int32_t col) const = 0;
@@ -170,6 +182,15 @@ namespace GraphEngine
             virtual void ReadBlob(int col, byte_t **pBuf, int32_t& size) const = 0;
             virtual CommonLib::IGeoShapePtr ReadShape(int32_t col) const = 0;
 
+        };
+
+        class IInsertRow : public IRow
+        {
+        public:
+            IInsertRow(){}
+            virtual ~IInsertRow(){}
+
+
             virtual void BindInt8(int32_t col, int8_t val) = 0;
             virtual void BindUInt8(int32_t col, uint8_t val) = 0;
             virtual void BindInt16(int32_t col, int16_t val) = 0;
@@ -185,7 +206,6 @@ namespace GraphEngine
             virtual void BindBlob(int32_t col, const byte_t *pBuf, int32_t size, bool copy) = 0;
             virtual void BindShape(int32_t col, CommonLib::IGeoShapePtr ptrShape) = 0;
         };
-
 
 
         class IField
@@ -213,6 +233,8 @@ namespace GraphEngine
             virtual void                 SetScale(int scale) = 0;
             virtual bool                 GetIsPrimaryKey() const = 0;
             virtual void                 SetIsPrimaryKey(bool flag) = 0;
+            virtual const std::any& 	 GetDefaultValue() const= 0;;
+            virtual void				 SetIsDefault(const std::any& value)= 0;;
             virtual IFieldPtr			 Clone() const = 0;
         };
 
@@ -267,10 +289,6 @@ namespace GraphEngine
             virtual void						 DeleteField(const std::string& fieldName) = 0;
             virtual IFieldsPtr					 GetFields() const  = 0;
             virtual void						 SetFields(IFieldsPtr ptrFields)  = 0;
-            virtual bool						 HasOIDField() const = 0;
-            virtual void						 SetHasOIDField(bool bFlag) = 0;
-            virtual const std::string&      	 GetOIDFieldName() const = 0;
-            virtual void						 SetOIDFieldName(const std::string& sOIDFieldName) = 0;
             virtual IRowPtr						 GetRow(int64_t id) = 0;
             virtual ICursorPtr					 Search(IQueryFilterPtr filter) = 0;
         };
@@ -384,7 +402,7 @@ namespace GraphEngine
             ICursor(){}
             virtual ~ICursor(){}
             virtual bool NextRow() = 0;
-            virtual IRowPtr GetCurrentRow() = 0;
+            virtual ISelectRowPtr GetCurrentRow() = 0;
         };
 
         class  IInsertCursor
@@ -392,7 +410,8 @@ namespace GraphEngine
         public:
             IInsertCursor(){}
             virtual ~IInsertCursor(){}
-            virtual int64_t InsertRow(IRowPtr pRow) = 0;
+            virtual IInsertRowPtr CreateRow() = 0;
+            virtual int64_t InsertRow(IInsertRowPtr pRow) = 0;
         };
 
         class  IUpdateCursor : public ICursor
@@ -400,7 +419,8 @@ namespace GraphEngine
         public:
             IUpdateCursor(){}
             virtual ~IUpdateCursor(){}
-            virtual void UpdateRow(IRowPtr pRow) = 0;
+            virtual IInsertRowPtr CreateRow() = 0;
+            virtual void UpdateRow(IInsertRowPtr pRow) = 0;
         };
 
         class IDeleteCursor

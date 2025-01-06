@@ -38,7 +38,8 @@ namespace GraphEngine {
             virtual void                 SetScale(int scale);
             virtual bool                 GetIsPrimaryKey() const;
             virtual void                 SetIsPrimaryKey(bool flag);
-
+            virtual const std::any& 	 GetDefaultValue() const;
+            virtual void				 SetIsDefault(const std::any& value);
             // IShapeField
             virtual IGeometryDefinitionPtr  GetGeometryDef() const;
             virtual void            SetGeometryDef(IGeometryDefinitionPtr ptrGeometryDef);
@@ -57,6 +58,7 @@ namespace GraphEngine {
             int						m_nScale;
             IGeometryDefinitionPtr  m_ptrGeometryDef;
             bool					m_bIsPrimaryKey;
+            std::any                m_defValue;
 
         };
     }

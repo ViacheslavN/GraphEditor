@@ -12,7 +12,7 @@ namespace GraphEngine
         CShapfileWorkspace::CShapfileWorkspace(CommonLib::IPropertySetPtr ptrProperties, int32_t nID) :
                 TBase(wtShapeFile, nID)
         {
-            m_sPath = std::any_cast<std::string>(ptrProperties->GetProperty(m_NameProps));
+            m_sName = std::any_cast<std::string>(ptrProperties->GetProperty(m_NameProps));
             m_sPath = std::any_cast<std::string>(ptrProperties->GetProperty(m_PathProps));
         }
 

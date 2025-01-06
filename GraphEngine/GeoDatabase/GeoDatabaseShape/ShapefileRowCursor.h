@@ -18,6 +18,7 @@ namespace GraphEngine
         public:
             // IRowCursor
             virtual bool NextRow();
+            virtual ISelectRowPtr GetCurrentRow();
         protected:
 
             bool EOC();
@@ -32,7 +33,7 @@ namespace GraphEngine
             CSHPObjectPtr     m_pCacheObject;
             Geometry::ISpatialReferencePtr m_ptrSpatialReference;
             CommonLib::IGeoShapePtr  m_ptrGeoShapeCache;
-
+            ISelectRowPtr   m_ptrCurrentRow;
             std::vector<int64_t> m_vecOids;
         };
     }
