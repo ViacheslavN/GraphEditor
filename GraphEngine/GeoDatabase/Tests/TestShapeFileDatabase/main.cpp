@@ -44,15 +44,15 @@ int main()
         ptrFilter->SetOutputSpatialReference(ptrShapeFile->GetSpatialReference());
         ptrFilter->SetSpatialRel(GraphEngine::GeoDatabase::srlIntersects);
 
-        GraphEngine::GeoDatabase::ICursorPtr ptrCursor = ptrShapeFile->Search(ptrFilter);
+        GraphEngine::GeoDatabase::ISelectCursorPtr ptrCursor = ptrShapeFile->Search(ptrFilter);
 
-        while (ptrCursor->NextRow())
+        while (ptrCursor->Next())
         {
-            GraphEngine::GeoDatabase::ISelectRowPtr ptrRow = ptrCursor->GetCurrentRow();
 
-           for(int i = 0; i < ptrRow->ColumnCount(); ++i)
+
+           for(int i = 0; i < ptrCursor->ColumnCount(); ++i)
            {
-               GraphEngine::GeoDatabase::eDataTypes fieldType =  ptrRow->GetColumnType(i);
+               GraphEngine::GeoDatabase::eDataTypes fieldType =  ptrCursor->GetColumnType(i);
                int intVal;
                double dVal;
                std::string  text;
@@ -68,19 +68,19 @@ int main()
                    case  GraphEngine::GeoDatabase::dtUInteger32:
                    case  GraphEngine::GeoDatabase::dtUInteger64:
                    {
-                       intVal = ptrRow->ReadInt32(i);
+                       intVal = ptrCursor->ReadInt32(i);
                    }
                    break;
                    case  GraphEngine::GeoDatabase::dtDouble:
                    case  GraphEngine::GeoDatabase::dtFloat:
-                       dVal = ptrRow->ReadDouble(i);
+                       dVal = ptrCursor->ReadDouble(i);
                        break;
 
                    case GraphEngine::GeoDatabase::dtString:
-                       text = ptrRow->ReadText(i);
+                       text = ptrCursor->ReadText(i);
                        break;
                    case GraphEngine::GeoDatabase::dtGeometry:
-                       ptrShape = ptrRow->ReadShape(i);
+                       ptrShape = ptrCursor->ReadShape(i);
                        break;
                }
            }

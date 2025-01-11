@@ -43,6 +43,7 @@ namespace GraphEngine {
             {
                 m_pFields = ptrFields;
             }
+        protected:
 
         protected:
             mutable IFieldsPtr         m_pFields;

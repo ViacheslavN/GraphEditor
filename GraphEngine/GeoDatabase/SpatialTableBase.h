@@ -13,8 +13,7 @@ namespace GraphEngine
             typedef ITableBase<I> TBase;
             ISpatialTableBase(std::string sDatasetName,  std::string sDatasetViewName) :
             TBase(dtSpatialTable, sDatasetName, sDatasetViewName),
-                m_ShapeType(CommonLib::shape_type_null),
-                m_bAnnotation(false)
+                m_ShapeType(CommonLib::shape_type_null)
             {
 
             }
@@ -34,35 +33,6 @@ namespace GraphEngine
                 return m_ShapeType;
             }
 
-            virtual const std::string&  GetShapeFieldName() const
-            {
-                return m_sShapeFieldName;
-            }
-
-            virtual void SetShapeFieldName(const std::string& sName)
-            {
-                m_sShapeFieldName = sName;
-            }
-
-            virtual bool GetIsAnnoClass() const
-            {
-                return m_bAnnotation;
-            }
-
-            virtual const std::string&	GetAnnoFieldName() const
-            {
-                return m_sAnnotationName;
-            }
-
-            virtual void SetIsAnnoClass(bool bAnno)
-            {
-                m_bAnnotation = bAnno;
-            }
-
-            virtual void SetAnnoFieldName(const std::string& sAnnoName)
-            {
-                m_sAnnotationName = sAnnoName;
-            }
 
             virtual Geometry::IEnvelopePtr	 GetExtent() const
             {
@@ -85,8 +55,6 @@ namespace GraphEngine
             }
 
         protected:
-            bool m_bAnnotation;
-            std::string m_sAnnotationName;
             mutable Geometry::IEnvelopePtr  m_ptrExtent;
             mutable std::string m_sShapeFieldName;
             mutable CommonLib::eShapeType m_ShapeType;

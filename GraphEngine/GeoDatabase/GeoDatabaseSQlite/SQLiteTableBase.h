@@ -3,15 +3,18 @@
 #include "../TableBase.h"
 #include "../../CommonLib/sqlitelib/Database.h"
 #include "SQLiteUtils.h"
+#include "SQLiteSelectCursor.h"
+
 
 namespace GraphEngine {
     namespace GeoDatabase {
 
-        class CSQLiteTableBase : public ITableBase<ITable>
+        template<class I>
+        class CSQLiteTableBase : public ITableBase<I>
         {
         public:
 
-            typedef ITableBase<ITable> TBase;
+            typedef ITableBase<I> TBase;
 
             CSQLiteTableBase(eDatasetType datasetType, const std::string& tableName,  const std::string& viewName,
                              CommonLib::database::IDatabasePtr ptrDatabase) :
@@ -28,15 +31,43 @@ namespace GraphEngine {
                 }
             }
 
-
-
-            virtual  ~CSQLiteTableBase()
+            virtual ISelectCursorPtr Select(const std::string& sqlSelectQuery)
             {
+                try
+                {
+
+                    return std::make_shared<CSQLiteSelectCursor>(sqlSelectQuery, m_ptrDatabase);
+
+                }
+                catch (std::exception& exc)
+                {
+                    CommonLib::CExcBase::RegenExc("CSQLiteTable: Failed to Select", exc);
+                    throw;
+                }
+
+            }
+
+            virtual ISelectCursorPtr	Search(IQueryFilterPtr ptrFilter)
+            {
+                try
+                {
+                    return std::make_shared<CSQLiteSelectCursor>(GetDatasetName(), GetFields(), ptrFilter, m_ptrDatabase);
+                }
+                catch (std::exception& exc)
+                {
+                    CommonLib::CExcBase::RegenExc("CSQLiteTable: Failed to Search", exc);
+                    throw;
+                }
 
             }
 
 
-        private:
+        protected:
+
+
+
+
+        protected:
             CommonLib::database::IDatabasePtr m_ptrDatabase;
         };
 

@@ -11,6 +11,9 @@ namespace GraphEngine {
             static eDataTypes SQLiteType2FieldType(const std::string& sSQLiteType);
             static eDataTypes SQLiteType2FieldType(int nSQLiteFieldType);
             static IFieldsPtr ReadFields(const std::string& sTable, CommonLib::database::IDatabasePtr ptrDatabase);
+            static IFieldsPtr ReadFields( CommonLib::database::IStatmentPtr ptrStatment);
+
+
         };
 
     }

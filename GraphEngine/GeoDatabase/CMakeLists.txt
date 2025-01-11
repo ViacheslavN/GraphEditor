@@ -29,8 +29,6 @@ set(COMMON_SOURCE_FILES
         GeoDatabaseShape/ShapeDBFile.cpp
         GeoDatabaseShape/ShapefileRowCursor.h
         GeoDatabaseShape/ShapefileRowCursor.cpp
-        GeoDatabaseShape/ShapeRow.h
-        GeoDatabaseShape/ShapeRow.cpp
         BaseRow.h
         GeoDatabaseShape/ShapeTree.h
         GeoDatabaseShape/ShapeTree.cpp
@@ -51,6 +49,9 @@ set(COMMON_SOURCE_FILES
         GeoDatabaseSQlite/SQLiteUtils.h
         GeoDatabaseUtils.h
         GeoDatabaseUtils.cpp
+        GeoDatabaseSQlite/SQLiteSelectCursor.h
+        GeoDatabaseSQlite/SQLiteSelectCursor.cpp
+        GeoDatabaseSQlite/SQLiteUtils.cpp
 
 )
 
@@ -62,7 +63,8 @@ IF (WIN32)
 
 ELSE()
     set(SOURCE_FILES ${COMMON_SOURCE_FILES}
-            GeoDatabaseSQlite/SQLiteUtils.cpp)
+
+ )
 
 ENDIF()
 

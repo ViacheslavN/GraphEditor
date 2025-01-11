@@ -27,6 +27,8 @@ namespace GraphEngine
 
         protected:
             virtual IDatasetPtr LoadDataset(const std::string& sName);
+            virtual IDatasetPtr LoadTable(const std::string& sName);
+            virtual IDatasetPtr LoadSpatialTable(const std::string& sName);
 
         private:
 

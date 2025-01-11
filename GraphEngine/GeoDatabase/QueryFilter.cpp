@@ -103,5 +103,24 @@ namespace GraphEngine {
             m_bbox = bbox;
         }
 
+        const std::vector<IJoinPtr>   CQueryFilter::GetJoins() const
+        {
+            return m_vecJoins;
+        }
+
+        void CQueryFilter::SetJoins(const std::vector<IJoinPtr> & vecJoins)
+        {
+            m_vecJoins = vecJoins;
+        }
+
+        const std::string&  CQueryFilter::GetTablePrefix() const
+        {
+            return  m_sTablePrefix;
+        }
+
+        void  CQueryFilter::SetTablePrefix(const std::string& tablePrefix)
+        {
+            m_sTablePrefix = tablePrefix;
+        }
     }
 }

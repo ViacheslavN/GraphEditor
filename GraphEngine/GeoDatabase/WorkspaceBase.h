@@ -33,6 +33,7 @@ namespace GraphEngine {
                 std::scoped_lock lock (m_mutex);
                 return (uint32_t)m_vecDatasets.size();
             }
+
             virtual IDatasetPtr GetDataset(uint32_t nIdx) const
             {
                 std::scoped_lock lock (m_mutex);
@@ -130,7 +131,15 @@ namespace GraphEngine {
 
         protected:
 
+            bool IsDatasetExists(const std::string& sName) const
+            {
+                return  m_DataSetMap.find(sName) != m_DataSetMap.end();
+            }
+
+
             virtual IDatasetPtr LoadDataset(const std::string& sName) = 0;
+            virtual IDatasetPtr LoadTable(const std::string& sName) = 0;
+            virtual IDatasetPtr LoadSpatialTable(const std::string& sName) = 0;
 
 
             void RebuildMap()

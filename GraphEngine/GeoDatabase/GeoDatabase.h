@@ -71,12 +71,32 @@ namespace GraphEngine
             ttDDL = 8
         };
 
+        enum eJoinType
+        {
+            jtInnerJoin = 1,
+            jtLeftJoin,
+            jtRightJoin,
+            jtOuterJoin
+        };
+
+
+        enum eJoinOperation
+        {
+            jotEqual = 1,
+            jotNotEqual,
+            jotLess,
+            jotLessOrEqual,
+            jotGreater,
+            jotGreaterOrEqual
+        };
+
 
 
         typedef std::shared_ptr<class IWorkspace> IWorkspacePtr;
         typedef std::shared_ptr<class IDatabaseWorkspace> IDatabaseWorkspacePtr;
         typedef std::shared_ptr<class ITransaction> ITransactionPtr;
         typedef std::shared_ptr<class ICursor> ICursorPtr;
+        typedef std::shared_ptr<class ISelectCursor> ISelectCursorPtr;
         typedef std::shared_ptr<class IInsertCursor> IInsertCursorPtr;
         typedef std::shared_ptr<class IUpdateCursor> IUpdateCursorPtr;
         typedef std::shared_ptr<class IDeleteCursor> IDeleteCursorPtr;
@@ -84,8 +104,6 @@ namespace GraphEngine
         typedef std::shared_ptr<class ITable> ITablePtr;
         typedef std::shared_ptr<class ISpatialTable> ISpatialTablePtr;
         typedef std::shared_ptr<class IRow> IRowPtr;
-        typedef std::shared_ptr<class ISelectRow> ISelectRowPtr;
-        typedef std::shared_ptr<class IInsertRow> IInsertRowPtr;
         typedef std::shared_ptr<class IField> IFieldPtr;
         typedef std::shared_ptr<class ISpatialField> ISpatialFieldPtr;
         typedef std::shared_ptr<class IOIDSet>  IOIDSetPtr;
@@ -94,6 +112,8 @@ namespace GraphEngine
         typedef std::shared_ptr<class IQueryFilter> IQueryFilterPtr;
         typedef std::shared_ptr<class ISpatialFilter> ISpatialFilterPtr;
         typedef std::shared_ptr<class IGeometryDefinition> IGeometryDefinitionPtr;
+        typedef std::shared_ptr<class IJoin> IJoinPtr;
+
 
 
 
@@ -154,15 +174,6 @@ namespace GraphEngine
             virtual eDataTypes GetColumnType(int32_t col) const = 0;
             virtual int32_t GetColumnBytes(int32_t col) const = 0;
 
-        };
-
-
-        class ISelectRow : public IRow
-        {
-        public:
-            ISelectRow(){}
-            virtual ~ISelectRow(){}
-
 
             virtual int64_t  GetRowId() const = 0;
             virtual int8_t ReadInt8(int32_t col) const = 0;
@@ -182,14 +193,6 @@ namespace GraphEngine
             virtual void ReadBlob(int col, byte_t **pBuf, int32_t& size) const = 0;
             virtual CommonLib::IGeoShapePtr ReadShape(int32_t col) const = 0;
 
-        };
-
-        class IInsertRow : public IRow
-        {
-        public:
-            IInsertRow(){}
-            virtual ~IInsertRow(){}
-
 
             virtual void BindInt8(int32_t col, int8_t val) = 0;
             virtual void BindUInt8(int32_t col, uint8_t val) = 0;
@@ -205,6 +208,7 @@ namespace GraphEngine
             virtual void BindTextW(int32_t col, const std::wstring& text, bool copy) = 0;
             virtual void BindBlob(int32_t col, const byte_t *pBuf, int32_t size, bool copy) = 0;
             virtual void BindShape(int32_t col, CommonLib::IGeoShapePtr ptrShape) = 0;
+
         };
 
 
@@ -289,8 +293,9 @@ namespace GraphEngine
             virtual void						 DeleteField(const std::string& fieldName) = 0;
             virtual IFieldsPtr					 GetFields() const  = 0;
             virtual void						 SetFields(IFieldsPtr ptrFields)  = 0;
-            virtual IRowPtr						 GetRow(int64_t id) = 0;
-            virtual ICursorPtr					 Search(IQueryFilterPtr filter) = 0;
+            virtual ISelectCursorPtr			 Search(IQueryFilterPtr filter) = 0;
+            virtual ISelectCursorPtr			 Select(const std::string& sqlSelectQuery) = 0;
+
         };
 
         class ISpatialTable : public ITable
@@ -300,12 +305,7 @@ namespace GraphEngine
             virtual ~ISpatialTable(){}
             virtual CommonLib::eShapeType				 GetGeometryType() const = 0;
             virtual	void								 SetGeometryType(CommonLib::eShapeType shapeType)	= 0;
-            virtual const std::string&			         GetShapeFieldName() const = 0;
-            virtual void						         SetShapeFieldName(const std::string& sName)  = 0;
-            virtual bool								 GetIsAnnoClass() const = 0;
-            virtual const std::string&			         GetAnnoFieldName() const = 0;
-            virtual void								 SetIsAnnoClass(bool bAnno) = 0;
-            virtual void								 SetAnnoFieldName(const std::string& sAnnoName) = 0;
+
             virtual Geometry::IEnvelopePtr			     GetExtent() const = 0;
             virtual Geometry::ISpatialReferencePtr	     GetSpatialReference() const = 0;
             virtual void								 SetExtent(Geometry::IEnvelopePtr pEnvelope)  = 0;
@@ -376,6 +376,10 @@ namespace GraphEngine
             virtual void								SetOutputSpatialReference(Geometry::ISpatialReferencePtr spatRef) = 0;
             virtual const std::string&                  GetWhereClause() const = 0;
             virtual void								SetWhereClause(const std::string& where) = 0;
+            virtual const std::vector<IJoinPtr>         GetJoins() const = 0;
+            virtual void                                SetJoins(const std::vector<IJoinPtr> & vecJoins)  = 0;
+            virtual const std::string&                  GetTablePrefix() const = 0;
+            virtual void                                SetTablePrefix(const std::string& tablePrefix)  = 0;
         };
 
         class ISpatialFilter : public IQueryFilter
@@ -401,17 +405,64 @@ namespace GraphEngine
         public:
             ICursor(){}
             virtual ~ICursor(){}
-            virtual bool NextRow() = 0;
-            virtual ISelectRowPtr GetCurrentRow() = 0;
+
+
+            virtual int32_t  ColumnCount() const = 0;
+            virtual std::string ColumnName(int32_t col) const = 0;
+            virtual bool ColumnIsNull(int32_t col) const = 0;
+            virtual eDataTypes GetColumnType(int32_t col) const = 0;
+            virtual int32_t GetColumnBytes(int32_t col) const = 0;
+
+            virtual bool Next() = 0;
         };
+
+
+        class  ISelectCursor : public ICursor
+        {
+        public:
+            ISelectCursor(){}
+            virtual ~ISelectCursor(){}
+
+            virtual int8_t ReadInt8(int32_t col) const = 0;
+            virtual uint8_t ReadUInt8(int32_t col) const = 0;
+            virtual int16_t ReadInt16(int32_t col) const = 0;
+            virtual uint16_t ReadUInt16(int32_t col) const = 0;
+            virtual int32_t ReadInt32(int32_t col) const = 0;
+            virtual uint32_t ReadUInt32(int32_t col) const = 0;
+            virtual int64_t ReadInt64(int32_t col) const = 0;
+            virtual uint64_t ReadUInt64(int32_t col) const = 0;
+            virtual float ReadFloat(int32_t col) const = 0;
+            virtual double ReadDouble(int32_t col) const = 0;
+            virtual void ReadText(int32_t col, std::string& text) const = 0;
+            virtual std::string ReadText(int32_t col) const = 0;
+            virtual void ReadTextW(int32_t col, std::wstring& text) const = 0;
+            virtual std::wstring ReadTextW(int32_t col) const = 0;
+            virtual void ReadBlob(int col, byte_t **pBuf, int32_t& size) const = 0;
+            virtual CommonLib::IGeoShapePtr ReadShape(int32_t col) const = 0;
+
+        };
+
 
         class  IInsertCursor
         {
         public:
             IInsertCursor(){}
             virtual ~IInsertCursor(){}
-            virtual IInsertRowPtr CreateRow() = 0;
-            virtual int64_t InsertRow(IInsertRowPtr pRow) = 0;
+
+            virtual void BindInt8(int32_t col, int8_t val) = 0;
+            virtual void BindUInt8(int32_t col, uint8_t val) = 0;
+            virtual void BindInt16(int32_t col, int16_t val) = 0;
+            virtual void BindUInt16(int32_t col, uint16_t val) = 0;
+            virtual void BindInt32(int32_t col, int32_t val) = 0;
+            virtual void BindUInt32(int32_t col, uint32_t val) = 0;
+            virtual void BindInt64(int32_t col, int64_t val) = 0;
+            virtual void BindUInt64(int32_t col, uint64_t val) = 0;
+            virtual void BindFloat(int32_t col, float val)  = 0;
+            virtual void BindDouble(int32_t col, double val) = 0;
+            virtual void BindText(int32_t col, const std::string& text, bool copy) = 0;
+            virtual void BindTextW(int32_t col, const std::wstring& text, bool copy) = 0;
+            virtual void BindBlob(int32_t col, const byte_t *pBuf, int32_t size, bool copy) = 0;
+            virtual void BindShape(int32_t col, CommonLib::IGeoShapePtr ptrShape) = 0;
         };
 
         class  IUpdateCursor : public ICursor
@@ -419,8 +470,8 @@ namespace GraphEngine
         public:
             IUpdateCursor(){}
             virtual ~IUpdateCursor(){}
-            virtual IInsertRowPtr CreateRow() = 0;
-            virtual void UpdateRow(IInsertRowPtr pRow) = 0;
+            virtual IRowPtr CreateRow() = 0;
+            virtual void UpdateRow(IRowPtr pRow) = 0;
         };
 
         class IDeleteCursor
@@ -429,6 +480,21 @@ namespace GraphEngine
             IDeleteCursor(){}
             virtual ~IDeleteCursor(){}
             virtual void DeleteRow(int64_t oid) = 0;
+        };
+
+        class IJoin
+        {
+        public:
+            IJoin(){}
+            virtual ~IJoin(){}
+            virtual IFieldSetPtr    GetFieldSet() const = 0;
+            virtual ITablePtr GetTable() = 0;
+            virtual eJoinType GetJoinType() = 0;
+            virtual eJoinOperation GetJoinOperation() = 0;
+            virtual const std::string&  GetTablePrefix() const = 0;
+            virtual void  SetTablePrefix(const std::string& tablePrefix)  = 0;
+            virtual std::string GetLeftField() = 0;
+            virtual std::string GetRightField() = 0;
         };
 
 

@@ -32,12 +32,19 @@ namespace CommonLib
 		return ((dwAttr != INVALID_FILE_ATTRIBUTES) && !(dwAttr & FILE_ATTRIBUTE_DIRECTORY));
 	}
 
-	void CFileUtils::DeleteFile(const wstr& path)
+	void CFileUtils::DelFile(const wstr& path)
 	{
 		if (::DeleteFile(path.c_str()) == FALSE)
 			throw CWinExc("Failed to delete file {0}", StringEncoding::str_w2a_safe(path));
 
 	}
+
+    void CFileUtils::DelFile(const std::string& path)
+    {
+        if (::DeleteFileA(path.c_str()) == FALSE)
+            throw CWinExc("Failed to delete file {0}", path);
+
+    }
 
 	void CFileUtils::FileDelFolder(const wstr& path)
 	{

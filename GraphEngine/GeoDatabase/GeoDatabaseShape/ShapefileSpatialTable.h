@@ -18,7 +18,8 @@ namespace GraphEngine
 
 
             virtual IRowPtr		GetRow(int64_t id);
-            virtual ICursorPtr	Search(IQueryFilterPtr filter);
+            virtual ISelectCursorPtr	Search(IQueryFilterPtr filter);
+            virtual ISelectCursorPtr	Select(const std::string& sqlSelectQuery);
 
 
             virtual void Save(CommonLib::ISerializeObjPtr pObj) const ;

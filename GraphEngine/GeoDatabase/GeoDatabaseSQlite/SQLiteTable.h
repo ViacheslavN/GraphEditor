@@ -1,18 +1,26 @@
 #pragma once
 
-#include "../TableBase.h"
-#include "../../CommonLib/sqlitelib/Database.h"
+#include "SQLiteTableBase.h"
+
 
 namespace GraphEngine {
     namespace GeoDatabase {
 
-        class CSQLiteTable : public ITableBase<ITable>
+        class CSQLiteTable : public CSQLiteTableBase<ITable>
         {
         public:
-            CSQLiteTable();
+
+            typedef CSQLiteTableBase<ITable> TBase;
+
+            CSQLiteTable(const std::string& tableName,  const std::string& viewName,
+                         CommonLib::database::IDatabasePtr ptrDatabase);
             virtual  ~CSQLiteTable();
+
+            virtual void Save(CommonLib::ISerializeObjPtr pObj) const ;
+            virtual void Load(CommonLib::ISerializeObjPtr pObj);
+
         private:
-            CommonLib::database::IDatabasePtr m_ptrDatabase;
+
         };
 
     }

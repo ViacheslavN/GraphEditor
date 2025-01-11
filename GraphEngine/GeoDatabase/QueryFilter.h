@@ -24,6 +24,10 @@ namespace GraphEngine {
             virtual void                              SetOutputSpatialReference(Geometry::ISpatialReferencePtr spatRef);
             virtual const std::string& 		  GetWhereClause() const;
             virtual void                              SetWhereClause(const std::string& where);
+            virtual const std::vector<IJoinPtr>       GetJoins() const;
+            virtual void                              SetJoins(const std::vector<IJoinPtr> & vecJoins);
+            virtual void                          SetTablePrefix(const std::string& tablePrefix);
+            virtual const std::string&  GetTablePrefix() const;
 
 
             // ISpatialFilter
@@ -46,7 +50,8 @@ namespace GraphEngine {
             eSpatialRel                        m_SpatialRel;
             double                             m_dPecision;
             CommonLib::bbox					   m_bbox;
-
+            std::vector<IJoinPtr>              m_vecJoins;
+            std::string                        m_sTablePrefix;
         };
 
     }

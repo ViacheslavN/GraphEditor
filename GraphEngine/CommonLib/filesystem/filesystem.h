@@ -14,7 +14,7 @@ namespace CommonLib
 	{
 	public:
 		static bool IsFileExist(const wstr& path);
-		static void DeleteFile(const wstr& path);
+		static void DelFile(const wstr& path);
 		static void FileDelFolder(const wstr& path);
 		static void RenameFile(const wstr& oldFile, const wstr& newFile);
 
@@ -29,7 +29,7 @@ namespace CommonLib
 #endif
 
 		static bool IsFileExist(const astr& path);
-		static void DeleteFile(const astr& path);
+		static void DelFile(const astr& path);
 		static void FileDelFolder(const astr& path);
 		static void RenameFile(const astr& oldFile, const astr& newFile);
         static void CreateDirectory(const astr& path);

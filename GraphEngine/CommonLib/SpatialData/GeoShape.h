@@ -109,7 +109,7 @@ namespace CommonLib
 
 
 
-        void Import(const byte_t* extBuf, uint32_t extBufSize);
+        virtual void Import(const byte_t* extBuf, uint32_t extBufSize);
         void Attach(byte_t* extBuf, uint32_t extBufSize);
         byte_t* Detach();
         bool Validate();

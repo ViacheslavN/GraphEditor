@@ -44,15 +44,15 @@ namespace CommonLib
 		RenameFile(StringEncoding::str_w2utf8_safe(oldFile), StringEncoding::str_w2utf8_safe(newFile));
 	}
  
-	void  CFileUtils::DeleteFile(const astr& path)
+	void  CFileUtils::DelFile(const astr& path)
 	{
 		if (remove(path.c_str()) != 0)
 			throw CPosixExc(errno, "Failed to delete file {0}", path);
 	}
 
-	void CFileUtils::DeleteFile(const wstr& path)
+	void CFileUtils::DelFile(const wstr& path)
 	{
-		DeleteFile(StringEncoding::str_w2utf8_safe(path));
+        DelFile(StringEncoding::str_w2utf8_safe(path));
 	}
 
 	void CFileUtils::FileDelFolder(const astr& path)

@@ -67,6 +67,17 @@ namespace GraphEngine
             return std::make_shared<CShapefileSpatialTable>(m_sPath, sName, sName);
         }
 
+        IDatasetPtr CShapfileWorkspace::LoadTable(const std::string& sName)
+        {
+            return  LoadDataset(sName);
+        }
+
+        IDatasetPtr CShapfileWorkspace::LoadSpatialTable(const std::string& sName)
+        {
+            return  LoadDataset(sName);
+        }
+
+
         ITransactionPtr CShapfileWorkspace::StartTransaction(eTransactionType type)
         {
             throw CommonLib::CExcBase("StartTransaction not implement");

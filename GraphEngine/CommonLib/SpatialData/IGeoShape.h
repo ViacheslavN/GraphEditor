@@ -209,6 +209,7 @@ namespace CommonLib
         virtual void Create(eShapeType shapeType, uint32_t npoints, uint32_t nparts = 1, uint32_t ncurves = 0, uint32_t mpatchSpecificSize = 0) = 0;
 
         virtual void  Add(IGeoShapePtr ptrShap)  = 0;
+        virtual void Import(const byte* extBuf, uint32_t extBufSize) = 0;
 
         static bool IsTypeSimple(eShapeType shapeType);
         static void GetTypeParams(eShapeType shapeType, eShapeType* genType = 0, bool* has_z = 0, bool* has_m = 0, bool* has_curve = 0, bool* has_id = 0);

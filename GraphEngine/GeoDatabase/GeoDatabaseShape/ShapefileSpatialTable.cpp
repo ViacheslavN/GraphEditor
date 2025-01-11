@@ -34,10 +34,15 @@ namespace GraphEngine
 
         IRowPtr CShapefileSpatialTable::GetRow(int64_t id)
         {
-            return IRowPtr();
+            throw CommonLib::CExcBase("CShapefileSpatialTable::GetRow not implement");
         }
 
-        ICursorPtr	CShapefileSpatialTable::Search(IQueryFilterPtr ptrFilter)
+        ISelectCursorPtr	CShapefileSpatialTable::Select(const std::string& sqlSelectQuery)
+        {
+            throw CommonLib::CExcBase("CShapefileSpatialTable::Select with SelectQuery not implement");
+        }
+
+        ISelectCursorPtr	CShapefileSpatialTable::Search(IQueryFilterPtr ptrFilter)
         {
             try
             {

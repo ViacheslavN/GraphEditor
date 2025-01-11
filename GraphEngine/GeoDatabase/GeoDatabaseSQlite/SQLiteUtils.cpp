@@ -10,7 +10,7 @@ extern "C" {
 namespace GraphEngine {
     namespace GeoDatabase {
 
-        void FieldType2SQLiteType(eDataTypes type, std::string& sSQLiteType)
+        void CSQLiteUtils::FieldType2SQLiteType(eDataTypes type, std::string& sSQLiteType)
         {
             switch(type)
             {
@@ -39,7 +39,7 @@ namespace GraphEngine {
             }
         }
 
-        eDataTypes  SQLiteType2FieldType(std::string& sSQLiteType)
+        eDataTypes  CSQLiteUtils::SQLiteType2FieldType(const std::string& sSQLiteType)
         {
             if(sSQLiteType == "INTEGER")
                 return dtInteger64;
@@ -53,7 +53,7 @@ namespace GraphEngine {
             return dtUnknown;
         }
 
-        eDataTypes SQLiteType2FieldType(int nSQLiteFieldType)
+        eDataTypes CSQLiteUtils::SQLiteType2FieldType(int nSQLiteFieldType)
         {
             switch(nSQLiteFieldType)
             {
@@ -81,7 +81,7 @@ namespace GraphEngine {
            {
                IFieldsPtr pFields = std::make_shared<CFields>();
 
-               CommonLib::database::IStatmentPtr ptrStatment = ptrDatabase->PrepareQuery(CommonLib::str_format::StrFormatSafe("pragma table_info ('{0}')", sTable).c_str()));
+               CommonLib::database::IStatmentPtr ptrStatment = ptrDatabase->PrepareQuery(CommonLib::str_format::StrFormatSafe("pragma table_info ('{0}')", sTable).c_str());
                while (ptrStatment->Next())
                {
                    std::string sName = ptrStatment->ReadText(1);
@@ -110,8 +110,37 @@ namespace GraphEngine {
            catch (std::exception& exc)
            {
                CommonLib::CExcBase::RegenExc("Failed to read fileds info for table {0}", sTable,  exc);
+               throw;
            }
        }
+
+
+        IFieldsPtr CSQLiteUtils::ReadFields( CommonLib::database::IStatmentPtr ptrStatment)
+        {
+            try
+            {
+                IFieldsPtr pFields = std::make_shared<CFields>();
+                int32_t colums = ptrStatment->ColumnCount();
+                for(int32_t i = 0; i <  colums; ++i)
+                {
+                    IFieldPtr pField = std::make_shared<CField>();
+                    eDataTypes dtType = SQLiteType2FieldType(ptrStatment->GetColumnType(i));
+                    std::string sName = ptrStatment->ColumnName(i);
+                    uint32_t size = ptrStatment->GetColumnBytes(i);
+
+                    pField->SetLength(size);
+                    pField->SetType(dtType);
+                    pFields->AddField(pField);
+                }
+
+                return pFields;
+            }
+            catch (std::exception& exc)
+            {
+                CommonLib::CExcBase::RegenExc("Failed to read fileds from statment",  exc);
+                throw;
+            }
+        }
 
     }
 }
