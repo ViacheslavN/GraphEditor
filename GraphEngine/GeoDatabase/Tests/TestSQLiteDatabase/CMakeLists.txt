@@ -7,6 +7,8 @@ set(SOURCE_FILES
         CreateDatabase.cpp
         TestingData.h
         TestingData.cpp
+        InsertDataIntoDatabase.cpp
+        SelectFromDatabaseTest.cpp
 )
 
 

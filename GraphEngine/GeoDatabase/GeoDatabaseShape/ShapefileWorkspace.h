@@ -19,7 +19,7 @@ namespace GraphEngine
             static IWorkspacePtr Open(CommonLib::ISerializeObjPtr pObj);
 
             virtual ITablePtr CreateTable(const std::string& name,  const std::string& viewName, IFieldsPtr ptrFields);
-            virtual ISpatialTablePtr CreateSpatialTable(const std::string& name,  const std::string& viewName, IFieldsPtr ptrFields, const std::string& shapeFiledName, const std::string& spatialIndexName = "");
+            virtual ISpatialTablePtr CreateSpatialTable(const std::string& name,  const std::string& viewName, IFieldsPtr ptrFields,  const std::string& spatialIndexName = "");
             virtual ITransactionPtr StartTransaction(eTransactionType type);
 
             virtual void Save(CommonLib::ISerializeObjPtr pObj) const;

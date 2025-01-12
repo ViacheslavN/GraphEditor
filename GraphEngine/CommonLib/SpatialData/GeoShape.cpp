@@ -388,6 +388,11 @@ namespace CommonLib
         return m_blob.Size();
     }
 
+    const byte_t * CGeoShape::Data() const
+    {
+        return  m_blob.Buffer();
+    }
+
     uint32_t  CGeoShape::GetPartCount() const
     {
 

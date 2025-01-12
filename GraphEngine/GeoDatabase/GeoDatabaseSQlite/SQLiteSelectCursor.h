@@ -20,6 +20,8 @@ namespace GraphEngine {
 
             virtual bool Next();
             virtual bool ColumnIsNull(int32_t col) const;
+            virtual int32_t GetColumnBytes(int32_t col) const;
+
             virtual int8_t ReadInt8(int32_t col) const;
             virtual uint8_t ReadUInt8(int32_t col) const ;
             virtual int16_t ReadInt16(int32_t col) const ;

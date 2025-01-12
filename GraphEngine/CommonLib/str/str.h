@@ -1,5 +1,6 @@
 #pragma once
 #include "convertToString.h"
+#include <any>
 
 namespace CommonLib
 {
@@ -63,7 +64,7 @@ public:
 	static astr StrFormatSafe(const astr& format, const astr& arg1, const astr& arg2, const astr& arg3, const astr& arg4);
 	static astr StrFormatSafe(const astr& format, const astr& arg1, const astr& arg2, const astr& arg3, const astr& arg4, const astr& arg5);
 	static astr StrFormatSafe(const astr& format, const astr& arg1, const astr& arg2, const astr& arg3, const astr& arg4, const astr& arg5, const astr& arg6);
-
+    static astr StrFormatAnySafe(const std::any& val);
 
 	template<class TArg>
 	static astr AStrFormatSafeT(const astr& format, const TArg& arg1)

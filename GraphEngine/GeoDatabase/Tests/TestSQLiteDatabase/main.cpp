@@ -8,8 +8,8 @@
 #include "TestingData.h"
 
 void CreateDatabase();
-
-
+void InsertDateInDatabase();
+void SelectFromDatabase();
 
 int main()
 {
@@ -18,6 +18,8 @@ int main()
         CTestingData::Create();
 
         CreateDatabase();
+        InsertDateInDatabase();
+        SelectFromDatabase();
 
 
     }

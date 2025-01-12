@@ -87,6 +87,9 @@ namespace GraphEngine
 
             virtual int32_t  ColumnCount() const
             {
+                if(m_ptrFields.get() == nullptr)
+                    throw CommonLib::CExcBase("Not information");
+
                 return m_ptrFields->GetFieldCount();
             }
 
@@ -224,7 +227,6 @@ namespace GraphEngine
                 {
                     strSqlQuery += ",";
                     strSqlQuery += gueryFields[i];
-                    strSqlQuery += "\n";
                 }
 
 
@@ -266,7 +268,7 @@ namespace GraphEngine
                     if(!sValPrefix.empty())
                         sSQl+= sValPrefix + ".";
 
-                    sSQl += ptrJoin->GetRightField();
+                    sSQl += ptrJoin->GetFirstField();
 
                     switch(ptrJoin->GetJoinOperation())
                     {
@@ -293,7 +295,7 @@ namespace GraphEngine
                     if(!sTablePrefix.empty())
                         sSQl+= sTablePrefix + ".";
 
-                    sSQl += ptrJoin->GetRightField() + "\n";
+                    sSQl += ptrJoin->GetSecondField() + "\n";
 
 
                 }

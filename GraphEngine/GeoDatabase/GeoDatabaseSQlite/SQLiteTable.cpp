@@ -5,7 +5,7 @@ namespace GraphEngine {
     namespace GeoDatabase {
 
         CSQLiteTable::CSQLiteTable(const std::string& tableName,  const std::string& viewName,
-                     CommonLib::database::IDatabasePtr ptrDatabase) :
+                                   CommonLib::database::IDatabasePtr ptrDatabase) :
                      TBase(eDatasetType::dtTypeTable, tableName, viewName, ptrDatabase)
         {
 

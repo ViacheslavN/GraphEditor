@@ -14,7 +14,6 @@ namespace GraphEngine {
             try
             {
                 m_ptrStatment = ptrDatabase->PrepareQuery(sqlSelectQuery.c_str());
-                m_ptrFields = CSQLiteUtils::ReadFields(m_ptrStatment);
             }
             catch (std::exception& exc)
             {
@@ -27,13 +26,21 @@ namespace GraphEngine {
                 TBase(IFieldsPtr(), ptrFilter)
 
         {
-
+            try
+            {
+                std::string sqlSelectQuery =  CreateSQLQuery(ptrSourceFields, ptrFilter, sTableName, "");
+                m_ptrStatment = ptrDatabase->PrepareQuery(sqlSelectQuery.c_str());
+            }
+            catch (std::exception& exc)
+            {
+                CommonLib::CExcBase::RegenExc("CSQLiteTable: Failed to Select", exc);
+            }
         }
 
-        CSQLiteSelectCursor::CSQLiteSelectCursor(const std::string& sTableName, IFieldsPtr  ptrSourceFields, IQueryFilterPtr ptrFilter, Geometry::ISpatialReferencePtr ptrSpatRefSource, CommonLib::database::IStatmentPtr ptrDatabase):
+        CSQLiteSelectCursor::CSQLiteSelectCursor(const std::string& sTableName, IFieldsPtr  ptrSourceFields, IQueryFilterPtr ptrFilter, Geometry::ISpatialReferencePtr ptrSpatRefSource, CommonLib::database::IStatmentPtr ptrStatment):
                 TBase(IFieldsPtr(), ptrFilter, ptrSpatRefSource)
         {
-
+            m_ptrStatment = ptrStatment;
         }
 
 
@@ -55,7 +62,7 @@ namespace GraphEngine {
 
             if(!sSpatialIndex.empty())
             {
-                strSqlQuery += ", " +  sSpatialIndex  + " AS " + "spatialIndexValue \n";
+                strSqlQuery += ", " +  sSpatialIndex  + " AS " + "spatialIndexValue ";
             }
 
             if(!vecJoints.empty())
@@ -86,12 +93,12 @@ namespace GraphEngine {
                 else
                     strSqlQuery += CommonLib::str_format::AStrFormatSafeT("{0}.rowid = spatialIndexValue.feature_id)", strMainTablePrefix);
 
-                strSqlQuery +=  "\n";
+
             }
 
             if(!whereClause.empty())
             {
-                if(!sSpatialIndex.empty())
+                if(sSpatialIndex.empty())
                     strSqlQuery += " WHERE ";
 
                 strSqlQuery += whereClause;
@@ -107,73 +114,84 @@ namespace GraphEngine {
 
         bool CSQLiteSelectCursor::Next()
         {
-            return  m_ptrStatment->Next();
+            bool bRet =  m_ptrStatment->Next();
+            if(bRet && m_ptrFields.get() == nullptr)
+                m_ptrFields = CSQLiteUtils::ReadFields(m_ptrStatment);
+
+            return  bRet;
+
+
         }
 
         bool CSQLiteSelectCursor::ColumnIsNull(int32_t col) const
         {
-            return m_ptrStatment->ColumnIsNull(col);
+            return m_ptrStatment->ColumnIsNull(col + 1);
+        }
+
+        int32_t CSQLiteSelectCursor::GetColumnBytes(int32_t col) const
+        {
+            return m_ptrStatment->GetColumnBytes(col + 1);
         }
 
         int8_t CSQLiteSelectCursor::ReadInt8(int32_t col) const
         {
-            return (int8_t) m_ptrStatment->ReadInt16(col);
+            return (int8_t) m_ptrStatment->ReadInt16(col + 1);
         }
 
         uint8_t CSQLiteSelectCursor::ReadUInt8(int32_t col) const
         {
-            return (int8_t) m_ptrStatment->ReadUInt16(col);
+            return (int8_t) m_ptrStatment->ReadUInt16(col + 1);
         }
 
         int16_t CSQLiteSelectCursor::ReadInt16(int32_t col) const
         {
-            return (int16_t) m_ptrStatment->ReadInt16(col);
+            return (int16_t) m_ptrStatment->ReadInt16(col + 1);
         }
 
         uint16_t CSQLiteSelectCursor::ReadUInt16(int32_t col) const
         {
-            return (uint16_t) m_ptrStatment->ReadUInt16(col);
+            return (uint16_t) m_ptrStatment->ReadUInt16(col + 1);
         }
 
         int32_t CSQLiteSelectCursor::ReadInt32(int32_t col) const
         {
-            return m_ptrStatment->ReadInt32(col);
+            return m_ptrStatment->ReadInt32(col + 1);
         }
 
         uint32_t CSQLiteSelectCursor::ReadUInt32(int32_t col) const
         {
-            return m_ptrStatment->ReadUInt32(col);
+            return m_ptrStatment->ReadUInt32(col + 1);
         }
 
 
         int64_t CSQLiteSelectCursor::ReadInt64(int32_t col) const
         {
-            return m_ptrStatment->ReadInt64(col);
+            return m_ptrStatment->ReadInt64(col + 1);
         }
 
         uint64_t CSQLiteSelectCursor::ReadUInt64(int32_t col) const
         {
-            return m_ptrStatment->ReadUInt64(col);
+            return m_ptrStatment->ReadUInt64(col + 1);
         }
 
         float CSQLiteSelectCursor::ReadFloat(int32_t col) const
         {
-            return m_ptrStatment->ReadFloat(col);
+            return m_ptrStatment->ReadFloat(col + 1);
         }
 
         double CSQLiteSelectCursor::ReadDouble(int32_t col) const
         {
-            return m_ptrStatment->ReadDouble(col);
+            return m_ptrStatment->ReadDouble(col + 1);
         }
 
         void CSQLiteSelectCursor::ReadText(int32_t col, std::string& text) const
         {
-            m_ptrStatment->ReadText(col, text);
+            m_ptrStatment->ReadText(col + 1, text);
         }
 
         std::string CSQLiteSelectCursor::ReadText(int32_t col) const
         {
-            return  m_ptrStatment->ReadText(col);
+            return  m_ptrStatment->ReadText(col + 1);
         }
 
         void CSQLiteSelectCursor::ReadTextW(int32_t col, std::wstring& text) const
@@ -190,7 +208,7 @@ namespace GraphEngine {
 
         void CSQLiteSelectCursor::ReadBlob(int col, byte_t **pBuf, int32_t& size) const
         {
-            m_ptrStatment->ReadBlob(col, pBuf, size);
+            m_ptrStatment->ReadBlob(col + 1, pBuf, size);
         }
 
         CommonLib::IGeoShapePtr CSQLiteSelectCursor::ReadShape(int32_t col) const

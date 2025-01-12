@@ -1,6 +1,8 @@
 #include "SQLiteWorkspace.h"
 #include "SQLiteTable.h"
-
+#include "SQLiteUtils.h"
+#include "SQLiteTransaction.h"
+#include "SQLiteSpatialTable.h"
 
 namespace GraphEngine {
     namespace GeoDatabase {
@@ -52,7 +54,6 @@ namespace GraphEngine {
                 throw;
             }
 
-
         }
 
         IDatabaseWorkspacePtr CSQLiteWorkspace::Open(CommonLib::ISerializeObjPtr pObj)
@@ -91,12 +92,20 @@ namespace GraphEngine {
 
         ITablePtr CSQLiteWorkspace::CreateTable(const std::string& name,  const std::string& viewName, IFieldsPtr ptrFields)
         {
-            throw CommonLib::CExcBase("Create table not implement");
+            CSQLiteUtils::CreateCreateTable(ptrFields, name, m_ptrDatabase);
+
+            return std::make_shared<CSQLiteTable>(name, viewName, m_ptrDatabase);
+
         }
 
-        ISpatialTablePtr CSQLiteWorkspace::CreateSpatialTable(const std::string& name,  const std::string& viewName, IFieldsPtr ptrFields, const std::string& shapeFiledName, const std::string& spatialIndexName)
+        ISpatialTablePtr CSQLiteWorkspace::CreateSpatialTable(const std::string& name,  const std::string& viewName, IFieldsPtr ptrFields,  const std::string& spatialIndexName)
         {
-            return ISpatialTablePtr();
+            CSQLiteUtils::CreateCreateTable(ptrFields, name, m_ptrDatabase);
+            if(!spatialIndexName.empty())
+                CSQLiteUtils::CreateSpatialIndex(spatialIndexName, "feature_id", m_ptrDatabase);
+
+            return std::make_shared<CSQLiteSpatialTable>(name, viewName, m_ptrDatabase);
+
         }
 
         IDatasetPtr CSQLiteWorkspace::LoadDataset(const std::string& sName)
@@ -116,7 +125,7 @@ namespace GraphEngine {
 
         ITransactionPtr CSQLiteWorkspace::StartTransaction(eTransactionType type)
         {
-            throw CommonLib::CExcBase("StartTransaction not implement");
+            return std::make_shared<CSQLiteTransaction>(m_ptrDatabase);
         }
 
         void CSQLiteWorkspace::Save(CommonLib::ISerializeObjPtr pObj) const

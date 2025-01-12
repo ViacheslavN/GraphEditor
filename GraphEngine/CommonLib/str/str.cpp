@@ -220,4 +220,64 @@ astr str_format::StrFormatSafe(const astr& format, const astr& arg1, const astr&
 	return StrFormatSafe(format, args);
 }
 
+
+astr str_format::StrFormatAnySafe(const std::any& value)
+{
+
+    if (auto x = std::any_cast<bool>(&value)) {
+        return str_utils::AStrFrom(*x);
+    }
+
+    if (auto x = std::any_cast<int8_t>(&value)) {
+        return str_utils::AStrFrom(*x);
+    }
+
+    if (auto x = std::any_cast<uint8_t>(&value)) {
+        return str_utils::AStrFrom(*x);
+    }
+
+    if (auto x = std::any_cast<int16_t>(&value)) {
+        return str_utils::AStrFrom(*x);
+    }
+
+    if (auto x = std::any_cast<uint16_t>(&value)) {
+        return str_utils::AStrFrom(*x);
+    }
+
+    if (auto x = std::any_cast<int32_t>(&value)) {
+        return str_utils::AStrFrom(*x);
+    }
+
+    if (auto x = std::any_cast<uint32_t>(&value)) {
+        return str_utils::AStrFrom(*x);
+    }
+
+    if (auto x = std::any_cast<int64_t>(&value)) {
+        return str_utils::AStrFrom(*x);
+    }
+
+    if (auto x = std::any_cast<uint64_t>(&value)) {
+        return str_utils::AStrFrom(*x);
+    }
+
+    if (auto x = std::any_cast<float>(&value)) {
+        return str_utils::AStrFrom(*x);
+    }
+
+    if (auto x = std::any_cast<double>(&value)) {
+        return str_utils::AStrFrom(*x);
+    }
+
+    if (auto x = std::any_cast<std::string>(&value)) {
+        return str_utils::AStrFrom(*x);
+    }
+
+    if (auto x = std::any_cast<const char*>(&value)) {
+        return str_utils::AStrFrom(*x);
+    }
+
+    throw CExcBase("Converting any  to string failed, Unknown type any");
+}
+
+
 }

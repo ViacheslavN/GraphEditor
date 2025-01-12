@@ -22,7 +22,7 @@ namespace GraphEngine {
             static IDatabaseWorkspacePtr Create(const char *pszName, const char *pszPath, int32_t nID = -1);
 
             virtual ITablePtr CreateTable(const std::string& name,  const std::string& viewName, IFieldsPtr ptrFields);
-            virtual ISpatialTablePtr CreateSpatialTable(const std::string& name,  const std::string& viewName, IFieldsPtr ptrFields, const std::string& shapeFiledName, const std::string& spatialIndexName = "");
+            virtual ISpatialTablePtr CreateSpatialTable(const std::string& name,  const std::string& viewName, IFieldsPtr ptrFields,  const std::string& spatialIndexName = "");
             virtual ITransactionPtr StartTransaction(eTransactionType type);
 
             virtual void Save(CommonLib::ISerializeObjPtr ptrObj) const;

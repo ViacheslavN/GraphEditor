@@ -44,13 +44,9 @@ namespace GraphEngine
             dtFloat,
             dtDouble,
             dtString,
-            dtWString,
             dtBlob,
-            dtRaster,
             dtDate,
-            dtGeometry,
-            dtSerializedObject,
-            dtAnnotation
+            dtGeometry
         };
 
         enum eSpatialRel {
@@ -122,11 +118,13 @@ namespace GraphEngine
             ITransaction() {}
             virtual ~ ITransaction() {}
 
-            virtual bool Commit() = 0;
-            virtual bool Rollback() = 0;
-            virtual void GetError(std::string &sText) = 0;
-            virtual IInsertCursorPtr CreateInsertCusor(ITablePtr pTable, IFieldSetPtr ptrFileds = nullptr) = 0;
-            virtual IUpdateCursorPtr CreateUpdateCusor(ITablePtr pTable, IFieldSetPtr ptrFileds = nullptr, const std::string& whereClause = "") = 0;
+            virtual void Commit() = 0;
+            virtual void Rollback() = 0;
+
+            virtual IInsertCursorPtr CreateInsertCusor(const std::string&  sqlInsertQuery) = 0;
+            virtual IInsertCursorPtr CreateInsertCusor(ITablePtr pTable) = 0;
+            virtual IUpdateCursorPtr CreateUpdateCusor(const std::string&  sqlUpdateQuery) = 0;
+            virtual IUpdateCursorPtr CreateUpdateCusor(ITablePtr pTable, const std::string& whereClause = "") = 0;
             virtual IDeleteCursorPtr CreateDeleteCusor(ITablePtr pTable, IFieldSetPtr ptrFileds = nullptr) = 0;
             virtual void Executequery(const std::string& sqlQuery) = 0;
 
@@ -156,7 +154,8 @@ namespace GraphEngine
 
             virtual ITablePtr CreateTable(const std::string& name, const std::string& viewName, IFieldsPtr ptrFields) = 0;
             virtual ITablePtr GetTable(const std::string& name) = 0;
-            virtual ISpatialTablePtr CreateSpatialTable(const std::string& name,  const std::string& viewName, IFieldsPtr ptrFields, const std::string& shapeFiledName, const std::string& spatialIndexName = "") = 0;
+            virtual ISpatialTablePtr CreateSpatialTable(const std::string& name,
+                                                        const std::string& viewName, IFieldsPtr ptrFields, const std::string& spatialIndexName = "") = 0;
             virtual ISpatialTablePtr GetSpatialTable(const std::string& name) = 0;
 
         };
@@ -449,6 +448,14 @@ namespace GraphEngine
             IInsertCursor(){}
             virtual ~IInsertCursor(){}
 
+            virtual int32_t  ColumnCount() const = 0;
+            virtual std::string ColumnName(int32_t col) const = 0;
+            virtual bool ColumnIsNull(int32_t col) const = 0;
+            virtual eDataTypes GetColumnType(int32_t col) const = 0;
+            virtual int32_t GetColumnBytes(int32_t col) const = 0;
+
+            virtual void Next() = 0;
+
             virtual void BindInt8(int32_t col, int8_t val) = 0;
             virtual void BindUInt8(int32_t col, uint8_t val) = 0;
             virtual void BindInt16(int32_t col, int16_t val) = 0;
@@ -462,7 +469,7 @@ namespace GraphEngine
             virtual void BindText(int32_t col, const std::string& text, bool copy) = 0;
             virtual void BindTextW(int32_t col, const std::wstring& text, bool copy) = 0;
             virtual void BindBlob(int32_t col, const byte_t *pBuf, int32_t size, bool copy) = 0;
-            virtual void BindShape(int32_t col, CommonLib::IGeoShapePtr ptrShape) = 0;
+            virtual void BindShape(int32_t col, CommonLib::IGeoShapePtr ptrShape, bool copy) = 0;
         };
 
         class  IUpdateCursor : public ICursor
@@ -488,13 +495,21 @@ namespace GraphEngine
             IJoin(){}
             virtual ~IJoin(){}
             virtual IFieldSetPtr    GetFieldSet() const = 0;
-            virtual ITablePtr GetTable() = 0;
-            virtual eJoinType GetJoinType() = 0;
-            virtual eJoinOperation GetJoinOperation() = 0;
+            virtual void    SetFieldSet(IFieldSetPtr  ptrFields) = 0;
+            virtual ITablePtr GetTable() const = 0;
+            virtual void SetTable(ITablePtr ptrTable)  = 0;
+            virtual eJoinType GetJoinType() const = 0;
+            virtual void SetJoinType(eJoinType type) = 0;
+            virtual eJoinOperation GetJoinOperation() const = 0;
+            virtual void SetJoinOperation(eJoinOperation joinOp) = 0;
             virtual const std::string&  GetTablePrefix() const = 0;
             virtual void  SetTablePrefix(const std::string& tablePrefix)  = 0;
-            virtual std::string GetLeftField() = 0;
-            virtual std::string GetRightField() = 0;
+
+            //based on FROM first_table < join_type > second_table [ ON ( join_condition ) ]
+            virtual const std::string& GetFirstField() const = 0;
+            virtual void SetFirstField(const std::string& field)  = 0;
+            virtual const std::string& GetSecondField() const = 0;
+            virtual void SetSecondField(const std::string& field)  = 0;
         };
 
 

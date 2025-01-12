@@ -52,6 +52,14 @@ set(COMMON_SOURCE_FILES
         GeoDatabaseSQlite/SQLiteSelectCursor.h
         GeoDatabaseSQlite/SQLiteSelectCursor.cpp
         GeoDatabaseSQlite/SQLiteUtils.cpp
+        GeoDatabaseSQlite/SQLiteInsertCursor.h
+        GeoDatabaseSQlite/SQLiteInsertCursor.cpp
+        GeoDatabaseSQlite/SQLiteTransaction.h
+        GeoDatabaseSQlite/SQLiteTransaction.cpp
+        Join.h
+        Jont.cpp
+        GeoDatabaseSQlite/SQLiteSpatialTable.h
+        GeoDatabaseSQlite/SQLiteSpatialTable.cpp
 
 )
 
@@ -64,7 +72,9 @@ IF (WIN32)
 ELSE()
     set(SOURCE_FILES ${COMMON_SOURCE_FILES}
 
- )
+
+
+    )
 
 ENDIF()
 
