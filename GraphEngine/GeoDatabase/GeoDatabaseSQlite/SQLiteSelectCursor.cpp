@@ -28,7 +28,7 @@ namespace GraphEngine {
         {
             try
             {
-                std::string sqlSelectQuery =  CreateSQLQuery(ptrSourceFields, ptrFilter, sTableName, "");
+                std::string sqlSelectQuery =  CreateSQLQuery(ptrSourceFields, ptrFilter, sTableName, "", "");
                 m_ptrStatment = ptrDatabase->PrepareQuery(sqlSelectQuery.c_str());
             }
             catch (std::exception& exc)
@@ -37,14 +37,22 @@ namespace GraphEngine {
             }
         }
 
-        CSQLiteSelectCursor::CSQLiteSelectCursor(const std::string& sTableName, IFieldsPtr  ptrSourceFields, IQueryFilterPtr ptrFilter, Geometry::ISpatialReferencePtr ptrSpatRefSource, CommonLib::database::IStatmentPtr ptrStatment):
+        CSQLiteSelectCursor::CSQLiteSelectCursor(const std::string& sTableName, const std::string& sOIDName, const std::string& sSpatialIndex, IFieldsPtr  ptrSourceFields, IQueryFilterPtr ptrFilter, Geometry::ISpatialReferencePtr ptrSpatRefSource, CommonLib::database::IDatabasePtr ptrDatabase ):
                 TBase(IFieldsPtr(), ptrFilter, ptrSpatRefSource)
         {
-            m_ptrStatment = ptrStatment;
+            try
+            {
+                    std::string sqlSelectQuery =  CreateSQLQuery(ptrSourceFields, ptrFilter, sTableName, sSpatialIndex, sOIDName);
+                    m_ptrStatment = ptrDatabase->PrepareQuery(sqlSelectQuery.c_str());
+            }
+            catch (std::exception& exc)
+            {
+                CommonLib::CExcBase::RegenExc("CSQLiteTable: Failed to Select", exc);
+            }
         }
 
 
-        std::string CSQLiteSelectCursor::CreateSQLQuery(IFieldsPtr  ptrSourceFields, IQueryFilterPtr ptrFilter, const std::string& sTableName, const std::string& sSpatialIndex)
+        std::string CSQLiteSelectCursor::CreateSQLQuery(IFieldsPtr  ptrSourceFields, IQueryFilterPtr ptrFilter, const std::string& sTableName, const std::string& sSpatialIndex, const std::string& sOIDFieldName)
         {
 
             std::string  strSqlQuery = CreateSelectPartQuery( ptrFilter, ptrSourceFields);
@@ -88,10 +96,17 @@ namespace GraphEngine {
                     strSqlQuery +=  CommonLib::str_format::AStrFormatSafeT("( spatialIndexValue.minX>={0} AND spatialIndexValue.maxX<={1} AND spatialIndexValue.minY>={2} AND spatialIndexValue.maxY<={3} ",
                                       bbox.xMin, bbox.xMax, bbox.yMin, bbox.yMax);
                 }
-                if(strMainTablePrefix.empty())
-                    strSqlQuery += (" AND rowid =  spatialIndexValue.feature_id)");
+
+                std::string sOIDName;
+                if(sOIDFieldName.empty())
+                    sOIDName = "rowid";
                 else
-                    strSqlQuery += CommonLib::str_format::AStrFormatSafeT("{0}.rowid = spatialIndexValue.feature_id)", strMainTablePrefix);
+                    sOIDName = sOIDFieldName;
+
+                if(strMainTablePrefix.empty())
+                    strSqlQuery += CommonLib::str_format::AStrFormatSafeT(" AND {0}.{1} =  spatialIndexValue.feature_id)", sTableName, sOIDName);
+                else
+                    strSqlQuery += CommonLib::str_format::AStrFormatSafeT(" AND {0}.{1} = spatialIndexValue.feature_id)", strMainTablePrefix, sOIDName);
 
 
             }

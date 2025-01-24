@@ -98,13 +98,15 @@ namespace GraphEngine {
 
         }
 
-        ISpatialTablePtr CSQLiteWorkspace::CreateSpatialTable(const std::string& name,  const std::string& viewName, IFieldsPtr ptrFields,  const std::string& spatialIndexName)
+        ITablePtr CSQLiteWorkspace::CreateTableWithSpatialIndex(const std::string& name,
+                                                       const std::string& viewName,  const std::string& spatialIndexName, const std::string& shapeFieldName, const std::string& sOIDFieldName, IFieldsPtr ptrFields,
+                                                       CommonLib::eShapeType shapeType, Geometry::IEnvelopePtr  ptrExtent, Geometry::ISpatialReferencePtr ptrSpatialReference)
         {
             CSQLiteUtils::CreateCreateTable(ptrFields, name, m_ptrDatabase);
             if(!spatialIndexName.empty())
                 CSQLiteUtils::CreateSpatialIndex(spatialIndexName, "feature_id", m_ptrDatabase);
 
-            return std::make_shared<CSQLiteSpatialTable>(name, viewName, m_ptrDatabase);
+            return std::make_shared<CSQLiteSpatialTable>(name, viewName, spatialIndexName, shapeType, ptrExtent, ptrSpatialReference, m_ptrDatabase);
 
         }
 

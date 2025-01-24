@@ -13,6 +13,7 @@ namespace GraphEngine {
 
             CSQLiteInsertCursor(const std::string&  sqlInsertQuery, CommonLib::database::IDatabasePtr ptrDatabase);
             CSQLiteInsertCursor(ITablePtr pTable, CommonLib::database::IDatabasePtr ptrDatabase);
+
             virtual ~CSQLiteInsertCursor();
 
             virtual int32_t  ColumnCount() const;
@@ -39,8 +40,20 @@ namespace GraphEngine {
             virtual void BindShape(int32_t col, CommonLib::IGeoShapePtr ptrShape, bool copy);
 
         private:
+            std::string GetInsertSql(IFieldsPtr ptrFields, const std::string& tableName);
+            void InserToSpatiallIndex();
+
+            void SetOID(int32_t col, int64_t  setOid);
+
+        private:
             CommonLib::database::IStatmentPtr m_ptrStatment;
+            CommonLib::database::IStatmentPtr m_ptrStmtSpatial;
+            CommonLib::database::IDatabasePtr m_ptrDatabase;
             IFieldsPtr      m_ptrFields;
+            int m_nShapeFieldIndex;
+            int m_nOIDFieldIndex;
+            CommonLib::bbox m_bbox;
+            int64_t  m_nOID;
         };
 
     }

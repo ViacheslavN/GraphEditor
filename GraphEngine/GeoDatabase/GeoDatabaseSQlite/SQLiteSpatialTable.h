@@ -6,14 +6,19 @@
 namespace GraphEngine {
     namespace GeoDatabase {
 
-        class CSQLiteSpatialTable : public CSQLiteTableBase<ISpatialTable >
+        class CSQLiteSpatialTable : public CSQLiteTableBase<ITable >
         {
         public:
 
-            typedef CSQLiteTableBase<ISpatialTable> TBase;
+            typedef CSQLiteTableBase<ITable> TBase;
 
-            CSQLiteSpatialTable(const std::string& tableName,  const std::string& viewName, CommonLib::eShapeType shapeType,
-            CommonLib::database::IDatabasePtr ptrDatabase, const std::string& spatialIndex);
+
+
+            CSQLiteSpatialTable(const std::string& name,
+                                const std::string& viewName,  const std::string& spatialIndexName,
+                                CommonLib::eShapeType shapeType, Geometry::IEnvelopePtr  ptrExtent, Geometry::ISpatialReferencePtr ptrSpatialReference,
+                                CommonLib::database::IDatabasePtr ptrDatabase);
+
             virtual  ~CSQLiteSpatialTable();
 
             virtual	void SetGeometryType(CommonLib::eShapeType shapeType);
@@ -27,10 +32,11 @@ namespace GraphEngine {
             virtual void Save(CommonLib::ISerializeObjPtr pObj) const ;
             virtual void Load(CommonLib::ISerializeObjPtr pObj);
 
+
+
         private:
 
             Geometry::IEnvelopePtr  m_ptrExtent;
-            std::string m_spatialIndexName;
             CommonLib::eShapeType m_ShapeType;
             Geometry::ISpatialReferencePtr m_ptrSpatialReference;
 

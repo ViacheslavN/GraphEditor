@@ -5,7 +5,7 @@
 
 
 std::string CTestingData::m_sDatabaseName = "TestDatabase";
-std::string CTestingData::m_sDatabasePath = "F:\\TestDatabase.sqlitedb";
+std::string CTestingData::m_sDatabasePath = "F:\\TestData\\TestDatabase.sqlitedb";
 std::string CTestingData::m_sTestTableName_1 = "TestTable_1";
 std::string CTestingData::m_sTestTableName_2 = "TestTable_2";
 std::string CTestingData::m_sTestTableName_3 = "TestTable_3";

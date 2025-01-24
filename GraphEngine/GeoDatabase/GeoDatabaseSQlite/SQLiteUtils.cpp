@@ -29,7 +29,6 @@ namespace GraphEngine {
                     return "REAL";
                     break;
                 case  dtBlob:
-                case  dtGeometry:
                     return "BLOB";
                     break;
                 case  dtString:
@@ -148,7 +147,7 @@ namespace GraphEngine {
         {
             try
             {
-               std::string sql =  CommonLib::str_format::AStrFormatSafeT("CREATE VIRTUAL TABLE {0}} USING rtree({1}, minX, maxX, minY, maxY)", sIndexName, sIndexField );
+               std::string sql =  CommonLib::str_format::AStrFormatSafeT("CREATE VIRTUAL TABLE {0} USING rtree({1}, minX, maxX, minY, maxY)", sIndexName, sIndexField );
                ptrDatabase->Execute(sql.c_str());
             }
             catch (std::exception& exc)

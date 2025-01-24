@@ -5,13 +5,21 @@ namespace GraphEngine {
     namespace GeoDatabase {
 
 
-        CSQLiteSpatialTable::CSQLiteSpatialTable(const std::string& tableName,  const std::string& viewName, CommonLib::eShapeType shapeType,
-                            CommonLib::database::IDatabasePtr ptrDatabase, const std::string& spatialIndex) :
-                    TBase(eDatasetType::dtSpatialTable, tableName, viewName, ptrDatabase),
-                    m_ShapeType(shapeType), m_spatialIndexName(spatialIndex)
-        {
 
+
+        CSQLiteSpatialTable::CSQLiteSpatialTable(const std::string& tableName,
+                                                 const std::string& viewName,  const std::string& spatialIndexName,
+                                                 CommonLib::eShapeType shapeType, Geometry::IEnvelopePtr  ptrExtent, Geometry::ISpatialReferencePtr ptrSpatialReference,
+                                                 CommonLib::database::IDatabasePtr ptrDatabase) :
+                TBase(eDatasetType::dtSpatialTable, tableName, viewName, ptrDatabase)
+        {
+            m_spatialIndexName = spatialIndexName;
+            m_ShapeType = shapeType;
+            m_ptrSpatialReference =ptrSpatialReference;
+
+            m_ptrExtent = ptrExtent;
         }
+
 
 
         CSQLiteSpatialTable:: ~CSQLiteSpatialTable()
@@ -49,6 +57,7 @@ namespace GraphEngine {
         {
             m_ptrSpatialReference = ptrSpatRef;
         }
+
 
         void CSQLiteSpatialTable::Save(CommonLib::ISerializeObjPtr pObj) const
         {

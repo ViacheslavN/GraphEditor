@@ -31,14 +31,15 @@ int main()
         GraphEngine::GeoDatabase::IDatabaseWorkspacePtr ptrExportWks =
                 std::dynamic_pointer_cast<GraphEngine::GeoDatabase::IDatabaseWorkspace>(GraphEngine::GeoDatabase::CShapfileWorkspace::Open("TestExport", pathExport.c_str(), 2));
 
-        GraphEngine::GeoDatabase::ISpatialTablePtr ptrShapeFile = ptrSrcWks->GetSpatialTable("building");
+        GraphEngine::GeoDatabase::ITablePtr ptrShapeFile = ptrSrcWks->GetTable("building");
+        GraphEngine::Geometry::IEnvelopePtr ptrExtent =  ptrShapeFile->GetExtent();
 
-
-        GraphEngine::GeoDatabase::ISpatialTablePtr ptrExportShapeFile = ptrExportWks->CreateSpatialTable("building", "building", ptrShapeFile->GetFields(), "");
+        GraphEngine::GeoDatabase::ITablePtr ptrExportShapeFile = ptrExportWks->CreateTableWithSpatialIndex("building", "building", "", ptrShapeFile->GetShapeFieldName(), ptrShapeFile->GetOIDFieldName(), ptrShapeFile->GetFields(),
+                                                                                                                ptrShapeFile->GetGeometryType(), ptrExtent->Clone(), ptrExtent->GetSpatialReference()->Clone());
 
         GraphEngine::GeoDatabase::ISpatialFilterPtr ptrFilter = std::make_shared<GraphEngine::GeoDatabase::CQueryFilter>();
 
-        GraphEngine::Geometry::IEnvelopePtr ptrExtent =  ptrShapeFile->GetExtent();
+
 
         ptrFilter->SetBB(ptrExtent->GetBoundingBox());
         ptrFilter->SetOutputSpatialReference(ptrShapeFile->GetSpatialReference());

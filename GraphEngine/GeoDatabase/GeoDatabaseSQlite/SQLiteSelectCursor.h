@@ -15,7 +15,7 @@ namespace GraphEngine {
 
             CSQLiteSelectCursor(const std::string& sQuery, CommonLib::database::IDatabasePtr ptrDatabase);
             CSQLiteSelectCursor(const std::string& sTableName, IFieldsPtr  ptrSourceFields, IQueryFilterPtr ptrFilter, CommonLib::database::IDatabasePtr ptrDatabase);
-            CSQLiteSelectCursor(const std::string& sTableName, IFieldsPtr  ptrSourceFields, IQueryFilterPtr ptrFilter, Geometry::ISpatialReferencePtr ptrSpatRefSource, CommonLib::database::IStatmentPtr ptrDatabase);
+            CSQLiteSelectCursor(const std::string& sTableName, const std::string& sOIDName, const std::string& sSpatialIndex, IFieldsPtr  ptrSourceFields, IQueryFilterPtr ptrFilter, Geometry::ISpatialReferencePtr ptrSpatRefSource, CommonLib::database::IDatabasePtr ptrDatabase);
 
 
             virtual bool Next();
@@ -39,10 +39,11 @@ namespace GraphEngine {
             virtual void ReadBlob(int col, byte_t **pBuf, int32_t& size) const;
             virtual CommonLib::IGeoShapePtr ReadShape(int32_t col) const;
         protected:
-            std::string CreateSQLQuery(IFieldsPtr  ptrSourceFields, IQueryFilterPtr ptrFilter, const std::string& sTableName, const std::string& sSpatialIndex);
+            std::string CreateSQLQuery(IFieldsPtr  ptrSourceFields, IQueryFilterPtr ptrFilter, const std::string& sTableName, const std::string& sSpatialIndex, const std::string& sOIDFieldName);
         private:
             CommonLib::database::IStatmentPtr m_ptrStatment;
             mutable CommonLib::IGeoShapePtr  m_ptrCacheShape;
+            int32_t m_nShapeIndexField;
 
 
         };

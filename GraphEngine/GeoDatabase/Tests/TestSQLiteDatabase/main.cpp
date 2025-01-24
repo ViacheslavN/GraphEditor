@@ -10,6 +10,7 @@
 void CreateDatabase();
 void InsertDateInDatabase();
 void SelectFromDatabase();
+void TestSpatialData();
 
 int main()
 {
@@ -18,6 +19,8 @@ int main()
         CTestingData::Create();
 
         CreateDatabase();
+        TestSpatialData();
+
         InsertDateInDatabase();
         SelectFromDatabase();
 

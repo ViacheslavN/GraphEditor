@@ -57,7 +57,9 @@ namespace GraphEngine
             throw CommonLib::CExcBase("Create table not implement");
         }
 
-        ISpatialTablePtr CShapfileWorkspace::CreateSpatialTable(const std::string& name,  const std::string& viewName, IFieldsPtr ptrFields, const std::string& spatialIndexName)
+        ITablePtr CShapfileWorkspace::CreateTableWithSpatialIndex(const std::string& name,
+                                                  const std::string& viewName,  const std::string& spatialIndexName, const std::string& shapeFieldName, const std::string& sOIDFieldName, IFieldsPtr ptrFields,
+                                                  CommonLib::eShapeType shapeType, Geometry::IEnvelopePtr  ptrExtent, Geometry::ISpatialReferencePtr ptrSpatialReference)
         {
             return std::make_shared<CShapefileSpatialTable>(m_sPath, name, viewName, ptrFields);
         }

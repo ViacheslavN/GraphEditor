@@ -148,7 +148,7 @@ namespace CommonLib
 
 			void CStatement::ReadBlob(int col, byte_t **pBuf, int32_t& size) const
 			{
-				if (*pBuf == 0)
+				if (pBuf == 0)
 					throw CExcBase("invalid argument, buf is null");
 
 				size = sqlite3_column_bytes(m_pStmt, col);

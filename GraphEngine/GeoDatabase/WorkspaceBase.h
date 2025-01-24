@@ -90,11 +90,6 @@ namespace GraphEngine {
                 return std::static_pointer_cast<ITable>( GetDataset(sName));
             }
 
-            virtual ISpatialTablePtr GetSpatialTable(const std::string& sName)
-            {
-                return std::static_pointer_cast<ISpatialTable>( GetDataset(sName));
-            }
-
             virtual int32_t GetID() const
             {
                 return m_nID;

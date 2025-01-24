@@ -9,6 +9,7 @@ set(SOURCE_FILES
         TestingData.cpp
         InsertDataIntoDatabase.cpp
         SelectFromDatabaseTest.cpp
+        TestSpatialData.cpp
 )
 
 

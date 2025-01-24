@@ -425,11 +425,12 @@ set(WINDOWS_SOURCE_FILES
 
 IF (WIN32)
         set(SOURCE_FILES ${COMMON_SOURCE_FILES} ${WINDOWS_SOURCE_FILES})
-		add_definitions(-DUNICODE -D_UNICODE)
+		add_definitions(-DUNICODE -D_UNICODE -DSQLITE_ENABLE_RTREE)
 ELSE()
         set(SOURCE_FILES ${COMMON_SOURCE_FILES} ${POSIX_SOURCE_FILES}
 				)
         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -static-libstdc++ -static-libgcc -fPIC -fvisibility=hidden")
+		add_definitions(-DSQLITE_ENABLE_RTREE)
 ENDIF()
 
 if (WIN32)

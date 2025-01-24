@@ -45,8 +45,7 @@ namespace GraphEngine
             dtDouble,
             dtString,
             dtBlob,
-            dtDate,
-            dtGeometry
+            dtDate
         };
 
         enum eSpatialRel {
@@ -98,7 +97,6 @@ namespace GraphEngine
         typedef std::shared_ptr<class IDeleteCursor> IDeleteCursorPtr;
         typedef std::shared_ptr<class IDataset> IDatasetPtr;
         typedef std::shared_ptr<class ITable> ITablePtr;
-        typedef std::shared_ptr<class ISpatialTable> ISpatialTablePtr;
         typedef std::shared_ptr<class IRow> IRowPtr;
         typedef std::shared_ptr<class IField> IFieldPtr;
         typedef std::shared_ptr<class ISpatialField> ISpatialFieldPtr;
@@ -154,9 +152,10 @@ namespace GraphEngine
 
             virtual ITablePtr CreateTable(const std::string& name, const std::string& viewName, IFieldsPtr ptrFields) = 0;
             virtual ITablePtr GetTable(const std::string& name) = 0;
-            virtual ISpatialTablePtr CreateSpatialTable(const std::string& name,
-                                                        const std::string& viewName, IFieldsPtr ptrFields, const std::string& spatialIndexName = "") = 0;
-            virtual ISpatialTablePtr GetSpatialTable(const std::string& name) = 0;
+            virtual ITablePtr CreateTableWithSpatialIndex(const std::string& name,
+                                                        const std::string& viewName,  const std::string& spatialIndexName, const std::string& shapeFieldName, const std::string& sOIDFieldName, IFieldsPtr ptrFields,
+                                                        CommonLib::eShapeType shapeType, Geometry::IEnvelopePtr  ptrExtent, Geometry::ISpatialReferencePtr ptrSpatialReference) = 0;
+
 
         };
 
@@ -288,6 +287,9 @@ namespace GraphEngine
         public:
             ITable(){}
             virtual ~ITable(){}
+
+            virtual void						 SetOIDFieldName(const std::string&	fieldName) = 0;
+            virtual const std::string&	         GetOIDFieldName() const = 0;
             virtual void						 AddField(IFieldPtr field) = 0;
             virtual void						 DeleteField(const std::string& fieldName) = 0;
             virtual IFieldsPtr					 GetFields() const  = 0;
@@ -295,21 +297,20 @@ namespace GraphEngine
             virtual ISelectCursorPtr			 Search(IQueryFilterPtr filter) = 0;
             virtual ISelectCursorPtr			 Select(const std::string& sqlSelectQuery) = 0;
 
-        };
+            //spatial part
 
-        class ISpatialTable : public ITable
-        {
-        public:
-            ISpatialTable(){}
-            virtual ~ISpatialTable(){}
             virtual CommonLib::eShapeType				 GetGeometryType() const = 0;
             virtual	void								 SetGeometryType(CommonLib::eShapeType shapeType)	= 0;
-
             virtual Geometry::IEnvelopePtr			     GetExtent() const = 0;
             virtual Geometry::ISpatialReferencePtr	     GetSpatialReference() const = 0;
             virtual void								 SetExtent(Geometry::IEnvelopePtr pEnvelope)  = 0;
             virtual void								 SetSpatialReference(Geometry::ISpatialReferencePtr pSpatRef)  = 0;
+            virtual const std::string&                   GetShapeFieldName() const = 0;
+            virtual void                                 SetShapeFieldName(const std::string& fieldName) = 0;
+            virtual void                                 SetSpatialIndexName(const std::string& spatialIndexName) = 0;
+            virtual const std::string&                   GetSpatialIndexName() const = 0;
         };
+
 
 
         class  IOIDSet

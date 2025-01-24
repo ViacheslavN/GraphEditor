@@ -17,7 +17,6 @@ set(COMMON_SOURCE_FILES
         InsertCursorBase.cpp
         GeoDatabaseShape/ShapefileUtils.h
         GeoDatabaseShape/ShapefileUtils.cpp
-        SpatialTableBase.h
         TableBase.h
         GeoDatabaseShape/SHPObject.h
         DataSetBase.h

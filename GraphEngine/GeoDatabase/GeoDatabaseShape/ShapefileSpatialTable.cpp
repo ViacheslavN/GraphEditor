@@ -10,7 +10,7 @@ namespace GraphEngine
     namespace GeoDatabase {
 
         CShapefileSpatialTable::CShapefileSpatialTable(const std::string& sPath, const std::string& sName, const std::string& sViewName) :
-            TBase(sName,  sViewName),
+            TBase(dtSpatialTable, sName,  sViewName),
             m_sPath(sPath)
         {
             m_sPath=  CShapefileUtils::NormalizePath(m_sPath);
@@ -18,7 +18,7 @@ namespace GraphEngine
         }
 
         CShapefileSpatialTable::CShapefileSpatialTable(const std::string& sPath,const std::string& sName,  const std::string& sViewName, IFieldsPtr ptrFields):
-                TBase(sName,  sViewName),
+                TBase(dtSpatialTable, sName,  sViewName),
                 m_sPath(sPath)
         {
             m_sPath=  CShapefileUtils::NormalizePath(m_sPath);
@@ -137,7 +137,7 @@ namespace GraphEngine
 
                 m_pShapeField = std::make_shared<CField>();
                 m_pShapeField->SetGeometryDef(ptrGeometryDef);
-                m_pShapeField->SetType(dtGeometry);
+                m_pShapeField->SetType(dtBlob);
 
                 m_sShapeFieldName = "Shape";
                 int i = 0;
@@ -187,28 +187,32 @@ namespace GraphEngine
                         case dtDate:
                             break;
 
-                        case dtGeometry:
+                        case dtBlob:
                         {
-                            ISpatialFieldPtr pShpField = std::static_pointer_cast<ISpatialField>(pField);
-                            if(pShpField.get() == nullptr)
-                                throw CommonLib::CExcBase("Wrong spatial field");
+                            if(pField->GetName() == m_sShapeFieldName)
+                            {
+                                ISpatialFieldPtr pShpField = std::static_pointer_cast<ISpatialField>(pField);
+                                if(pShpField.get() == nullptr)
+                                    throw CommonLib::CExcBase("Wrong spatial field");
 
-                            CommonLib::eShapeType gtype = pShpField->GetGeometryDef()->GetGeometryType();
-                            if(gtype == CommonLib::shape_type_point )
-                                shapeType = SHPT_MULTIPOINT;
-                            else if(gtype == CommonLib::shape_type_polyline)
-                            {
-                                shapeType = SHPT_ARC;
+                                CommonLib::eShapeType gtype = pShpField->GetGeometryDef()->GetGeometryType();
+                                if(gtype == CommonLib::shape_type_point )
+                                    shapeType = SHPT_MULTIPOINT;
+                                else if(gtype == CommonLib::shape_type_polyline)
+                                {
+                                    shapeType = SHPT_ARC;
+                                }
+                                if(gtype == CommonLib::shape_type_polygon)
+                                {
+                                    shapeType = SHPT_POLYGON;
+                                }
+                                if(gtype == CommonLib::shape_type_multipatch)
+                                {
+                                    shapeType = SHPT_MULTIPATCH;
+                                }
+                                pSprefPtr = pShpField->GetGeometryDef()->GetSpatialReference();
                             }
-                            if(gtype == CommonLib::shape_type_polygon)
-                            {
-                                shapeType = SHPT_POLYGON;
-                            }
-                            if(gtype == CommonLib::shape_type_multipatch)
-                            {
-                                shapeType = SHPT_MULTIPATCH;
-                            }
-                            pSprefPtr = pShpField->GetGeometryDef()->GetSpatialReference();
+
                         }
                         break;
                     }
@@ -257,7 +261,7 @@ namespace GraphEngine
                         case dtDate:
                             m_ptrDBfile->AddField(pField->GetName().c_str(), FTDate, pField->GetLength(), 0);
                             break;
-                       case dtGeometry:
+                       case dtBlob:
                             break;
                         default:
                             throw CommonLib::CExcBase("Doesn't support type: {0}", (int)pField->GetType());

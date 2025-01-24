@@ -1,4 +1,4 @@
-#include "../SpatialTableBase.h"
+#include "../TableBase.h"
 #include "ShapefileUtils.h"
 #include "ShapeFile.h"
 #include "ShapeDBFile.h"
@@ -7,10 +7,10 @@ namespace GraphEngine
 {
     namespace GeoDatabase {
 
-        class CShapefileSpatialTable : public ISpatialTableBase<ISpatialTable>
+        class CShapefileSpatialTable : public ITableBase<ITable>
         {
         public:
-            typedef  ISpatialTableBase<ISpatialTable> TBase;
+            typedef  ITableBase<ITable> TBase;
 
             CShapefileSpatialTable(const std::string& sPath, const std::string& sName, const std::string& sViewName); //open
             CShapefileSpatialTable(const std::string& sPath, const std::string& name,  const std::string& viewName, IFieldsPtr ptrFields); //create

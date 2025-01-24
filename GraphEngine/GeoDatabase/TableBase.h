@@ -43,10 +43,82 @@ namespace GraphEngine {
             {
                 m_pFields = ptrFields;
             }
-        protected:
+
+
+            virtual void SetOIDFieldName(const std::string& sOIDFieldName)
+            {
+                m_sOIDFieldName = sOIDFieldName;
+            }
+
+
+            virtual const std::string& GetOIDFieldName() const
+            {
+                return m_sOIDFieldName;
+            }
+
+
+            virtual	void SetGeometryType(CommonLib::eShapeType shapeType)
+            {
+                m_ShapeType = shapeType;
+            }
+
+            virtual CommonLib::eShapeType GetGeometryType() const
+            {
+                return m_ShapeType;
+            }
+
+
+            virtual Geometry::IEnvelopePtr	 GetExtent() const
+            {
+                return m_ptrExtent;
+            }
+
+            virtual Geometry::ISpatialReferencePtr GetSpatialReference() const
+            {
+                return m_ptrSpatialReference;
+            }
+
+            virtual void SetExtent(Geometry::IEnvelopePtr ptrEnvelope)
+            {
+                m_ptrExtent = ptrEnvelope;
+            }
+
+            virtual void SetSpatialReference(Geometry::ISpatialReferencePtr ptrSpatRef)
+            {
+                m_ptrSpatialReference = ptrSpatRef;
+            }
+            virtual const std::string&  GetShapeFieldName() const
+            {
+                return  m_sShapeFieldName;
+            }
+
+            virtual void  SetShapeFieldName(const std::string& fieldName)
+            {
+                m_sShapeFieldName = fieldName;
+
+            }
+
+            virtual void   SetSpatialIndexName(const std::string& spatialIndexName)
+            {
+                m_spatialIndexName = spatialIndexName;
+            }
+
+            virtual const std::string& GetSpatialIndexName() const
+            {
+                return m_spatialIndexName;
+            }
 
         protected:
-            mutable IFieldsPtr         m_pFields;
+            IFieldsPtr         m_pFields;
+            std::string m_sOIDFieldName;
+
+            //spatial part
+
+            Geometry::IEnvelopePtr  m_ptrExtent;
+            std::string m_sShapeFieldName;
+            std::string m_spatialIndexName;
+            CommonLib::eShapeType m_ShapeType;
+            Geometry::ISpatialReferencePtr m_ptrSpatialReference;
         };
     }
 }
