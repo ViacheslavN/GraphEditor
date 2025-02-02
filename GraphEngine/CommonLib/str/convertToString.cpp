@@ -6,27 +6,27 @@
 
 namespace CommonLib
 {
-	wstr str_utils::WStrInt8(int8_t val)
+    std::wstring str_utils::WStrInt8(int8_t val)
 	{
 		return WStrInt32(int32_t(val));
 	}
 
-	wstr str_utils::WStrUint8(uint8_t val)
+    std::wstring str_utils::WStrUint8(uint8_t val)
 	{
 		return WStrUint32(uint32_t(val));
 	}
 
-	wstr str_utils::WStrInt16(int16_t val)
+    std::wstring str_utils::WStrInt16(int16_t val)
 	{
 		return WStrInt32(int32_t(val));
 	}
 
-	wstr str_utils::WStrUint16(uint16_t val)
+    std::wstring str_utils::WStrUint16(uint16_t val)
 	{
 		return WStrUint32(uint32_t(val));
 	}
 
-	wstr str_utils::WStrInt32(int32_t val)
+    std::wstring str_utils::WStrInt32(int32_t val)
 	{
 		wchar_t  buf[32];
 #ifdef _WIN32
@@ -37,7 +37,7 @@ namespace CommonLib
 		return buf;
 	}
 
-	wstr str_utils::WStrUint32(uint32_t val)
+    std::wstring str_utils::WStrUint32(uint32_t val)
 	{
 		wchar_t  buf[32];
 #ifdef _WIN32
@@ -48,7 +48,7 @@ namespace CommonLib
 		return buf;
 	}
 
-	wstr str_utils::WStrInt64(int64_t val)
+    std::wstring str_utils::WStrInt64(int64_t val)
 	{
 		wchar_t  buf[32];
 #ifdef _WIN32
@@ -59,7 +59,7 @@ namespace CommonLib
 		return buf;
 	}
 
-	wstr str_utils::WStrUint64(uint64_t val)
+    std::wstring str_utils::WStrUint64(uint64_t val)
 	{
 		wchar_t  buf[32];
 #ifdef _WIN32
@@ -70,7 +70,7 @@ namespace CommonLib
 		return buf;
 	}
 
-	wstr str_utils::WStrFloat(float val)
+    std::wstring str_utils::WStrFloat(float val)
 	{
 		wchar_t  buf[32];
 #ifdef _WIN32
@@ -81,7 +81,7 @@ namespace CommonLib
 		return buf;
 	}
 
-	wstr str_utils::WStrDouble(double val)
+    std::wstring str_utils::WStrDouble(double val)
 	{
 		wchar_t buf[32];
 #ifdef _WIN32
@@ -95,53 +95,53 @@ namespace CommonLib
 
 	/////////////////////////////////////////////////////////////////////////////////////////////////
 
-	astr str_utils::AStrBool(bool val)
+    std::string str_utils::AStrBool(bool val)
 	{
 		return val ? "1" : "0";
 	}
 
-	astr str_utils::AStrInt8(int8_t val)
+    std::string str_utils::AStrInt8(int8_t val)
 	{
 		return AStrInt32(int32_t(val));
 	}
 
-	astr str_utils::AStrUint8(uint8_t val)
+    std::string str_utils::AStrUint8(uint8_t val)
 	{
 		return AStrUint32(uint32_t(val));
 	}
 
-	astr str_utils::AStrInt16(int16_t val)
+    std::string str_utils::AStrInt16(int16_t val)
 	{
 		return AStrInt32(int32_t(val));
 	}
 
-	astr str_utils::AStrUint16(uint16_t val)
+    std::string str_utils::AStrUint16(uint16_t val)
 	{
 		return AStrUint32(uint32_t(val));
 	}
 
 
-	astr str_utils::AStrInt8(int8_t val, uint32_t nZero)
+    std::string str_utils::AStrInt8(int8_t val, uint32_t nZero)
 	{
 		return AStrInt32(int32_t(val), nZero);
 	}
 
-	astr str_utils::AStrUint8(uint8_t val, uint32_t nZero)
+    std::string str_utils::AStrUint8(uint8_t val, uint32_t nZero)
 	{
 		return AStrUint32(uint32_t(val), nZero);
 	}
 
-	astr str_utils::AStrInt16(int16_t val, uint32_t nZero)
+    std::string str_utils::AStrInt16(int16_t val, uint32_t nZero)
 	{
 		return AStrInt32(int32_t(val), nZero);
 	}
 
-	astr str_utils::AStrUint16(uint16_t val, uint32_t nZero)
+    std::string str_utils::AStrUint16(uint16_t val, uint32_t nZero)
 	{
 		return AStrUint32(uint32_t(val), nZero);
 	}
 
-	astr str_utils::AStrInt32(int32_t val)
+    std::string str_utils::AStrInt32(int32_t val)
 	{
 		char  buf[32];
 #ifdef _WIN32
@@ -152,7 +152,7 @@ namespace CommonLib
 		return buf;
 	}
 
-	astr str_utils::AStrInt32(int32_t val, uint32_t nZero)
+    std::string str_utils::AStrInt32(int32_t val, uint32_t nZero)
 	{
 		char  buf[32];
 #ifdef _WIN32
@@ -163,7 +163,7 @@ namespace CommonLib
 		return buf;
 	}
 
-	astr str_utils::AStrUint32(uint32_t val)
+    std::string str_utils::AStrUint32(uint32_t val)
 	{
 		char  buf[32];
 #ifdef _WIN32
@@ -174,7 +174,7 @@ namespace CommonLib
 		return buf;
 	}
 
-	astr str_utils::AStrUint32(uint32_t val, uint32_t nZero)
+    std::string str_utils::AStrUint32(uint32_t val, uint32_t nZero)
 	{
 		char  buf[32];
 #ifdef _WIN32
@@ -185,7 +185,7 @@ namespace CommonLib
 		return buf;
 	}
 
-	astr str_utils::AStrInt64(int64_t val, uint32_t nZero)
+    std::string str_utils::AStrInt64(int64_t val, uint32_t nZero)
 	{
 		char  buf[32];
 #ifdef _WIN32
@@ -196,7 +196,7 @@ namespace CommonLib
 		return buf;
 	}
 
-	astr str_utils::AStrInt64(int64_t val)
+    std::string str_utils::AStrInt64(int64_t val)
 	{
 		char  buf[32];
 #ifdef _WIN32
@@ -207,7 +207,7 @@ namespace CommonLib
 		return buf;
 	}
 
-	astr str_utils::AStrUint64(uint64_t val)
+    std::string str_utils::AStrUint64(uint64_t val)
 	{
 		char  buf[32];
 #ifdef _WIN32
@@ -218,7 +218,7 @@ namespace CommonLib
 		return buf;
 	}
 
-	astr str_utils::AStrUint64(uint64_t val, uint32_t nZero)
+    std::string str_utils::AStrUint64(uint64_t val, uint32_t nZero)
 	{
 		char  buf[32];
 #ifdef _WIN32
@@ -229,7 +229,7 @@ namespace CommonLib
 		return buf;
 	}
 
-	astr str_utils::AStrFloat(float val)
+    std::string str_utils::AStrFloat(float val)
 	{
 		char  buf[32];
 #ifdef _WIN32
@@ -240,7 +240,7 @@ namespace CommonLib
 		return buf;
 	}
 
-	astr str_utils::AStrDouble(double val)
+    std::string str_utils::AStrDouble(double val)
 	{
 		char buf[32];
 #ifdef _WIN32
@@ -251,12 +251,12 @@ namespace CommonLib
 		return buf;
 	}
 
-	astr str_utils::AStrFrom(const wchar_t *ptrStr)
+    std::string str_utils::AStrFrom(const wchar_t *ptrStr)
 	{
 		return StringEncoding::str_w2utf8_safe(ptrStr);
 	}
 
-	astr str_utils::AStrFrom(const wstr& val)
+    std::string str_utils::AStrFrom(const std::wstring& val)
 	{
 		return StringEncoding::str_w2utf8_safe(val);
 	}
@@ -264,7 +264,7 @@ namespace CommonLib
 	//================================================================================================
 
 
-	int StrCaseIcmp(const astr& str1, const astr& str2)
+	int StrCaseIcmp(const std::string& str1, const std::string& str2)
 	{
 #ifdef  _WIN32
 		return _stricmp(str1.c_str(), str2.c_str());
@@ -274,7 +274,7 @@ namespace CommonLib
 	}
 
 
-	bool str_utils::AStr2Bool(const astr& val)
+	bool str_utils::AStr2Bool(const std::string& val)
 	{
 		if (StrCaseIcmp(val, "true"))
 			return true;
@@ -288,27 +288,27 @@ namespace CommonLib
 		throw CExcBase("Failed convert str to bool, {0}", val);
 	}
 	
-	int8_t str_utils::AStr2Int8(const astr& val)
+	int8_t str_utils::AStr2Int8(const std::string& val)
 	{
 		return (int8_t)AStr2Int32(val);
 	}
 
-	uint8_t str_utils::AStr2Uint8(const astr& val)
+	uint8_t str_utils::AStr2Uint8(const std::string& val)
 	{
 		return (uint8_t)AStr2Uint32(val);
 	}
 
-	int16_t str_utils::AStr2Int16(const astr& val)
+	int16_t str_utils::AStr2Int16(const std::string& val)
 	{
 		return (int16_t)AStr2Int32(val);
 	}
 
-	uint16_t str_utils::AStr2Uint16(const astr& val)
+	uint16_t str_utils::AStr2Uint16(const std::string& val)
 	{
 		return (uint16_t)AStr2Uint32(val);
 	}
 
-	int32_t str_utils::AStr2Int32(const astr& val)
+	int32_t str_utils::AStr2Int32(const std::string& val)
 	{
 		const char  *start = val.c_str();
 		char *stop = 0;
@@ -320,7 +320,7 @@ namespace CommonLib
 		return ret;
 	}
 
-	uint32_t str_utils::AStr2Uint32(const astr& val)
+	uint32_t str_utils::AStr2Uint32(const std::string& val)
 	{
 		const char  *start = val.c_str();
 		char *stop = 0;
@@ -332,7 +332,7 @@ namespace CommonLib
 		return ret;
 	}
 
-	int64_t str_utils::AStr2Int64(const astr& val)
+	int64_t str_utils::AStr2Int64(const std::string& val)
 	{
 		const char  *start = val.c_str();
 		char *stop = 0;
@@ -344,7 +344,7 @@ namespace CommonLib
 		return ret;
 	}
 
-	uint64_t str_utils::AStr2Uint64(const astr& val)
+	uint64_t str_utils::AStr2Uint64(const std::string& val)
 	{
 		const char  *start = val.c_str();
 		char *stop = 0;
@@ -356,12 +356,12 @@ namespace CommonLib
 		return ret;
 	}
 
-	float str_utils::AStr2Float(const astr& val)
+	float str_utils::AStr2Float(const std::string& val)
 	{
 		return (float)AStr2Double(val);
 	}
 
-	double str_utils::AStr2Double(const astr& val)
+	double str_utils::AStr2Double(const std::string& val)
 	{
 		const char  *start = val.c_str();
 		char *stop = 0;
@@ -374,73 +374,73 @@ namespace CommonLib
 	}
 
     template<>
-    bool str_utils::AStr2TVal<bool>(const astr& val)
+    bool str_utils::AStr2TVal<bool>(const std::string& val)
     {
         return AStr2Bool(val);
     }
 
     template<>
-    int8_t str_utils::AStr2TVal<int8_t>(const astr& val)
+    int8_t str_utils::AStr2TVal<int8_t>(const std::string& val)
     {
         return AStr2Int8(val);
     }
 
     template<>
-    uint8_t str_utils::AStr2TVal<uint8_t>(const astr& val)
+    uint8_t str_utils::AStr2TVal<uint8_t>(const std::string& val)
     {
         return AStr2Uint8(val);
     }
 
     template<>
-    int16_t str_utils::AStr2TVal<int16_t>(const astr& val)
+    int16_t str_utils::AStr2TVal<int16_t>(const std::string& val)
     {
         return AStr2Int16(val);
     }
 
     template<>
-    uint16_t str_utils::AStr2TVal<uint16_t>(const astr& val)
+    uint16_t str_utils::AStr2TVal<uint16_t>(const std::string& val)
     {
         return AStr2Uint16(val);
     }
 
     template<>
-    int32_t str_utils::AStr2TVal<int32_t>(const astr& val)
+    int32_t str_utils::AStr2TVal<int32_t>(const std::string& val)
     {
         return AStr2Int32(val);
     }
 
     template<>
-    uint32_t str_utils::AStr2TVal<uint32_t>(const astr& val)
+    uint32_t str_utils::AStr2TVal<uint32_t>(const std::string& val)
     {
         return AStr2Uint32(val);
     }
 
     template<>
-    int64_t str_utils::AStr2TVal<int64_t>(const astr& val)
+    int64_t str_utils::AStr2TVal<int64_t>(const std::string& val)
     {
         return AStr2Int64(val);
     }
 
     template<>
-    uint64_t str_utils::AStr2TVal<uint64_t>(const astr& val)
+    uint64_t str_utils::AStr2TVal<uint64_t>(const std::string& val)
     {
         return AStr2Uint64(val);
     }
 
     template<>
-    float str_utils::AStr2TVal<float>(const astr& val)
+    float str_utils::AStr2TVal<float>(const std::string& val)
     {
         return AStr2Float(val);
     }
 
     template<>
-    double str_utils::AStr2TVal<double>(const astr& val)
+    double str_utils::AStr2TVal<double>(const std::string& val)
     {
         return AStr2Double(val);
     }
 
     template<>
-    astr str_utils::AStr2TVal<astr>(const astr& val)
+    std::string str_utils::AStr2TVal<std::string>(const std::string& val)
     {
         return val;
     }

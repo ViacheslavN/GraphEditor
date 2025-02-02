@@ -4,7 +4,7 @@
 
 namespace CommonLib
 {
-	void CConsoleLogWriter::Write(const astr& msg)
+	void CConsoleLogWriter::Write(const std::string& msg)
 	{
 		std::cout << msg.c_str();
 	}

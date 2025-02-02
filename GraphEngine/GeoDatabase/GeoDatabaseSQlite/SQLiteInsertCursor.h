@@ -38,6 +38,7 @@ namespace GraphEngine {
             virtual void BindTextW(int32_t col, const std::wstring& text, bool copy);
             virtual void BindBlob(int32_t col, const byte_t *pBuf, int32_t size, bool copy);
             virtual void BindShape(int32_t col, CommonLib::IGeoShapePtr ptrShape, bool copy);
+            virtual void BindGuid(int32_t col, const CommonLib::CGuid& guid);
 
         private:
             std::string GetInsertSql(IFieldsPtr ptrFields, const std::string& tableName);

@@ -9,7 +9,7 @@ namespace CommonLib
 		AddMsg(GetErrorDesc(m_ntStatus));
 	}
 
-	CWinNtExc::CWinNtExc(const astr& err_msg, NTSTATUS ntStatus) : CExcBase(err_msg), m_ntStatus(ntStatus)
+	CWinNtExc::CWinNtExc(const std::string& err_msg, NTSTATUS ntStatus) : CExcBase(err_msg), m_ntStatus(ntStatus)
 	{
 		AddMsg(GetErrorDesc(m_ntStatus));
 	}
@@ -25,10 +25,10 @@ namespace CommonLib
 		return ptrExc;
 	}
 
-	astr CWinNtExc::GetErrorDesc(NTSTATUS ntStatus)
+    std::string CWinNtExc::GetErrorDesc(NTSTATUS ntStatus)
 	{
 		LPWSTR pBuffer;
-		astr result;
+        std::string result;
 		if (FormatMessageW(FORMAT_MESSAGE_ALLOCATE_BUFFER|FORMAT_MESSAGE_FROM_SYSTEM|FORMAT_MESSAGE_FROM_HMODULE,
 			GetModuleHandleW(L"ntdll.dll"),
 			ntStatus,

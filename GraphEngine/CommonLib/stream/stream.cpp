@@ -67,13 +67,13 @@ namespace CommonLib
 		WriteT<double>(value);
 	}
 	 
-	void IWriteStream::Write(const astr& str)
+	void IWriteStream::Write(const std::string& str)
 	{
 		uint32_t length = (uint32_t)str.length();
 		Write(length);
 		Write((byte_t*)str.c_str(), length);
 	}
-	void IWriteStream::Write(const wstr& str)
+	void IWriteStream::Write(const std::wstring& str)
 	{
 		uint32_t length = (uint32_t)str.length();
 		Write(length);
@@ -167,7 +167,7 @@ namespace CommonLib
 		return WriteTSafe<double>(value);
 	}
 
-	bool IWriteStream::WriteSafe(const astr& str)
+	bool IWriteStream::WriteSafe(const std::string& str)
 	{
 		uint32_t length = (uint32_t)str.length();
 		
@@ -178,7 +178,7 @@ namespace CommonLib
 
 	}
 
-	bool IWriteStream::WriteSafe(const wstr& str)
+	bool IWriteStream::WriteSafe(const std::wstring& str)
 	{
 		uint32_t length = (uint32_t)str.length();
 
@@ -276,7 +276,7 @@ namespace CommonLib
 		ReadT<double>(value);
 	}
 
-	void IReadStream::Read(astr& str)
+	void IReadStream::Read(std::string& str)
 	{
 		uint32_t nLen = ReadIntu32();
 		if (nLen != 0)
@@ -286,7 +286,7 @@ namespace CommonLib
 		}
 	}
 
-	void IReadStream::Read(wstr& str)
+	void IReadStream::Read(std::wstring& str)
 	{
 		uint32_t nLen = ReadIntu32();
 		if (nLen != 0)
@@ -366,7 +366,7 @@ namespace CommonLib
 		return SafeReadT<double>(value);
 	}
 
-	bool IReadStream::ReadSafe(astr& str)
+	bool IReadStream::ReadSafe(std::string& str)
 	{
 		uint32_t nLen = 0;
 		if (!ReadSafe(nLen))
@@ -380,7 +380,7 @@ namespace CommonLib
 		return ReadSafe((byte_t*)&str[0], sizeof(char)*nLen);
 	}
 
-	bool IReadStream::ReadSafe(wstr& str)
+	bool IReadStream::ReadSafe(std::wstring& str)
 	{
 		uint32_t nLen = 0;
 		if (!ReadSafe(nLen))
@@ -454,17 +454,17 @@ namespace CommonLib
 		return ReadTR<double>();
 	}
 
-	astr IReadStream::ReadAstr()
+    std::string IReadStream::ReadAstr()
 	{
-		astr str;
+        std::string str;
 		Read(str);
 
 		return str;
 	}
 
-	wstr IReadStream::ReadWstr()
+    std::wstring IReadStream::ReadWstr()
 	{
-		wstr str;
+        std::wstring str;
 		Read(str);
 
 		return str;

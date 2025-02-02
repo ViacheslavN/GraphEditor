@@ -7,12 +7,12 @@ namespace CommonLib
 	namespace database
 	{
 
-		void ICryptoContext::AddCryptoContext(const astr& databaseName, ICryptoContextPtr ptrCryptoContex)
+		void ICryptoContext::AddCryptoContext(const std::string& databaseName, ICryptoContextPtr ptrCryptoContex)
 		{
 			CCryptoContextHolder::Instance().AddCryptoContext(databaseName, ptrCryptoContex);
 		}
 
-		void ICryptoContext::RemoveCryptoContext(const astr& databaseName)
+		void ICryptoContext::RemoveCryptoContext(const std::string& databaseName)
 		{
 			CCryptoContextHolder::Instance().RemoveCryptoContext(databaseName);
 		}
@@ -30,7 +30,7 @@ namespace CommonLib
 		CCryptoContextHolder::~CCryptoContextHolder()
 		{}
 
-		ICryptoContextPtr CCryptoContextHolder::GetCryptoContext(const astr& databaseName) const
+		ICryptoContextPtr CCryptoContextHolder::GetCryptoContext(const std::string& databaseName) const
 		{
 			auto it = m_cryptoContexts.find(databaseName);
 			if (it != m_cryptoContexts.end())
@@ -39,7 +39,7 @@ namespace CommonLib
 			return ICryptoContextPtr();
 		}
 
-		void CCryptoContextHolder::AddCryptoContext(const astr& databaseName, ICryptoContextPtr ptrContext)
+		void CCryptoContextHolder::AddCryptoContext(const std::string& databaseName, ICryptoContextPtr ptrContext)
 		{
 			auto it = m_cryptoContexts.find(databaseName);
 			if (it != m_cryptoContexts.end())
@@ -48,7 +48,7 @@ namespace CommonLib
 			m_cryptoContexts.insert(std::make_pair(databaseName, ptrContext));
 		}
 
-		void CCryptoContextHolder::RemoveCryptoContext(const astr& databaseName)
+		void CCryptoContextHolder::RemoveCryptoContext(const std::string& databaseName)
 		{
 			m_cryptoContexts.erase(databaseName);
 		}

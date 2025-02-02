@@ -12,12 +12,12 @@ namespace CommonLib
 
 	}
 
-	CExcBase::CExcBase(const astr& msg) noexcept : m_srcThreadId(synch::CThread::GetCurThreadId())
+	CExcBase::CExcBase(const std::string& msg) noexcept : m_srcThreadId(synch::CThread::GetCurThreadId())
 	{
 		AddMsg(msg);
 	}
 
-	CExcBase::CExcBase(const wstr& msg) noexcept : m_srcThreadId(synch::CThread::GetCurThreadId())
+	CExcBase::CExcBase(const std::wstring& msg) noexcept : m_srcThreadId(synch::CThread::GetCurThreadId())
 	{
 		AddMsg(StringEncoding::str_w2utf8_safe(msg));
 	}
@@ -53,63 +53,63 @@ namespace CommonLib
 		return m_what.c_str();
 	}
 
-	const astrvec& CExcBase::GetChain() const
+	const std::vector<std::string >& CExcBase::GetChain() const
 	{
 		return m_msgChain;
 	}
 
-	void CExcBase::AddMsg(const astr& msg)
+	void CExcBase::AddMsg(const std::string& msg)
 	{
 		m_msgChain.push_back(msg);
 	}
 
-	void CExcBase::AddMsg(const astr& format, const astr& msg)
+	void CExcBase::AddMsg(const std::string& format, const std::string& msg)
 	{
 		m_msgChain.push_back(str_format::StrFormatSafe(format, msg));
 	}
 
-	void CExcBase::AddMsg(const astr& format, const astr& msg1, const astr& msg2)
+	void CExcBase::AddMsg(const std::string& format, const std::string& msg1, const std::string& msg2)
 	{
 		m_msgChain.push_back(str_format::StrFormatSafe(format, msg1, msg2));
 	}
 
-	void CExcBase::AddMsg(const astr& format, const astr& msg1, const astr& msg2, const astr& msg3)
+	void CExcBase::AddMsg(const std::string& format, const std::string& msg1, const std::string& msg2, const std::string& msg3)
 	{
 		m_msgChain.push_back(str_format::StrFormatSafe(format, msg1, msg2, msg3));
 	}
 
-	void CExcBase::AddMsg(const astr& format, const astr& msg1, const astr& msg2, const astr& msg3, const astr& msg4)
+	void CExcBase::AddMsg(const std::string& format, const std::string& msg1, const std::string& msg2, const std::string& msg3, const std::string& msg4)
 	{
 		m_msgChain.push_back(str_format::StrFormatSafe(format, msg1, msg2, msg3, msg4));
 	}
 
-	void CExcBase::AddMsg(const wstr& msg)
+	void CExcBase::AddMsg(const std::wstring& msg)
 	{
 		AddMsg(StringEncoding::str_w2utf8_safe(msg));
 	}
 
-	void CExcBase::AddMsg(const wstr& format, const wstr& msg)
+	void CExcBase::AddMsg(const std::wstring& format, const std::wstring& msg)
 	{
 		AddMsg(StringEncoding::str_w2utf8_safe(format), StringEncoding::str_w2utf8_safe(msg));
 	}
 
 
-	void CExcBase::AddMsg(const wstr& format, const wstr& msg1, const wstr& msg2)
+	void CExcBase::AddMsg(const std::wstring& format, const std::wstring& msg1, const std::wstring& msg2)
 	{
 		AddMsg(StringEncoding::str_w2utf8_safe(format), StringEncoding::str_w2utf8_safe(msg1), StringEncoding::str_w2utf8_safe(msg2));
 	}
 
-	void CExcBase::AddMsg(const wstr& format, const wstr& msg1, const wstr& msg2, const wstr& msg3)
+	void CExcBase::AddMsg(const std::wstring& format, const std::wstring& msg1, const std::wstring& msg2, const std::wstring& msg3)
 	{
 		AddMsg(StringEncoding::str_w2utf8_safe(format), StringEncoding::str_w2utf8_safe(msg1), StringEncoding::str_w2utf8_safe(msg2), StringEncoding::str_w2utf8_safe(msg3));
 	}
 
-	void CExcBase::AddMsg(const wstr& format, const wstr& msg1, const wstr& msg2, const wstr& msg3, const wstr& msg4)
+	void CExcBase::AddMsg(const std::wstring& format, const std::wstring& msg1, const std::wstring& msg2, const std::wstring& msg3, const std::wstring& msg4)
 	{
 		AddMsg(StringEncoding::str_w2utf8_safe(format), StringEncoding::str_w2utf8_safe(msg1), StringEncoding::str_w2utf8_safe(msg2), StringEncoding::str_w2utf8_safe(msg3), StringEncoding::str_w2utf8_safe(msg4));
 	}
 		
-	void CExcBase::RegenExc(const astr& msg, std::exception& exc_src)
+	void CExcBase::RegenExc(const std::string& msg, std::exception& exc_src)
 	{
 		CExcBase* pExcBase = dynamic_cast<CExcBase*>(&exc_src);
 		if (pExcBase != NULL)
@@ -119,7 +119,7 @@ namespace CommonLib
 		}
 		else
 		{
-			astr msgWhat;
+            std::string msgWhat;
 			if (const char* msg = exc_src.what())
 				msgWhat = msg;
 
@@ -128,27 +128,27 @@ namespace CommonLib
 		}
 	}
 
-	void CExcBase::RegenExc(const astr& format, const astr& msg, std::exception& exc_src)
+	void CExcBase::RegenExc(const std::string& format, const std::string& msg, std::exception& exc_src)
 	{
 		RegenExc(str_format::StrFormatSafe(format, msg), exc_src);
 	}
 
-	void CExcBase::RegenExc(const astr& format, const astr& msg1, const astr& msg2, std::exception& exc_src)
+	void CExcBase::RegenExc(const std::string& format, const std::string& msg1, const std::string& msg2, std::exception& exc_src)
 	{
 		RegenExc(str_format::StrFormatSafe(format, msg1, msg2), exc_src);
 	}
 
-	void CExcBase::RegenExc(const astr& format, const astr& msg1, const astr& msg2, const astr& msg3, std::exception& exc_src)
+	void CExcBase::RegenExc(const std::string& format, const std::string& msg1, const std::string& msg2, const std::string& msg3, std::exception& exc_src)
 	{
 		RegenExc(str_format::StrFormatSafe(format, msg1, msg2, msg3), exc_src);
 	}
 
-	void CExcBase::RegenExc(const astr& format, const astr& msg1, const astr& msg2, const astr& msg3, const astr& msg4, std::exception& exc_src)
+	void CExcBase::RegenExc(const std::string& format, const std::string& msg1, const std::string& msg2, const std::string& msg3, const std::string& msg4, std::exception& exc_src)
 	{
 		RegenExc(str_format::StrFormatSafe(format, msg1, msg2, msg3, msg4), exc_src);
 	}
 
-	astr CExcBase::GetErrorDesc(const std::exception& exc)
+    std::string CExcBase::GetErrorDesc(const std::exception& exc)
 	{
 		const CExcBase* pExcBase = dynamic_cast<const CExcBase*>(&exc);
 		if (pExcBase != NULL)
@@ -170,14 +170,14 @@ namespace CommonLib
 		return ptrExc;
 	}
 
-	astrvec CExcBase::GetChainFromExc(const std::exception& exc)
+    std::vector<std::string > CExcBase::GetChainFromExc(const std::exception& exc)
 	{
 		
 		const CExcBase* pExcBase = dynamic_cast<const CExcBase*>(&exc);
 		if (pExcBase != NULL)
 			return pExcBase->GetChain();
 
-		astrvec vec;
+        std::vector<std::string > vec;
 		vec.push_back(exc.what() ? exc.what() : "Unknown exception");
 		return vec;
 	}

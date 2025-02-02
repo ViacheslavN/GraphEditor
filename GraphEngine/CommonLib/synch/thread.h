@@ -21,7 +21,7 @@ namespace CommonLib
 		class CThread
 		{
 			public:
-				CThread(std::function<void()>&& threadFunk, astr&& threadName);
+				CThread(std::function<void()>&& threadFunk,  std::string&& threadName);
 				~CThread();
 
 				CThread(const CThread&) = delete;
@@ -29,29 +29,29 @@ namespace CommonLib
 
 				thread_id_t GetThreadId() const;
  				bool IsActive() const;
-				const astr& GetName() const;
+				const  std::string& GetName() const;
 				void Join();
 				bool Join(int timeoutms);
 				void TerminateThread(int32_t code = 1);
 
 				bool IsHaveException() const;
-				astr GetExceptionMsg() const;
+                std::string GetExceptionMsg() const;
 				void ThrowException() const;
 
 				int32_t GetExitCodeThread();
 				
 				
-				static void SetDescriptionForCurrThread(const astr& threadName);
+				static void SetDescriptionForCurrThread(const  std::string& threadName);
 				static thread_id_t GetCurThreadId();
 				static void Sleep(uint32_t msec);
 
 
 			private:
 
-				void RunThread(std::function<void()> threadFunk, astr threadName);
+				void RunThread(std::function<void()> threadFunk,  std::string threadName);
 			private:
 				std::shared_ptr<CThreadImpl> m_thread;
-				astr m_name;
+                std::string m_name;
 				std::shared_ptr<CExcBase> m_exeption;
 				std::function<void()> m_threadFunk;
 		};

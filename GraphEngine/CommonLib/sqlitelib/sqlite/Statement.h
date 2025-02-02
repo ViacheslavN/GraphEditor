@@ -20,7 +20,7 @@ namespace CommonLib
 				void Reset();
 
 				int32_t  ColumnCount() const override;
-				astr ColumnName(int32_t col) const override;
+                std::string ColumnName(int32_t col) const override;
 				bool ColumnIsNull(int32_t col) const override;
 				EDBFieldType GetColumnType(int32_t col) const override;
 				int32_t GetColumnBytes(int32_t col) const override;
@@ -33,8 +33,8 @@ namespace CommonLib
 				uint64_t ReadUInt64(int32_t col) const override;
 				float ReadFloat(int32_t col) const override;
 				double ReadDouble(int32_t col) const override;
-				void ReadText(int32_t col, astr& text) const override;
-				astr ReadText(int32_t col) const override;
+				void ReadText(int32_t col, std::string& text) const override;
+                std::string ReadText(int32_t col) const override;
 				void ReadBlob(int col, byte_t **pBuf, int32_t& size) const override;
 
 				void BindInt16(int32_t col, int16_t nVal) override;
@@ -45,7 +45,7 @@ namespace CommonLib
 				void BindUInt64(int32_t col, uint64_t nVal) override;
 				void BindFloat(int32_t col, float val) override;
 				void BindDouble(int32_t col, double val) override;
-				void BindText(int32_t col, const astr& text, bool copy) override;
+				void BindText(int32_t col, const std::string& text, bool copy) override;
 				void BindBlob(int32_t col, const byte_t *pBuf, int32_t size, bool copy) override;
 
 			private:

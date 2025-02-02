@@ -13,25 +13,25 @@ namespace CommonLib
 	class CFileUtils
 	{
 	public:
-		static bool IsFileExist(const wstr& path);
-		static void DelFile(const wstr& path);
-		static void FileDelFolder(const wstr& path);
-		static void RenameFile(const wstr& oldFile, const wstr& newFile);
+		static bool IsFileExist(const std::wstring& path);
+		static void DelFile(const std::wstring& path);
+		static void FileDelFolder(const std::wstring& path);
+		static void RenameFile(const std::wstring& oldFile, const std::wstring& newFile);
 
 #ifdef _WIN32
-		typedef std::function<bool(const wstr&)> TCheckFileObj;
-		static void FileSearch(const wstr& searchMask,  const TCheckFileObj& addDir, const TCheckFileObj& addFile);
-		static void FileSearch(const wstr& searchMask, wstrvec& folders, wstrvec& files);
+		typedef std::function<bool(const std::wstring&)> TCheckFileObj;
+		static void FileSearch(const std::wstring& searchMask,  const TCheckFileObj& addDir, const TCheckFileObj& addFile);
+		static void FileSearch(const std::wstring& searchMask, std::vector<std::wstring>& folders, std::vector<std::wstring>& files);
 #elif  __linux__
 		typedef std::function<bool(const astr&)> TCheckFileObj;
 		static void FileSearch(const astr& searchMask, const TCheckFileObj& addDir, const TCheckFileObj& addFile);
 		static void FileSearch(const astr& searchMask, astrvec& folders, astrvec& files);
 #endif
 
-		static bool IsFileExist(const astr& path);
-		static void DelFile(const astr& path);
-		static void FileDelFolder(const astr& path);
-		static void RenameFile(const astr& oldFile, const astr& newFile);
-        static void CreateDirectory(const astr& path);
+		static bool IsFileExist(const std::string& path);
+		static void DelFile(const std::string& path);
+		static void FileDelFolder(const std::string& path);
+		static void RenameFile(const std::string& oldFile, const std::string& newFile);
+        static void CreateDirectory(const std::string& path);
 	};
 }

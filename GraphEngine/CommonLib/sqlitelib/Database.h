@@ -59,8 +59,8 @@ namespace CommonLib
 			virtual bool ValidateInitBlock(byte_t *pBuf, size_t size) = 0;
 
 
-			static void AddCryptoContext(const astr& databaseName, ICryptoContextPtr ptrCryptoContex);
-			static void RemoveCryptoContext(const astr& databaseName);
+			static void AddCryptoContext(const std::string& databaseName, ICryptoContextPtr ptrCryptoContex);
+			static void RemoveCryptoContext(const std::string& databaseName);
 		};
 
 		class IDatabase
@@ -109,7 +109,7 @@ namespace CommonLib
 			virtual bool Next() = 0;
 			virtual void Reset() = 0;
 			virtual int32_t  ColumnCount() const = 0;
-			virtual astr ColumnName(int32_t col) const = 0;
+			virtual std::string ColumnName(int32_t col) const = 0;
 			virtual bool ColumnIsNull(int32_t col) const = 0;
 			virtual EDBFieldType GetColumnType(int32_t col) const = 0;
 			virtual int32_t GetColumnBytes(int32_t col) const = 0;
@@ -122,8 +122,8 @@ namespace CommonLib
 			virtual uint64_t ReadUInt64(int32_t col) const = 0;
 			virtual float ReadFloat(int32_t col) const = 0;
 			virtual double ReadDouble(int32_t col) const = 0;
-			virtual void ReadText(int32_t col, astr& text) const = 0;
-			virtual astr ReadText(int32_t col) const = 0;
+			virtual void ReadText(int32_t col, std::string& text) const = 0;
+			virtual std::string ReadText(int32_t col) const = 0;
 			virtual void ReadBlob(int col, byte_t **pBuf, int32_t& size) const = 0;
 
 			virtual void BindInt16(int32_t col, int16_t val) = 0;
@@ -134,7 +134,7 @@ namespace CommonLib
 			virtual void BindUInt64(int32_t col, uint64_t val) = 0;
 			virtual void BindFloat(int32_t col, float val)  = 0;
 			virtual void BindDouble(int32_t col, double val) = 0;
-			virtual void BindText(int32_t col, const astr& text, bool copy) = 0;
+			virtual void BindText(int32_t col, const std::string& text, bool copy) = 0;
 			virtual void BindBlob(int32_t col, const byte_t *pBuf, int32_t size, bool copy) = 0;
 		};
 	}

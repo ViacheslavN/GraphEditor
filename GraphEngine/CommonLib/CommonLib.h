@@ -53,14 +53,8 @@
 #include <stack>
 #include <algorithm>
 
-typedef std::string astr;
-typedef std::wstring wstr;
-typedef std::vector<astr> astrvec;
-typedef std::vector<wstr> wstrvec;
-typedef std::list<astr> astrlist;
-typedef std::list<wstr> wstrlist;
-typedef std::set<astr> astrset;
-typedef std::set<wstr> wstrset;
+
+
 typedef uint8_t byte_t;
 
 

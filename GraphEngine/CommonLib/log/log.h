@@ -15,7 +15,7 @@ namespace CommonLib
 	public:
 		IlogLineFormat() {}
 		virtual ~IlogLineFormat(){}
-		virtual void FormatLogline(const astr& msg, eMsgType type, astr& outMsg) = 0;
+		virtual void FormatLogline(const std::string& msg, eMsgType type, std::string& outMsg) = 0;
 	};	
 
 	class IlogRetention
@@ -24,8 +24,8 @@ namespace CommonLib
 		IlogRetention() {}
 		virtual ~IlogRetention() {}
 
-		virtual void LogProcessing(const astr& logDirPath, const astr& logFileName) = 0;
-		virtual void ArcLogFile(const astr& logPath) = 0;
+		virtual void LogProcessing(const std::string& logDirPath, const std::string& logFileName) = 0;
+		virtual void ArcLogFile(const std::string& logPath) = 0;
 	};
 
 	class IlogWriter
@@ -39,7 +39,7 @@ namespace CommonLib
 
 	//	virtual void Open(const astr& path) = 0;
 	//	virtual void Close() = 0;
-		virtual void Write(const astr& msg) = 0;
+		virtual void Write(const std::string& msg) = 0;
 		//virtual const astr& GetPath() const = 0;
 		//virtual const astr& GetName() const = 0;
 		//virtual size_t GetSize() const = 0;

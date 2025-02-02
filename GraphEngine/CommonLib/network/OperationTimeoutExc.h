@@ -12,7 +12,7 @@ namespace CommonLib
 			{}
 
 			template<typename... Types>
-			COperationTimeout(long timeout, const astr& format, Types&&... args) : CExcBase(format, std::forward<Types>(args)...), m_timeout(timeout)
+			COperationTimeout(long timeout, const std::string& format, Types&&... args) : CExcBase(format, std::forward<Types>(args)...), m_timeout(timeout)
 			{
 			}
 

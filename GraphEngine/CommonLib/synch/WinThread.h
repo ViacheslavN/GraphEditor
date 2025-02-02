@@ -14,7 +14,7 @@ namespace CommonLib
 			~CThreadWinImpl();
 
 			bool Wait(const int Timeout = 0xFFFFFFFF) const;
-			static void SetDescriptionForCurrThread(const astr& threadName);
+			static void SetDescriptionForCurrThread(const  std::string& threadName);
 			int32_t GetExitCodeThread();
 			void  TerminateThread(int32_t code);
 

@@ -101,7 +101,7 @@ namespace CommonLib
 				if (pszTable == nullptr)
 					throw CExcBase("Invalid argument, table name is null");
 
-				astr stm = str_format::StrFormatSafe("SELECT name FROM sqlite_master WHERE type = 'table' AND name = '{0}'", pszTable);
+                std::string stm = str_format::StrFormatSafe("SELECT name FROM sqlite_master WHERE type = 'table' AND name = '{0}'", pszTable);
 				IStatmentPtr ptrStatemnt = PrepareQuery(stm.c_str());
 				return ptrStatemnt->Next();
 			}

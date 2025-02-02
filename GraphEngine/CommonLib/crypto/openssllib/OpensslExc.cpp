@@ -9,7 +9,7 @@ namespace CommonLib
 	{
 		namespace openssllib
 		{
-			COpenSSLExc::COpenSSLExc(const astr& err_msg) : CExcBase(err_msg)
+			COpenSSLExc::COpenSSLExc(const std::string& err_msg) : CExcBase(err_msg)
 			{
 				m_nErrorCode = ERR_get_error();
 				AddMsg(GetErrorDesc(m_nErrorCode));
@@ -20,7 +20,7 @@ namespace CommonLib
 				AddMsg(GetErrorDesc(m_nErrorCode));
 			}
 
-			COpenSSLExc::COpenSSLExc(const astr& err_msg, int errorCode) : CExcBase(err_msg), m_nErrorCode(errorCode)
+			COpenSSLExc::COpenSSLExc(const std::string& err_msg, int errorCode) : CExcBase(err_msg), m_nErrorCode(errorCode)
 			{
 				AddMsg(GetErrorDesc(m_nErrorCode));
 			}
@@ -36,7 +36,7 @@ namespace CommonLib
 				return ptrExc;
 			}
 
-			astr COpenSSLExc::GetErrorDesc(int errorCode)
+            std::string COpenSSLExc::GetErrorDesc(int errorCode)
 			{
 				const char*  pszErrdescr = ERR_error_string(errorCode, 0);
 				return  str_format::AStrFormatSafeT("OpenSSL error code: {0}, desc: {1}", errorCode, pszErrdescr ? pszErrdescr : "Unknown error");

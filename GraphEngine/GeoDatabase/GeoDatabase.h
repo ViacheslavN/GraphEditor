@@ -5,6 +5,8 @@
 #include "../CommonLib/utils/PropertySet.h"
 #include "../CommonLib/Serialize/SerializeObj.h"
 #include "../CommonLib/exception/exc_base.h"
+#include "../CommonLib/guid/guid.h"
+#include "../CommonLib/data/blob.h"
 
 namespace GraphEngine
 {
@@ -45,7 +47,8 @@ namespace GraphEngine
             dtDouble,
             dtString,
             dtBlob,
-            dtDate
+            dtDate,
+            dtGuid
         };
 
         enum eSpatialRel {
@@ -170,42 +173,26 @@ namespace GraphEngine
             virtual std::string ColumnName(int32_t col) const = 0;
             virtual bool ColumnIsNull(int32_t col) const = 0;
             virtual eDataTypes GetColumnType(int32_t col) const = 0;
-            virtual int32_t GetColumnBytes(int32_t col) const = 0;
 
+            virtual std::any GetValue(int32_t col) const = 0;
+            virtual CommonLib::Data::CBlobPtr GetBlobValue(int32_t col) const = 0;
+            virtual CommonLib::IGeoShapePtr GetShapeValue(int32_t col) const = 0;
 
-            virtual int64_t  GetRowId() const = 0;
-            virtual int8_t ReadInt8(int32_t col) const = 0;
-            virtual uint8_t ReadUInt8(int32_t col) const = 0;
-            virtual int16_t ReadInt16(int32_t col) const = 0;
-            virtual uint16_t ReadUInt16(int32_t col) const = 0;
-            virtual int32_t ReadInt32(int32_t col) const = 0;
-            virtual uint32_t ReadUInt32(int32_t col) const = 0;
-            virtual int64_t ReadInt64(int32_t col) const = 0;
-            virtual uint64_t ReadUInt64(int32_t col) const = 0;
-            virtual float ReadFloat(int32_t col) const = 0;
-            virtual double ReadDouble(int32_t col) const = 0;
-            virtual void ReadText(int32_t col, std::string& text) const = 0;
-            virtual std::string ReadText(int32_t col) const = 0;
-            virtual void ReadTextW(int32_t col, std::wstring& text) const = 0;
-            virtual std::wstring ReadTextW(int32_t col) const = 0;
-            virtual void ReadBlob(int col, byte_t **pBuf, int32_t& size) const = 0;
-            virtual CommonLib::IGeoShapePtr ReadShape(int32_t col) const = 0;
-
-
-            virtual void BindInt8(int32_t col, int8_t val) = 0;
-            virtual void BindUInt8(int32_t col, uint8_t val) = 0;
-            virtual void BindInt16(int32_t col, int16_t val) = 0;
-            virtual void BindUInt16(int32_t col, uint16_t val) = 0;
-            virtual void BindInt32(int32_t col, int32_t val) = 0;
-            virtual void BindUInt32(int32_t col, uint32_t val) = 0;
-            virtual void BindInt64(int32_t col, int64_t val) = 0;
-            virtual void BindUInt64(int32_t col, uint64_t val) = 0;
-            virtual void BindFloat(int32_t col, float val)  = 0;
-            virtual void BindDouble(int32_t col, double val) = 0;
-            virtual void BindText(int32_t col, const std::string& text, bool copy) = 0;
-            virtual void BindTextW(int32_t col, const std::wstring& text, bool copy) = 0;
-            virtual void BindBlob(int32_t col, const byte_t *pBuf, int32_t size, bool copy) = 0;
-            virtual void BindShape(int32_t col, CommonLib::IGeoShapePtr ptrShape) = 0;
+            virtual void SetInt8(int32_t col, int8_t val) = 0;
+            virtual void SetUInt8(int32_t col, uint8_t val) = 0;
+            virtual void SetInt16(int32_t col, int16_t val) = 0;
+            virtual void SetUInt16(int32_t col, uint16_t val) = 0;
+            virtual void BSetInt32(int32_t col, int32_t val) = 0;
+            virtual void SetUInt32(int32_t col, uint32_t val) = 0;
+            virtual void SetInt64(int32_t col, int64_t val) = 0;
+            virtual void SetUInt64(int32_t col, uint64_t val) = 0;
+            virtual void SetFloat(int32_t col, float val)  = 0;
+            virtual void SetDouble(int32_t col, double val) = 0;
+            virtual void SetText(int32_t col, const std::string& text) = 0;
+            virtual void SetTextW(int32_t col, const std::wstring& text) = 0;
+            virtual void SetBlob(int32_t col, const byte_t *pBuf, int32_t size) = 0;
+            virtual void SetShape(int32_t col, CommonLib::IGeoShapePtr ptrShape) = 0;
+            virtual void SetGuid(int32_t col, const CommonLib::CGuid& guid) = 0;
 
         };
 
@@ -439,6 +426,10 @@ namespace GraphEngine
             virtual std::wstring ReadTextW(int32_t col) const = 0;
             virtual void ReadBlob(int col, byte_t **pBuf, int32_t& size) const = 0;
             virtual CommonLib::IGeoShapePtr ReadShape(int32_t col) const = 0;
+            virtual CommonLib::CGuid  ReadGuid(int32_t col) const = 0;
+
+            virtual IRowPtr CreateRow() const = 0;
+            virtual void FillRow(IRowPtr ptrRow) const = 0;
 
         };
 
@@ -471,6 +462,7 @@ namespace GraphEngine
             virtual void BindTextW(int32_t col, const std::wstring& text, bool copy) = 0;
             virtual void BindBlob(int32_t col, const byte_t *pBuf, int32_t size, bool copy) = 0;
             virtual void BindShape(int32_t col, CommonLib::IGeoShapePtr ptrShape, bool copy) = 0;
+            virtual void BindGuid(int32_t col, const CommonLib::CGuid& guid )= 0;
         };
 
         class  IUpdateCursor : public ICursor

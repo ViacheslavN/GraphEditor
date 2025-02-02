@@ -11,7 +11,7 @@ namespace CommonLib
 
 	CFileAsyncLogger::CFileAsyncLogger(size_t maxLogSize, std::shared_ptr<IlogRetention>& pLogRetention) : CLogFileWriterBase(maxLogSize, pLogRetention)
 	{
-		astr threadName = "log:";
+        std::string threadName = "log:";
 		m_thread.reset(new synch::CThread(
 			
 			[this]() 
@@ -29,7 +29,7 @@ namespace CommonLib
 
 	}
 
-	std::shared_ptr<CommonLib::IlogWriter> CFileAsyncLogger::Create(const astr& path, size_t maxLogSize, std::shared_ptr<IlogRetention>& pLogRetention)
+	std::shared_ptr<CommonLib::IlogWriter> CFileAsyncLogger::Create(const std::string& path, size_t maxLogSize, std::shared_ptr<IlogRetention>& pLogRetention)
 	{
 		std::shared_ptr<CommonLib::IlogWriter> fileLogger(new CommonLib::CFileAsyncLogger(maxLogSize, pLogRetention));
 		((CommonLib::CFileAsyncLogger*)fileLogger.get())->Open(path);
@@ -37,7 +37,7 @@ namespace CommonLib
 		return fileLogger;
 	}
 
-	void CFileAsyncLogger::Write(const astr& msg)
+	void CFileAsyncLogger::Write(const std::string& msg)
 	{
 		m_queue.Push(msg);
 	}
@@ -48,13 +48,13 @@ namespace CommonLib
 		try
 		{
 
-			astr path = GetPath();
+            std::string path = GetPath();
 
-			astr logName = CPathUtils::FindOnlyFileName(path);
-			astr logPath = CPathUtils::FindFilePath(path);
-			astr logExt = CPathUtils::FindFileExtension(path);
+            std::string logName = CPathUtils::FindOnlyFileName(path);
+            std::string logPath = CPathUtils::FindFilePath(path);
+            std::string logExt = CPathUtils::FindFileExtension(path);
 
-			astr fileLogName;
+            std::string fileLogName;
 			for (uint32_t i = 0; i < 0xFFFFFFFF; ++i)
 			{
 				fileLogName = str_format::AStrFormatSafeT("{0}\\{1}_{2}.{3}", logPath, logName, i, logExt);
@@ -85,7 +85,7 @@ namespace CommonLib
 
 			while (true)
 			{
-				astr msg = m_queue.Pop();
+                std::string msg = m_queue.Pop();
 				
 				if (msg.empty() && m_queue.IsAborted())
 				{
@@ -102,7 +102,7 @@ namespace CommonLib
 		}
 	}
 
-	void CFileAsyncLogger::WriteMessage(const astr& msg)
+	void CFileAsyncLogger::WriteMessage(const std::string& msg)
 	{
 		if (m_file.get() == nullptr)
 			return;

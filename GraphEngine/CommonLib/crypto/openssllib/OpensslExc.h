@@ -10,12 +10,12 @@ namespace CommonLib
 			class COpenSSLExc : public CExcBase
 			{
 			public:
-				COpenSSLExc(const astr& err_msg);
+				COpenSSLExc(const std::string& err_msg);
 				COpenSSLExc(int errorCode);
-				COpenSSLExc(const astr& err_msg, int errorCode);
+				COpenSSLExc(const std::string& err_msg, int errorCode);
 
 				template<typename... Types>
-				COpenSSLExc(int errorCode, const astr& format, Types... args) : CExcBase(format, args...), m_nErrorCode(errorCode)
+				COpenSSLExc(int errorCode, const std::string& format, Types... args) : CExcBase(format, args...), m_nErrorCode(errorCode)
 				{
 					CExcBase::AddMsg(GetErrorDesc(m_nErrorCode));
 				}
@@ -23,7 +23,7 @@ namespace CommonLib
 				virtual ~COpenSSLExc() noexcept;
 				virtual std::shared_ptr<CExcBase> Clone() const;
 
-				static astr GetErrorDesc(int errorCode);
+				static std::string GetErrorDesc(int errorCode);
 			private:
 
 			private:

@@ -38,7 +38,7 @@ namespace CommonLib
 				CExcBase::AddMsg(GetErrorDesc(m_sqliteErr));
 			}
 
-			CSqlitExc::CSqlitExc(const astr& err_msg, int sqliteErr) : m_sqliteErr(sqliteErr)
+			CSqlitExc::CSqlitExc(const std::string& err_msg, int sqliteErr) : m_sqliteErr(sqliteErr)
 			{
 				CExcBase::AddMsg(err_msg);
 				CExcBase::AddMsg(GetErrorDesc(sqliteErr));
@@ -56,7 +56,7 @@ namespace CommonLib
 				return ptrExc;
 			}
 
-			astr CSqlitExc::GetErrorDesc(int sqliteErr)
+            std::string CSqlitExc::GetErrorDesc(int sqliteErr)
 			{
 				const char * pszError = sqlite3_errstr(sqliteErr);
 				if (pszError != nullptr)

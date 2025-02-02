@@ -23,7 +23,7 @@ namespace CommonLib
 			}
 
 		 
-			void  CXMLDoc::Open(const astr& fileName)
+			void  CXMLDoc::Open(const std::string& fileName)
 			{
 				try
 				{
@@ -145,7 +145,7 @@ namespace CommonLib
 							}
 							else
 							{
-								astr sAttrName = m_token;
+                                std::string sAttrName = m_token;
 								get_token(pStream);
 								if (m_token != "=")
 								{
@@ -277,7 +277,7 @@ namespace CommonLib
 				return pStream->Pos() == pStream->Size();
 			}
 
-			void  CXMLDoc::Save(const astr& fileName)
+			void  CXMLDoc::Save(const std::string& fileName)
 			{
 				try
 				{

@@ -54,21 +54,21 @@ namespace CommonLib {
 
         std::string WstdLineInOut::GetLine()
         {
-            wstr wStr;
+            std::wstring wStr;
             m_wInStream.sync();
             std::getline(m_wInStream, wStr);
             return StringEncoding::str_w2utf8_safe(wStr);
         }
 
-        void WstdLineInOut::WriteLine(const astr& val)
+        void WstdLineInOut::WriteLine(const std::string& val)
         {
-            wstr line = StringEncoding::str_utf82w_safe(val + "\n");
+            std::wstring line = StringEncoding::str_utf82w_safe(val + "\n");
             m_wOutStream << line << std::flush;
         }
 
         void WstdLineInOut::Write(const std::string& val)
         {
-            wstr line = StringEncoding::str_utf82w_safe(val);
+            std::wstring line = StringEncoding::str_utf82w_safe(val);
             m_wOutStream << line << std::flush;
         }
 

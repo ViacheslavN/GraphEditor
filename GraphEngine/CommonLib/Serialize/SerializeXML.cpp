@@ -12,17 +12,17 @@ namespace CommonLib {
 
     }
 
-    const astr& CSerializeObjXML::GetName() const
+    const std::string& CSerializeObjXML::GetName() const
     {
         return m_ptrNode->GetName();
     }
 
-    void  CSerializeObjXML::SetName(const astr& name)
+    void  CSerializeObjXML::SetName(const std::string& name)
     {
         m_ptrNode->SetName(name);
     }
 
-    ISerializeObjPtr  CSerializeObjXML::CreateChildNode(const astr& name) const
+    ISerializeObjPtr  CSerializeObjXML::CreateChildNode(const std::string& name) const
     {
         return std::make_shared<CSerializeObjXML>(m_ptrNode->CreateChildNode(name));
     }
@@ -37,12 +37,12 @@ namespace CommonLib {
         return std::make_shared<CSerializeObjXML>(m_ptrNode->GetChild(nIndex));
     }
 
-    ISerializeObjPtr CSerializeObjXML::GetChild(const astr& name) const
+    ISerializeObjPtr CSerializeObjXML::GetChild(const std::string& name) const
     {
         return std::make_shared<CSerializeObjXML>(m_ptrNode->GetChild(name));
     }
 
-    std::vector<ISerializeObjPtr> CSerializeObjXML::GetChilds(const astr& name) const
+    std::vector<ISerializeObjPtr> CSerializeObjXML::GetChilds(const std::string& name) const
     {
         std::vector<xml::IXMLNodePtr> nodes = m_ptrNode->GetChilds(name);
         std::vector<ISerializeObjPtr> ret;
@@ -55,7 +55,7 @@ namespace CommonLib {
         return ret;
     }
 
-    bool CSerializeObjXML::IsChildExists(const astr& name) const
+    bool CSerializeObjXML::IsChildExists(const std::string& name) const
     {
         return m_ptrNode->IsChildExists(name);
     }
@@ -70,63 +70,63 @@ namespace CommonLib {
         m_ptrNode->SetBlobCDATA(data, size);
     }
 
-    void CSerializeObjXML::AddPropertyInt16(const  astr& name, int16_t value)
+    void CSerializeObjXML::AddPropertyInt16(const  std::string& name, int16_t value)
     {
         m_ptrNode->AddPropertyInt16(name, value);
     }
 
-    void CSerializeObjXML::AddPropertyInt16U(const astr& name, uint16_t value)
+    void CSerializeObjXML::AddPropertyInt16U(const std::string& name, uint16_t value)
     {
         m_ptrNode->AddPropertyInt16U(name, value);
     }
 
-    void CSerializeObjXML::AddPropertyInt32(const astr& name, int32_t value)
+    void CSerializeObjXML::AddPropertyInt32(const std::string& name, int32_t value)
     {
         m_ptrNode->AddPropertyInt32(name, value);
     }
 
-    void CSerializeObjXML::AddPropertyInt32U(const astr& name, uint32_t value)
+    void CSerializeObjXML::AddPropertyInt32U(const std::string& name, uint32_t value)
     {
         m_ptrNode->AddPropertyInt32U(name, value);
     }
 
-    void CSerializeObjXML::AddPropertyInt64(const astr& name, int64_t value)
+    void CSerializeObjXML::AddPropertyInt64(const std::string& name, int64_t value)
     {
         m_ptrNode->AddPropertyInt64(name, value);
     }
 
-    void CSerializeObjXML::AddPropertyIntU64(const astr& name, uint64_t value)
+    void CSerializeObjXML::AddPropertyIntU64(const std::string& name, uint64_t value)
     {
         m_ptrNode->AddPropertyIntU64(name, value);
     }
 
-    void CSerializeObjXML::AddPropertyDouble(const astr& name, double value)
+    void CSerializeObjXML::AddPropertyDouble(const std::string& name, double value)
     {
         m_ptrNode->AddPropertyDouble(name, value);
     }
 
-    void CSerializeObjXML::AddPropertyBool(const astr& name, bool value)
+    void CSerializeObjXML::AddPropertyBool(const std::string& name, bool value)
     {
         m_ptrNode->AddPropertyBool(name, value);
     }
 
-    void CSerializeObjXML::AddPropertyString(const astr& name, const astr& valueUtf8)
+    void CSerializeObjXML::AddPropertyString(const std::string& name, const std::string& valueUtf8)
     {
         m_ptrNode->AddPropertyString(name, valueUtf8);
     }
 
-    void CSerializeObjXML::AddPropertyWString(const astr& name, const wstr& value)
+    void CSerializeObjXML::AddPropertyWString(const std::string& name, const std::wstring& value)
     {
         m_ptrNode->AddPropertyWString(name, value);
     }
 
 
-    bool CSerializeObjXML::IsPropertyExists(const astr& name) const
+    bool CSerializeObjXML::IsPropertyExists(const std::string& name) const
     {
         return m_ptrNode->IsPropertyExists(name);
     }
 
-    const astr& CSerializeObjXML::GetProperty(const astr& name) const
+    const std::string& CSerializeObjXML::GetProperty(const std::string& name) const
     {
         return m_ptrNode->GetProperty(name);
     }
@@ -136,102 +136,102 @@ namespace CommonLib {
         return m_ptrNode->GetPropertyCnt();
     }
 
-    const astr&  CSerializeObjXML::GetProperty(uint32_t nIndex) const
+    const std::string&  CSerializeObjXML::GetProperty(uint32_t nIndex) const
     {
         return m_ptrNode->GetProperty(nIndex);
     }
 
-    int16_t	CSerializeObjXML::GetPropertyInt16(const astr& name, int16_t defValue) const
+    int16_t	CSerializeObjXML::GetPropertyInt16(const std::string& name, int16_t defValue) const
     {
         return m_ptrNode->GetPropertyInt16(name, defValue);
     }
 
-    uint16_t CSerializeObjXML::GetPropertyInt16U(const astr& name, uint16_t defValue) const
+    uint16_t CSerializeObjXML::GetPropertyInt16U(const std::string& name, uint16_t defValue) const
     {
         return m_ptrNode->GetPropertyInt16U(name, defValue);
     }
 
-    int32_t	 CSerializeObjXML::GetPropertyInt32(const astr& name, int32_t defValue) const
+    int32_t	 CSerializeObjXML::GetPropertyInt32(const std::string& name, int32_t defValue) const
     {
         return m_ptrNode->GetPropertyInt32(name, defValue);
     }
 
-    uint32_t CSerializeObjXML::GetPropertyInt32U(const astr& name, uint32_t defValue) const
+    uint32_t CSerializeObjXML::GetPropertyInt32U(const std::string& name, uint32_t defValue) const
     {
         return m_ptrNode->GetPropertyInt32U(name, defValue);
     }
 
-    int64_t	CSerializeObjXML::GetPropertyInt64(const astr& name, int64_t defValue) const
+    int64_t	CSerializeObjXML::GetPropertyInt64(const std::string& name, int64_t defValue) const
     {
         return m_ptrNode->GetPropertyInt64(name, defValue);
     }
 
-    uint64_t CSerializeObjXML::GetPropertyIntU64(const astr& name, uint64_t defValue) const
+    uint64_t CSerializeObjXML::GetPropertyIntU64(const std::string& name, uint64_t defValue) const
     {
         return m_ptrNode->GetPropertyIntU64(name, defValue);
     }
 
-    double  CSerializeObjXML::GetPropertyDouble(const astr& name, double defValue) const
+    double  CSerializeObjXML::GetPropertyDouble(const std::string& name, double defValue) const
     {
         return m_ptrNode->GetPropertyDouble(name, defValue);
     }
 
-    bool  CSerializeObjXML::GetPropertyBool(const astr& name, bool defValue) const
+    bool  CSerializeObjXML::GetPropertyBool(const std::string& name, bool defValue) const
     {
         return m_ptrNode->GetPropertyBool(name, defValue);
     }
 
-    astr CSerializeObjXML::GetPropertyString(const astr& name, const  astr& defValueUtf8) const
+    std::string CSerializeObjXML::GetPropertyString(const std::string& name, const  std::string& defValueUtf8) const
     {
         return m_ptrNode->GetPropertyString(name, defValueUtf8);
     }
 
-    wstr CSerializeObjXML::GetPropertyWString(const astr& name, const  wstr& defValue) const
+    std::wstring CSerializeObjXML::GetPropertyWString(const std::string& name, const  std::wstring& defValue) const
     {
         return m_ptrNode->GetPropertyWString(name, defValue);
     }
 
-    int16_t	CSerializeObjXML::GetPropertyInt16(const astr& name) const
+    int16_t	CSerializeObjXML::GetPropertyInt16(const std::string& name) const
     {
         return m_ptrNode->GetPropertyInt16(name);
     }
 
-    uint16_t CSerializeObjXML::GetPropertyInt16U(const astr& name) const
+    uint16_t CSerializeObjXML::GetPropertyInt16U(const std::string& name) const
     {
         return m_ptrNode->GetPropertyInt16U(name);
     }
 
-    int32_t	 CSerializeObjXML::GetPropertyInt32(const astr& name) const
+    int32_t	 CSerializeObjXML::GetPropertyInt32(const std::string& name) const
     {
         return m_ptrNode->GetPropertyInt32(name);
     }
 
-    uint32_t CSerializeObjXML::GetPropertyInt32U(const astr& name) const
+    uint32_t CSerializeObjXML::GetPropertyInt32U(const std::string& name) const
     {
         return m_ptrNode->GetPropertyInt32U(name);
     }
 
-    int64_t	CSerializeObjXML::GetPropertyInt64(const astr& name) const
+    int64_t	CSerializeObjXML::GetPropertyInt64(const std::string& name) const
     {
         return m_ptrNode->GetPropertyInt64(name);
     }
 
-    uint64_t CSerializeObjXML::GetPropertyIntU64(const astr& name) const
+    uint64_t CSerializeObjXML::GetPropertyIntU64(const std::string& name) const
     {
         return m_ptrNode->GetPropertyIntU64(name);
     }
 
-    double  CSerializeObjXML::GetPropertyDouble(const astr& name) const
+    double  CSerializeObjXML::GetPropertyDouble(const std::string& name) const
     {
         return m_ptrNode->GetPropertyDouble(name);
     }
 
-    bool  CSerializeObjXML::GetPropertyBool(const astr& name) const
+    bool  CSerializeObjXML::GetPropertyBool(const std::string& name) const
     {
         return m_ptrNode->GetPropertyBool(name);
     }
 
-    astr CSerializeObjXML::GetPropertyString(const astr& name) const
+    std::string CSerializeObjXML::GetPropertyString(const std::string& name) const
     {
         return m_ptrNode->GetPropertyString(name);
     }

@@ -7,10 +7,10 @@ namespace CommonLib
 	{
 	public:
 		CWinSockExc(int err = WSAGetLastError());
- 		CWinSockExc(const astr& err_msg, int err = WSAGetLastError());
+ 		CWinSockExc(const std::string& err_msg, int err = WSAGetLastError());
 
 		template<typename... Types>
-		CWinSockExc(HRESULT err, const astr& format, Types&&... args) : CExcBase(format, std::forward<Types>(args)...), m_err(err)
+		CWinSockExc(HRESULT err, const std::string& format, Types&&... args) : CExcBase(format, std::forward<Types>(args)...), m_err(err)
 		{
 			CExcBase::AddMsg(GetErrorDesc(err));
 		}
@@ -18,7 +18,7 @@ namespace CommonLib
 		~CWinSockExc() noexcept;
 		virtual std::shared_ptr<CExcBase> Clone() const;
 
-		static astr GetErrorDesc(int err);
+		static std::string GetErrorDesc(int err);
 	private:
 
 	private:

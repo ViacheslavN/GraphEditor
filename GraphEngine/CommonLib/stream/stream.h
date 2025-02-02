@@ -94,8 +94,8 @@ public:
 	virtual void Write(uint64_t value);
 	virtual void Write(float value);
 	virtual void Write(double value);
-	virtual void Write(const astr& str);
-	virtual void Write(const wstr& str);
+	virtual void Write(const std::string& str);
+	virtual void Write(const std::wstring& str);
 	virtual void Write(const char* pszStr);
 	virtual void Write(const wchar_t* pszStr);
 	virtual std::streamsize Write(const byte_t* dataPtr, size_t dataSize);
@@ -112,8 +112,8 @@ public:
 	virtual bool WriteSafe(uint64_t value);
 	virtual bool WriteSafe(float value);
 	virtual bool WriteSafe(double value);
-	virtual bool WriteSafe(const astr& str);
-	virtual bool WriteSafe(const wstr& str);
+	virtual bool WriteSafe(const std::string& str);
+	virtual bool WriteSafe(const std::wstring& str);
 };
 
 typedef std::shared_ptr<IWriteStream> WriteStreamPtr;
@@ -168,8 +168,8 @@ public:
 	virtual void Read(uint64_t& value);
 	virtual void Read(float& value);
 	virtual void Read(double& value);
-	virtual void Read(astr& str);
-	virtual void Read(wstr& str);
+	virtual void Read(std::string& str);
+	virtual void Read(std::wstring& str);
 
 	virtual std::streamsize ReadSafe(byte_t* pBuffer, uint32_t bufLen);
 	virtual bool ReadSafe(bool& value);
@@ -183,8 +183,8 @@ public:
 	virtual bool ReadSafe(uint64_t& value);
 	virtual bool ReadSafe(float& value);
 	virtual bool ReadSafe(double& value);
-	virtual bool ReadSafe(astr& str);
-	virtual bool ReadSafe(wstr& str);
+	virtual bool ReadSafe(std::string& str);
+	virtual bool ReadSafe(std::wstring& str);
 
 	virtual bool         ReadBool();
 	virtual byte_t       ReadByte();
@@ -198,8 +198,8 @@ public:
 	virtual uint64_t     ReadIntu64();
 	virtual float        ReadFloat();
 	virtual double       ReadDouble();
-	virtual astr         ReadAstr();
-	virtual wstr	     ReadWstr();
+	virtual std::string  ReadAstr();
+	virtual std::wstring	     ReadWstr();
 
 };
 

@@ -11,12 +11,12 @@ namespace CommonLib
 		class CAcceptedSocket : public CBaseSocketIP
 		{
 		public:
-			CAcceptedSocket(SocketType socket, const astr& connectedAddr);
+			CAcceptedSocket(SocketType socket, const std::string& connectedAddr);
 			virtual ~CAcceptedSocket();
-			const astr GetClientAddr() const;
+			const std::string GetClientAddr() const;
 
 		private:
-			astr m_connectedAddr;
+            std::string m_connectedAddr;
 
 		};
 	}

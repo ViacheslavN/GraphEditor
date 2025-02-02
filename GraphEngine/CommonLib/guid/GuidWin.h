@@ -15,8 +15,8 @@ namespace CommonLib
 			CGuid();
 			CGuid(const CGuid &gid);
 			CGuid(const GUID gid);
-			CGuid(const astr &gid);
-			CGuid(const wstr &gid);
+			CGuid(const std::string &gid);
+			CGuid(const std::wstring &gid);
 
 			CGuid& operator =(const CGuid& gid);
 			~CGuid();
@@ -28,11 +28,11 @@ namespace CommonLib
 			bool operator <=(const CGuid &gid) const;
 			bool operator >=(const CGuid &gid) const;
 
-			astr ToAstr(bool withbrackets) const;
-			wstr ToWstr(bool withbrackets) const;
+            std::string ToAstr(bool withbrackets) const;
+            std::wstring ToWstr(bool withbrackets) const;
 
-			void FromAstr(const astr& gid);
-			void FromWstr(const wstr& gid);
+			void FromAstr(const std::string& gid);
+			void FromWstr(const std::wstring& gid);
 
 			static CGuid CreateNew();
 			static CGuid CreateNull();

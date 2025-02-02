@@ -26,13 +26,13 @@ namespace CommonLib
 	};
 
 
-	bool CFileUtils::IsFileExist(const wstr& path)
+	bool CFileUtils::IsFileExist(const std::wstring& path)
 	{
 		DWORD dwAttr = ::GetFileAttributes(path.c_str());
 		return ((dwAttr != INVALID_FILE_ATTRIBUTES) && !(dwAttr & FILE_ATTRIBUTE_DIRECTORY));
 	}
 
-	void CFileUtils::DelFile(const wstr& path)
+	void CFileUtils::DelFile(const std::wstring& path)
 	{
 		if (::DeleteFile(path.c_str()) == FALSE)
 			throw CWinExc("Failed to delete file {0}", StringEncoding::str_w2a_safe(path));
@@ -46,7 +46,7 @@ namespace CommonLib
 
     }
 
-	void CFileUtils::FileDelFolder(const wstr& path)
+	void CFileUtils::FileDelFolder(const std::wstring& path)
 	{
 		if (::RemoveDirectoryW(path.c_str()) == FALSE)
 			throw CWinExc("Failed to delete folder {0}", StringEncoding::str_w2a_safe(path));
@@ -58,7 +58,7 @@ namespace CommonLib
             throw CWinExc("Failed to delete folder {0}", path);
     }
 
-	void CFileUtils::RenameFile(const wstr& oldFile, const wstr& newFile)
+	void CFileUtils::RenameFile(const std::wstring& oldFile, const std::wstring& newFile)
 	{
 		if(::MoveFileW(oldFile.c_str(), newFile.c_str()) == FALSE)
 			throw CWinExc("Failed rename file {0}->{1}", StringEncoding::str_w2a_safe(oldFile), StringEncoding::str_w2a_safe(newFile));
@@ -66,7 +66,7 @@ namespace CommonLib
 
 
 
-	void CFileUtils::FileSearch(const wstr& searchMask, const TCheckFileObj& addDir, const TCheckFileObj& addFile)
+	void CFileUtils::FileSearch(const std::wstring& searchMask, const TCheckFileObj& addDir, const TCheckFileObj& addFile)
 	{
 		WIN32_FIND_DATAW  searchData = { 0 };
 		HANDLE  hSearch = FindFirstFileW(searchMask.c_str(), &searchData);
@@ -76,7 +76,7 @@ namespace CommonLib
 		CFindFileHandle  findHandle(hSearch);
 		do
 		{
-			wstr nextChild = searchData.cFileName;
+            std::wstring nextChild = searchData.cFileName;
 			if (_wcsicmp(nextChild.c_str(), L".") == 0)
 				continue;
 
@@ -99,16 +99,16 @@ namespace CommonLib
 	}
 
 
-	void CFileUtils::FileSearch(const wstr& searchMask, wstrvec& folders, wstrvec& files)
+	void CFileUtils::FileSearch(const std::wstring& searchMask, std::vector<std::wstring>& folders, std::vector<std::wstring>& files)
 	{
 
-		TCheckFileObj addDir = [&folders](const wstr& dir)-> bool
+		TCheckFileObj addDir = [&folders](const std::wstring& dir)-> bool
 		{
 			folders.push_back(dir);
 			return true;
 		};
 
-		TCheckFileObj addFile = [&files](const wstr& file)-> bool
+		TCheckFileObj addFile = [&files](const std::wstring& file)-> bool
 		{
 			files.push_back(file);
 			return true;
@@ -118,17 +118,17 @@ namespace CommonLib
 	}
 
 
-	bool CFileUtils::IsFileExist(const astr& path)
+	bool CFileUtils::IsFileExist(const std::string& path)
 	{
 		return IsFileExist(StringEncoding::str_a2w_safe(path));
 	}
 
-	void CFileUtils::RenameFile(const astr& oldFile, const astr& newFile)
+	void CFileUtils::RenameFile(const std::string& oldFile, const std::string& newFile)
 	{
 		RenameFile(StringEncoding::str_a2w_safe(oldFile), StringEncoding::str_a2w_safe(newFile));
 	}
 
-    void CFileUtils::CreateDirectory(const astr& path)
+    void CFileUtils::CreateDirectory(const std::string& path)
     {
         if (::CreateDirectoryA(path.c_str(), NULL) == FALSE)
             throw CWinExc("Failed to create directory {0}", path);

@@ -10,12 +10,12 @@ namespace CommonLib
 		CLogFilePerformer();
 		~CLogFilePerformer();
 
-		virtual void FormatLogline(const astr& msg, eMsgType type, astr& outMsg);
+		virtual void FormatLogline(const std::string& msg, eMsgType type, std::string& outMsg);
 	private:
-		void AddCurrentTime(astr& msg);
-		void AddThreadID(astr& msg);
-		void AddTypeMsg(eMsgType type, astr& msg);
-		void AddMsg(const astr& msg, astr& outMsg);
+		void AddCurrentTime(std::string& msg);
+		void AddThreadID(std::string& msg);
+		void AddTypeMsg(eMsgType type, std::string& msg);
+		void AddMsg(const std::string& msg, std::string& outMsg);
 
 	};
 }

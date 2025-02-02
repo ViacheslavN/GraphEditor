@@ -27,7 +27,7 @@ namespace CommonLib
 			m_connectdAddr = addr.GetAddres();
 		}
 
-		void CClientSocket::ConnectToIP(const astr& addr, unsigned short port)
+		void CClientSocket::ConnectToIP(const std::string& addr, unsigned short port)
 		{
 			CSocketAddr sockAddr;
 			sockAddr.SetFamily(AF_INET);
@@ -40,7 +40,7 @@ namespace CommonLib
 			Connect(sockAddr);
 		}
 
-		void CClientSocket::ConnectToHost(const astr& hostName, unsigned short port)
+		void CClientSocket::ConnectToHost(const std::string& hostName, unsigned short port)
 		{
 			addrinfo hints;
 			memset(&hints, 0, sizeof(hints));
@@ -48,7 +48,7 @@ namespace CommonLib
 			hints.ai_socktype = SOCK_STREAM;
 			hints.ai_protocol = IPPROTO_TCP;
 
-			astr strPort = str_utils::AStrUint16(port);
+            std::string strPort = str_utils::AStrUint16(port);
 
 			CAddrInfo addrInfo;
 
@@ -57,7 +57,7 @@ namespace CommonLib
 
 
 			addrinfo* pAddrInfo = addrInfo.Get();
-			astr errors;
+            std::string errors;
 			while (pAddrInfo)
 			{
 				if ((pAddrInfo->ai_family == AF_INET)&& (pAddrInfo->ai_socktype == SOCK_STREAM) && (pAddrInfo->ai_protocol == IPPROTO_TCP))
@@ -66,7 +66,7 @@ namespace CommonLib
 					{
 						retVal = connect(m_socket, pAddrInfo->ai_addr, sizeof(sockaddr_in));
 						CheckSocketRetVal(retVal, "failed to connect");
-						m_connectdAddr = hostName + astr(":") + str_utils::AStrUint16(port);
+						m_connectdAddr = hostName + std::string(":") + str_utils::AStrUint16(port);
 						return;
 					}
 					catch (std::exception& excSrc)

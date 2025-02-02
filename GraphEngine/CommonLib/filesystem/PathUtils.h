@@ -7,24 +7,24 @@ namespace CommonLib
 	class CPathUtils
 	{
 	public:
-        static astr GetPathDelim(const astr& path);
-        static wstr GetPathDelim(const wstr& path);
-        static size_t FindLastPathDelim( const wstr& path);
-        static size_t FindLastPathDelim(const astr& path);
+        static std::string GetPathDelim(const std::string& path);
+        static std::wstring GetPathDelim(const std::wstring& path);
+        static size_t FindLastPathDelim( const std::wstring& path);
+        static size_t FindLastPathDelim(const std::string& path);
 
 
 
-		static astr FindFileName(const astr& path);
-		static astr FindOnlyFileName(const astr& path);
-		static astr FindFileExtension(const astr& path);
-		static astr FindFilePath(const astr& fullPath);
-        static astr FileMergePath(const astr& dir, const astr& path);
+		static std::string FindFileName(const std::string& path);
+		static std::string FindOnlyFileName(const std::string& path);
+		static std::string FindFileExtension(const std::string& path);
+		static std::string FindFilePath(const std::string& fullPath);
+        static std::string FileMergePath(const std::string& dir, const std::string& path);
 
-		static wstr FindFileName(const wstr& path);
-		static wstr FindOnlyFileName(const wstr& path);
-		static wstr FindFileExtension(const wstr& path);
-		static wstr FindFilePath(const wstr& fullPath);
-        static wstr FileMergePath(const wstr& dir, const wstr& path);
+		static std::wstring FindFileName(const std::wstring& path);
+		static std::wstring FindOnlyFileName(const std::wstring& path);
+		static std::wstring FindFileExtension(const std::wstring& path);
+		static std::wstring FindFilePath(const std::wstring& fullPath);
+        static std::wstring FileMergePath(const std::wstring& dir, const std::wstring& path);
 
 	};
 }

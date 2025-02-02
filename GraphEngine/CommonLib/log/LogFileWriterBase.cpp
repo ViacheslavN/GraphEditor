@@ -17,7 +17,7 @@ namespace CommonLib
 
 	}
 
-	void CLogFileWriterBase::Open(const astr& path)
+	void CLogFileWriterBase::Open(const std::string& path)
 	{
 		try
 		{
@@ -50,12 +50,12 @@ namespace CommonLib
 		m_file.reset();
 	}
 
-	const astr& CLogFileWriterBase::GetPath() const
+	const std::string& CLogFileWriterBase::GetPath() const
 	{
 		return m_path;
 	}
 
-	const astr& CLogFileWriterBase::GetName() const
+	const std::string& CLogFileWriterBase::GetName() const
 	{
 		return m_logName;
 	}

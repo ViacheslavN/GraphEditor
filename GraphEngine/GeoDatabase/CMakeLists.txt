@@ -70,7 +70,8 @@ IF (WIN32)
 
 ELSE()
     set(SOURCE_FILES ${COMMON_SOURCE_FILES}
-
+            Row.h
+            Row.cpp
 
 
     )

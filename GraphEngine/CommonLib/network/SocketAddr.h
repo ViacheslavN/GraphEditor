@@ -40,8 +40,8 @@ namespace CommonLib
 				in_addr Address() const;
 				unsigned short Port() const;
 
-				astr GetAddres() const;
-				static astr GetAddres(const in_addr& sin_addr, unsigned short port);
+                std::string GetAddres() const;
+				static std::string GetAddres(const in_addr& sin_addr, unsigned short port);
 
 			protected:
 				sockaddr_in m_sockaddr;

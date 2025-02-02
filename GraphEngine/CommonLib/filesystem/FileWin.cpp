@@ -74,7 +74,7 @@ namespace CommonLib
 
 			void CFileWin32::OpenFileA(const char *pszFileNameUtf8, enOpenFileMode mode, enAccesRights access, enShareMode share, enOpenFileType openType)
 			{
-				wstr fileName = StringEncoding::str_utf82w_safe(pszFileNameUtf8);
+                std::wstring fileName = StringEncoding::str_utf82w_safe(pszFileNameUtf8);
 				return OpenFile(fileName.c_str(), mode, access, share, openType);
 			}
 

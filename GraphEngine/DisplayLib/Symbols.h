@@ -24,6 +24,8 @@ namespace GraphEngine {
         typedef std::shared_ptr<class IMarkerSymbol> IMarkerSymbolPtr;
         typedef std::shared_ptr<class ITextBackground> ITextBackgroundPtr;
         typedef std::shared_ptr<class ITextSymbol>  ITextSymbolPtr;
+        typedef std::shared_ptr<class IFillSymbol>  IFillSymbolPtr;
+
 
 
         class  ISymbol : public CommonLib::ISerialize

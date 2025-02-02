@@ -44,8 +44,8 @@ namespace GraphEngine
             void Save(CommonLib::IWriteStream *pStream) const;
             void Load(CommonLib::IReadStream *pStream);
 
-            void Save(CommonLib::ISerializeObjPtr pObj, const astr& name) const;
-            void Load(CommonLib::ISerializeObjPtr pObj, const astr& name);
+            void Save(CommonLib::ISerializeObjPtr pObj, const std::string& name) const;
+            void Load(CommonLib::ISerializeObjPtr pObj, const std::string& name);
 
 		private:
 			unsigned char*   m_pBuf;

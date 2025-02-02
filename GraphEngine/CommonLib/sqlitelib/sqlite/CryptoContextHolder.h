@@ -12,15 +12,15 @@ namespace CommonLib
 		public:
 			static CCryptoContextHolder& Instance();
 
-			ICryptoContextPtr GetCryptoContext(const astr& databaseName) const;
-			void AddCryptoContext(const astr& databaseName, ICryptoContextPtr ptrContext);
-			void RemoveCryptoContext(const astr& databaseName);
+			ICryptoContextPtr GetCryptoContext(const std::string& databaseName) const;
+			void AddCryptoContext(const std::string& databaseName, ICryptoContextPtr ptrContext);
+			void RemoveCryptoContext(const std::string& databaseName);
 
 			~CCryptoContextHolder();
 
 		private:
 			CCryptoContextHolder();
-			typedef std::map<astr, ICryptoContextPtr> TMapCryptoContexts;
+			typedef std::map<std::string, ICryptoContextPtr> TMapCryptoContexts;
 			TMapCryptoContexts m_cryptoContexts;
 		};
 

@@ -6,6 +6,9 @@
 namespace CommonLib {
     namespace Data {
 
+
+        typedef std::shared_ptr<class CBlob> CBlobPtr;
+
         class CBlob
         {
         public:

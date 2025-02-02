@@ -43,7 +43,7 @@ namespace CommonLib
 
 		using SetThreadDescriptionFunc = HRESULT(WINAPI*)(HANDLE hThread, PCWSTR lpThreadDescription);
 
-		void CThreadWinImpl::SetDescriptionForCurrThread(const astr& threadName)
+		void CThreadWinImpl::SetDescriptionForCurrThread(const std::string& threadName)
 		{
 			static SetThreadDescriptionFunc setThreadDescription = reinterpret_cast<SetThreadDescriptionFunc>(::GetProcAddress(::GetModuleHandleW(L"Kernel32.dll"), "SetThreadDescription"));
 			if (setThreadDescription)

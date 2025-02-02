@@ -48,7 +48,7 @@ namespace CommonLib
 				return nCol;
 			}
 
-			astr CStatement::ColumnName(int col) const
+            std::string CStatement::ColumnName(int col) const
 			{
 				const char* pszName = sqlite3_column_name(m_pStmt, col);
 				if (pszName == nullptr)
@@ -128,7 +128,7 @@ namespace CommonLib
 				return sqlite3_column_double(m_pStmt, col);
 			}
 
-			void CStatement::ReadText(int col, astr& text) const
+			void CStatement::ReadText(int col, std::string& text) const
 			{
 				int len = sqlite3_column_bytes(m_pStmt, col);
 				const unsigned char *pText = sqlite3_column_text(m_pStmt, col);
@@ -138,9 +138,9 @@ namespace CommonLib
 					text = (const char*)pText;
 			}
 
-			astr  CStatement::ReadText(int32_t col) const
+            std::string  CStatement::ReadText(int32_t col) const
 			{
-				astr text;
+                std::string text;
 				ReadText(col, text);
 
 				return text;
@@ -211,7 +211,7 @@ namespace CommonLib
 					throw CSqlitExc(m_pStmt, nRetVal);
 			}
 
-			void CStatement::BindText(int32_t col, const astr& text, bool copy)
+			void CStatement::BindText(int32_t col, const std::string& text, bool copy)
 			{
 				int nRetVal = sqlite3_bind_text(m_pStmt, col, text.c_str(), (int)text.size(), copy ? SQLITE_TRANSIENT : SQLITE_STATIC);
 				if (nRetVal != SQLITE_OK)

@@ -8,10 +8,10 @@ namespace CommonLib
 	{
 	public:
 		CWinNtExc(NTSTATUS ntStatus);
-		CWinNtExc(const astr& err_msg, NTSTATUS ntStatus);
+		CWinNtExc(const std::string& err_msg, NTSTATUS ntStatus);
 
 		template<typename... Types>
-		CWinNtExc(NTSTATUS ntStatus, const astr& format, Types&&... args) : CExcBase(format, std::forward<Types>(args)...), m_ntStatus(ntStatus)
+		CWinNtExc(NTSTATUS ntStatus, const std::string& format, Types&&... args) : CExcBase(format, std::forward<Types>(args)...), m_ntStatus(ntStatus)
 		{
 			CExcBase::AddMsg(GetErrorDesc(ntStatus));
 		}
@@ -19,7 +19,7 @@ namespace CommonLib
 		virtual ~CWinNtExc() noexcept;
 		virtual std::shared_ptr<CExcBase> Clone() const;
 
-		static astr GetErrorDesc(NTSTATUS ntStatus);
+		static std::string GetErrorDesc(NTSTATUS ntStatus);
 	private:
 
 	private:

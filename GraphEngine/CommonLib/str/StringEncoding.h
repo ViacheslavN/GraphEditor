@@ -5,36 +5,36 @@ namespace CommonLib
 	namespace StringEncoding
 	{
 					   
-		void str_utf82w(const astr& utf8, wstr& unicode);
-		void str_w2utf8(const wstr& unicode, astr& utf8);
-		astr str_w2utf8(const wstr& unicode);
+		void str_utf82w(const std::string& utf8, std::wstring& unicode);
+		void str_w2utf8(const std::wstring& unicode,  std::string& utf8);
+        std::string str_w2utf8(const std::wstring& unicode);
 
-		void str_utf82w_safe(const astr& utf8, wstr& unicode);
-		void str_w2utf8_safe(const wstr& unicode, astr& utf8);
+		void str_utf82w_safe(const  std::string& utf8, std::wstring& unicode);
+		void str_w2utf8_safe(const std::wstring& unicode,  std::string& utf8);
 
-		wstr str_utf82w_safe(const astr& utf8);
-		astr str_w2utf8_safe(const wstr& unicode);
-
-
-		void str_w2a(const wstr& src_str, astr& stra);
-		astr str_w2a(const wstr& unicode);
-		astr str_w2a_safe(const wstr& unicode);
-		void str_a2w(const astr& src_str, wstr& unicode);
-		wstr str_a2w(const astr& src_str);
-		wstr str_a2w_safe(const astr& src_str);
-
-		void str_univ_utf82w(const astr& srca, wstr& unicode);
-		void str_univ_w2utf8(const wstr& unicode, astr& stra);
-
-		wstr str_univ_utf82w(const astr& stra);
-		astr str_univ_w2utf8(const wstr& unicode);
-
-		wstr str_univ_utf82w_safe(const astr& stra);
-		astr str_univ_w2utf8_safe(const wstr& unicode);
+        std::wstring str_utf82w_safe(const  std::string& utf8);
+        std::string str_w2utf8_safe(const std::wstring& unicode);
 
 
-		astr str_a2utf8(const astr& src_str);
-		astr str_a2utf8_safe(const astr& src_str);
+		void str_w2a(const std::wstring& src_str,  std::string& stra);
+        std::string str_w2a(const std::wstring& unicode);
+        std::string str_w2a_safe(const std::wstring& unicode);
+		void str_a2w(const  std::string& src_str, std::wstring& unicode);
+        std::wstring str_a2w(const  std::string& src_str);
+        std::wstring str_a2w_safe(const  std::string& src_str);
+
+		void str_univ_utf82w(const  std::string& srca, std::wstring& unicode);
+		void str_univ_w2utf8(const std::wstring& unicode,  std::string& stra);
+
+        std::wstring str_univ_utf82w(const  std::string& stra);
+        std::string str_univ_w2utf8(const std::wstring& unicode);
+
+        std::wstring str_univ_utf82w_safe(const  std::string& stra);
+        std::string str_univ_w2utf8_safe(const std::wstring& unicode);
+
+
+        std::string str_a2utf8(const  std::string& src_str);
+        std::string str_a2utf8_safe(const  std::string& src_str);
 
 	}
 

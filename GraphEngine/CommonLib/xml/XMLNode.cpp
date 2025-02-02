@@ -7,7 +7,7 @@ namespace CommonLib
 	{
 		namespace xml
 		{
-			CXMLNode::CXMLNode(IXMLNodePtr ptrParent, const astr& name) : m_name(name), m_ptrParent(ptrParent)
+			CXMLNode::CXMLNode(IXMLNodePtr ptrParent, const std::string& name) : m_name(name), m_ptrParent(ptrParent)
 			{
 
 			}
@@ -22,7 +22,7 @@ namespace CommonLib
 				m_ptrParent = ptrParent;
 			}
 
-			IXMLNodePtr	CXMLNode::CreateChildNode(const astr& name)
+			IXMLNodePtr	CXMLNode::CreateChildNode(const std::string& name)
 			{
 				if(name.empty())
 					throw CommonLib::CExcBase("XML::CreateChildNode: node name is empty");
@@ -48,13 +48,13 @@ namespace CommonLib
 				throw CommonLib::CExcBase("XML::GetChild out of range, nodes %1, index %2", m_Nodes.size(), nIndex);
 			}
 
-			bool CXMLNode::IsChildExists(const astr& name) const
+			bool CXMLNode::IsChildExists(const std::string& name) const
 			{
 				auto it = m_NodeByName.find(name);
 				return it != m_NodeByName.end();
 			}
 
-			IXMLNodePtr	CXMLNode::GetChild(const astr& name) const
+			IXMLNodePtr	CXMLNode::GetChild(const std::string& name) const
 			{
 				TNodesByName::const_iterator it = m_NodeByName.find(name);
 				if (it == m_NodeByName.end())
@@ -63,7 +63,7 @@ namespace CommonLib
 				return GetChild(it->second);
 			}
 
-			std::vector<IXMLNodePtr> CXMLNode::GetChilds(const astr& name) const
+			std::vector<IXMLNodePtr> CXMLNode::GetChilds(const std::string& name) const
 			{
 
 				std::vector<IXMLNodePtr> result;
@@ -81,37 +81,37 @@ namespace CommonLib
 				return m_ptrParent.lock();
 			}
 
-			const astr& CXMLNode::GetName() const
+			const std::string& CXMLNode::GetName() const
 			{
 				return m_name;
 			}
 
-			void CXMLNode::SetName(const astr& name)
+			void CXMLNode::SetName(const std::string& name)
 			{
 				m_name = name;
 			}
 
-			const astr& CXMLNode::GetText() const
+			const std::string& CXMLNode::GetText() const
 			{
 				return m_textUtf8;
 			}
 
-			void CXMLNode::SetText(const astr& text)
+			void CXMLNode::SetText(const std::string& text)
 			{
 				m_textUtf8 = text;
 			}
 
-			void  CXMLNode::SetText(const wstr& unicode)
+			void  CXMLNode::SetText(const std::wstring& unicode)
 			{
 				m_textUtf8 = CommonLib::StringEncoding::str_w2utf8(unicode);
 			}
  
-			const astr& CXMLNode::GetCDATA() const
+			const std::string& CXMLNode::GetCDATA() const
 			{
 				return m_caData;
 			}
 
-			void CXMLNode::SetCDATA(const  astr& cdata)
+			void CXMLNode::SetCDATA(const  std::string& cdata)
 			{
 				m_caData = cdata;
 			}
@@ -126,47 +126,47 @@ namespace CommonLib
 				CXMLUtils::Blob2String(data, size, m_caData);
 			}
 
-			void CXMLNode::AddPropertyInt16(const  astr& name, int16_t value)
+			void CXMLNode::AddPropertyInt16(const  std::string& name, int16_t value)
 			{
 				AddProperyT(name, value);
 			}
 
-			void CXMLNode::AddPropertyInt16U(const astr& name, uint16_t value)
+			void CXMLNode::AddPropertyInt16U(const std::string& name, uint16_t value)
 			{
 				AddProperyT(name, value);
 			}
 
-			void CXMLNode::AddPropertyInt32(const astr& name, int32_t value)
+			void CXMLNode::AddPropertyInt32(const std::string& name, int32_t value)
 			{
 				AddProperyT(name, value);
 			}
 
-			void CXMLNode::AddPropertyInt32U(const astr& name, uint32_t value)
+			void CXMLNode::AddPropertyInt32U(const std::string& name, uint32_t value)
 			{
 				AddProperyT(name, value);
 			}
 
-			void CXMLNode::AddPropertyInt64(const astr& name, int64_t value)
+			void CXMLNode::AddPropertyInt64(const std::string& name, int64_t value)
 			{
 				AddProperyT(name, value);
 			}
 
-			void CXMLNode::AddPropertyIntU64(const astr& name, uint64_t value)
+			void CXMLNode::AddPropertyIntU64(const std::string& name, uint64_t value)
 			{
 				AddProperyT(name, value);
 			}
 
-			void CXMLNode::AddPropertyDouble(const astr& name, double value)
+			void CXMLNode::AddPropertyDouble(const std::string& name, double value)
 			{
 				AddProperyT(name, value);
 			}
 
-			void CXMLNode::AddPropertyBool(const astr& name, bool value)
+			void CXMLNode::AddPropertyBool(const std::string& name, bool value)
 			{
 				AddProperyT(name, value);
 			}
 
-			void CXMLNode::AddPropertyString(const astr& name, const astr& value)
+			void CXMLNode::AddPropertyString(const std::string& name, const std::string& value)
 			{
 				TPropByName::iterator it = m_PropsByName.find(name);
 				if (it == m_PropsByName.end())
@@ -180,17 +180,17 @@ namespace CommonLib
 				}
 			}
 
-			void CXMLNode::AddPropertyWString(const astr& name, const wstr& value)
+			void CXMLNode::AddPropertyWString(const std::string& name, const std::wstring& value)
 			{
 				AddPropertyString(name, CommonLib::StringEncoding::str_w2utf8(value));
 			}
 
-			bool CXMLNode::IsPropertyExists(const astr& name) const
+			bool CXMLNode::IsPropertyExists(const std::string& name) const
 			{
 				return m_PropsByName.find(name) != m_PropsByName.end();
 			}
 
-			const astr& CXMLNode::GetProperty(const astr& name) const
+			const std::string& CXMLNode::GetProperty(const std::string& name) const
 			{
 				TPropByName::const_iterator c_it = m_PropsByName.find(name);
 				if (c_it != m_PropsByName.end())
@@ -204,7 +204,7 @@ namespace CommonLib
 				return (uint32_t)m_Props.size();
 			}
 
-			const astr&  CXMLNode::GetProperty(uint32_t nIndex) const
+			const std::string&  CXMLNode::GetProperty(uint32_t nIndex) const
 			{
 				if (m_Props.size() > nIndex)
 					return m_Props[nIndex].second;
@@ -212,112 +212,112 @@ namespace CommonLib
 				throw CommonLib::CExcBase("XML::GetProperty out of range, nodes %1, index %2", m_Props.size(), nIndex);
 			}
 
-			int16_t	CXMLNode::GetPropertyInt16(const astr& name, int16_t defValue) const
+			int16_t	CXMLNode::GetPropertyInt16(const std::string& name, int16_t defValue) const
 			{
 				return GetProperyT<int16_t>(name, defValue);
 			}
 
-			uint16_t CXMLNode::GetPropertyInt16U(const astr& name, uint16_t defValue) const
+			uint16_t CXMLNode::GetPropertyInt16U(const std::string& name, uint16_t defValue) const
 			{
 				return GetProperyT<uint16_t>(name, defValue);
 			}
-			int32_t	 CXMLNode::GetPropertyInt32(const astr& name, int32_t defValue) const
+			int32_t	 CXMLNode::GetPropertyInt32(const std::string& name, int32_t defValue) const
 			{
 				return GetProperyT<int32_t>(name, defValue);
 			}
 
-			uint32_t CXMLNode::GetPropertyInt32U(const astr& name, uint32_t defValue) const
+			uint32_t CXMLNode::GetPropertyInt32U(const std::string& name, uint32_t defValue) const
 			{
 				return GetProperyT<uint32_t>(name, defValue);
 			}
 
-			int64_t	CXMLNode::GetPropertyInt64(const astr& name, int64_t defValue) const
+			int64_t	CXMLNode::GetPropertyInt64(const std::string& name, int64_t defValue) const
 			{
 				return GetProperyT<int64_t>(name, defValue);
 			}
 
-			uint64_t CXMLNode::GetPropertyIntU64(const astr& name, uint64_t defValue) const
+			uint64_t CXMLNode::GetPropertyIntU64(const std::string& name, uint64_t defValue) const
 			{
 				return GetProperyT<uint64_t>(name, defValue);
 			}
 
-			double  CXMLNode::GetPropertyDouble(const astr& name, double defValue) const
+			double  CXMLNode::GetPropertyDouble(const std::string& name, double defValue) const
 			{
 				return GetProperyT<double>(name, defValue);
 			}
 
-			bool  CXMLNode::GetPropertyBool(const astr& name, bool defValue) const
+			bool  CXMLNode::GetPropertyBool(const std::string& name, bool defValue) const
 			{
 				return GetProperyT<bool>(name, defValue);
 			}
 
-			astr CXMLNode::GetPropertyString(const astr& name, const  astr& defValue) const
+            std::string CXMLNode::GetPropertyString(const std::string& name, const  std::string& defValue) const
 			{
-				return GetProperyT<astr>(name, defValue);
+				return GetProperyT<std::string>(name, defValue);
 			}
 
-			wstr CXMLNode::GetPropertyWString(const astr& name, const  wstr& defValue) const
+            std::wstring CXMLNode::GetPropertyWString(const std::string& name, const  std::wstring& defValue) const
 			{
 				if (!IsPropertyExists(name))
 					return defValue;
 
-				wstr unicode;
-				CommonLib::StringEncoding::str_utf82w(GetProperyT<astr>(name), unicode);
+                std::wstring unicode;
+				CommonLib::StringEncoding::str_utf82w(GetProperyT<std::string>(name), unicode);
 
 				return unicode;
 			}
 
 
 
-			int16_t	CXMLNode::GetPropertyInt16(const astr& name) const
+			int16_t	CXMLNode::GetPropertyInt16(const std::string& name) const
 			{
 				return GetProperyT<int16_t>(name);
 			}
 
-			uint16_t CXMLNode::GetPropertyInt16U(const astr& name) const
+			uint16_t CXMLNode::GetPropertyInt16U(const std::string& name) const
 			{
 				return GetProperyT<uint16_t>(name);
 			}
 
-			int32_t	 CXMLNode::GetPropertyInt32(const astr& name) const
+			int32_t	 CXMLNode::GetPropertyInt32(const std::string& name) const
 			{
 				return GetProperyT<int32_t>(name);
 			}
 
-			uint32_t CXMLNode::GetPropertyInt32U(const astr& name) const
+			uint32_t CXMLNode::GetPropertyInt32U(const std::string& name) const
 			{
 				return GetProperyT<uint32_t>(name);
 			}
 
-			int64_t	CXMLNode::GetPropertyInt64(const astr& name) const
+			int64_t	CXMLNode::GetPropertyInt64(const std::string& name) const
 			{
 				return GetProperyT<int64_t>(name);
 			}
 
-			uint64_t CXMLNode::GetPropertyIntU64(const astr& name) const
+			uint64_t CXMLNode::GetPropertyIntU64(const std::string& name) const
 			{
 				return GetProperyT<uint64_t>(name);
 			}
 
-			double  CXMLNode::GetPropertyDouble(const astr& name) const
+			double  CXMLNode::GetPropertyDouble(const std::string& name) const
 			{
 				return GetProperyT<double>(name);
 			}
 
-			bool CXMLNode::GetPropertyBool(const astr& name) const
+			bool CXMLNode::GetPropertyBool(const std::string& name) const
 			{
 				return GetProperyT<bool>(name);
 			}
 
-			astr CXMLNode::GetPropertyString(const astr& name) const
+            std::string CXMLNode::GetPropertyString(const std::string& name) const
 			{
-				return GetProperyT<astr>(name);
+				return GetProperyT<std::string>(name);
 			}
 
-			wstr CXMLNode::GetPropertyWString(const astr& name) const
+            std::wstring CXMLNode::GetPropertyWString(const std::string& name) const
 			{
-				wstr unicode;
-				CommonLib::StringEncoding::str_utf82w(GetProperyT<astr>(name), unicode);
+                std::wstring unicode;
+				CommonLib::StringEncoding::str_utf82w(GetProperyT<std::string>(name), unicode);
 
 				return unicode;
 			}
@@ -327,7 +327,7 @@ namespace CommonLib
 			{
 				try
 				{
-					astr sName;
+                    std::string sName;
 					sName = CommonLib::str_format::AStrFormatSafeT("<%1", m_name);
 					if (m_Props.empty() && m_textUtf8.empty() && m_caData.empty() && m_Nodes.empty())
 					{
@@ -339,7 +339,7 @@ namespace CommonLib
 					pSteam->Write(sName.c_str());
 					if (!m_Props.empty())
 					{
-						astr sProps;
+                        std::string sProps;
 						for (size_t i = 0, sz = m_Props.size(); i < sz; ++i)
 						{
 							pSteam->Write(" ");

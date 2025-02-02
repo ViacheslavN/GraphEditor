@@ -50,7 +50,7 @@ public:
 
 
 
-void TestDatabase(CommonLib::crypto::ICryptoFactoryPtr ptrCryptoFactory, const astr& strPath, const astr& pwd)
+void TestDatabase(CommonLib::crypto::ICryptoFactoryPtr ptrCryptoFactory, const std::string& strPath, const std::string& pwd)
 {
  
 	std::shared_ptr<CommonLib::database::ICryptoContext> ptrCryptoContext(new CommonLib::database::CCryptoContext(pwd.c_str(), CommonLib::database::PwdKey, ptrCryptoFactory));
@@ -125,8 +125,8 @@ int main()
 	{
 		CommonLib::crypto::ICryptoFactoryPtr ptrCryptoFactory(new CommonLib::crypto::winapi::CCryptoFactory());
 		CommonLib::crypto::ICryptoFactoryPtr ptrCryptoFactorySSL(new CommonLib::crypto::openssllib::CCryptoFactoryOpenSSL());
-		astr dbPath = "F:\\test.db";
-		astr pwd = "12334ddffdfdfg";
+        std::string dbPath = "F:\\test.db";
+        std::string pwd = "12334ddffdfdfg";
 
 		//TestDatabase(ptrCryptoFactorySSL, dbPath, pwd);
 		TestDatabase(ptrCryptoFactory, dbPath, pwd);

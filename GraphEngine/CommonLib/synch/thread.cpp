@@ -14,13 +14,13 @@ namespace CommonLib
 #endif 
 		}
 
-		void  CThread::SetDescriptionForCurrThread(const astr& threadName)
+		void  CThread::SetDescriptionForCurrThread(const std::string& threadName)
 		{
 			CThreadImpl::SetDescriptionForCurrThread(threadName);
 		}
 
 
-		CThread::CThread(std::function<void()>&& threadFunk, astr&& threadName) : m_threadFunk(threadFunk), m_name(threadName)
+		CThread::CThread(std::function<void()>&& threadFunk, std::string&& threadName) : m_threadFunk(threadFunk), m_name(threadName)
 		{
 			try
 			{
@@ -43,7 +43,7 @@ namespace CommonLib
 
 		}
 
-		void CThread::RunThread(std::function<void()> threadFunk, astr threadName)
+		void CThread::RunThread(std::function<void()> threadFunk, std::string threadName)
 		{
 			try
 			{
@@ -72,10 +72,10 @@ namespace CommonLib
 			return m_exeption.get() != nullptr;
 		}
 
-		astr CThread::GetExceptionMsg() const
+        std::string CThread::GetExceptionMsg() const
 		{
 			if (m_exeption.get() == nullptr)
-				return astr();
+				return std::string();
 
 			return m_exeption->what();
 		

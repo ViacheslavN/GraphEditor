@@ -22,7 +22,7 @@ namespace CommonLib
 
 	}
 
-	void CLogFilePerformer::FormatLogline(const astr& msg, eMsgType type, astr& outMsg)
+	void CLogFilePerformer::FormatLogline(const std::string& msg, eMsgType type, std::string& outMsg)
 	{
 		AddTypeMsg(type, outMsg);
 		AddCurrentTime(outMsg);
@@ -30,7 +30,7 @@ namespace CommonLib
 		AddMsg(msg, outMsg);
 	}
 
-	void CLogFilePerformer::AddCurrentTime(astr& msg)
+	void CLogFilePerformer::AddCurrentTime(std::string& msg)
 	{
 		time_t  currTime;
 		time(&currTime);
@@ -63,7 +63,7 @@ namespace CommonLib
 		msg += "]";
 	}
 
-	void CLogFilePerformer::AddThreadID(astr& msg)
+	void CLogFilePerformer::AddThreadID(std::string& msg)
 	{
 		msg += "<";
 		msg += str_utils::AStrFrom(synch::CThread::GetCurThreadId());
@@ -71,7 +71,7 @@ namespace CommonLib
 
 	}
 
-	void CLogFilePerformer::AddTypeMsg(eMsgType type, astr& msg)
+	void CLogFilePerformer::AddTypeMsg(eMsgType type, std::string& msg)
 	{
 		switch (type)
 		{
@@ -92,7 +92,7 @@ namespace CommonLib
 		}
 	}
 
-	void CLogFilePerformer::AddMsg(const astr& msg, astr& outMsg)
+	void CLogFilePerformer::AddMsg(const std::string& msg, std::string& outMsg)
 	{
 		if (!msg.empty())
 		{

@@ -15,12 +15,12 @@ CWinExc::CWinExc(const CWinExc& exc) : CExcBase(exc), m_error(exc.m_error)
 	AddMsg(GetErrorMessageA(m_error));
 }
 
-CWinExc::CWinExc(const astr& msg, DWORD error) : CExcBase(msg), m_error(error)
+CWinExc::CWinExc(const std::string& msg, DWORD error) : CExcBase(msg), m_error(error)
 {
 	AddMsg(GetErrorMessageA(m_error));
 }	
 
-CWinExc::CWinExc(const wstr& msg, DWORD error) : CExcBase(msg), m_error(error)
+CWinExc::CWinExc(const std::wstring& msg, DWORD error) : CExcBase(msg), m_error(error)
 {
 	AddMsg(GetErrorMessageA(m_error));
 }
@@ -41,7 +41,7 @@ DWORD  CWinExc::GetErrCode() const
 	return m_error;
 }
 
-bool CWinExc::GetSysMessage(DWORD errCode, astr& result)
+bool CWinExc::GetSysMessage(DWORD errCode, std::string& result)
 {
 	LPWSTR pBuffer = NULL;
 	if (FormatMessageW(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_IGNORE_INSERTS, NULL,
@@ -54,7 +54,7 @@ bool CWinExc::GetSysMessage(DWORD errCode, astr& result)
 	return false;
 }
 
-bool CWinExc::GetWinInetMessage(DWORD errCode, astr& result)
+bool CWinExc::GetWinInetMessage(DWORD errCode, std::string& result)
 {
 	LPWSTR pBuffer = NULL;
 	if (errCode >= INTERNET_ERROR_BASE && errCode <= INTERNET_ERROR_LAST)
@@ -68,16 +68,16 @@ bool CWinExc::GetWinInetMessage(DWORD errCode, astr& result)
 	return false;
 }
 
-astr CWinExc::GetErrorMessageA(DWORD errCode)
+std::string CWinExc::GetErrorMessageA(DWORD errCode)
 {
-	astr errorDescr;
+    std::string errorDescr;
 	if (!GetSysMessage(errCode, errorDescr))
 		GetWinInetMessage(errCode, errorDescr);
 
 	return errorDescr;
 }
 
-wstr CWinExc::GetErrorMessageW(DWORD errCode)
+    std::wstring CWinExc::GetErrorMessageW(DWORD errCode)
 {
 	return StringEncoding::str_utf82w_safe(GetErrorMessageA(errCode));
 }
@@ -87,61 +87,61 @@ void CWinExc::AddMsg(DWORD error)
 	CExcBase::AddMsg(GetErrorMessageA(error));
 }
 
-void CWinExc::AddMsg(const astr& msg, DWORD error)
+void CWinExc::AddMsg(const std::string& msg, DWORD error)
 {
 	CExcBase::AddMsg(msg);
 	CExcBase::AddMsg(GetErrorMessageA(error));
 }
 
-void CWinExc::AddMsg(const astr& format, const astr& msg, DWORD error)
+void CWinExc::AddMsg(const std::string& format, const std::string& msg, DWORD error)
 {
 	CExcBase::AddMsg(format, msg);
 	CExcBase::AddMsg(GetErrorMessageA(error));
 }
  
-void CWinExc::AddMsg(const astr& format, const astr& msg1, const astr& msg2, DWORD error)
+void CWinExc::AddMsg(const std::string& format, const std::string& msg1, const std::string& msg2, DWORD error)
 {
 	CExcBase::AddMsg(format, msg1, msg2);
 	CExcBase::AddMsg(GetErrorMessageA(error));
 }
 
-void CWinExc::AddMsg(const astr& format, const astr& msg1, const astr& msg2, const astr& msg3, DWORD error)
+void CWinExc::AddMsg(const std::string& format, const std::string& msg1, const std::string& msg2, const std::string& msg3, DWORD error)
 {
 	CExcBase::AddMsg(format, msg1, msg2, msg3);
 	CExcBase::AddMsg(GetErrorMessageA(error));
 }
 
-void CWinExc::AddMsg(const astr& format, const astr& msg1, const astr& msg2, const astr& msg3, const astr& msg4, DWORD error)
+void CWinExc::AddMsg(const std::string& format, const std::string& msg1, const std::string& msg2, const std::string& msg3, const std::string& msg4, DWORD error)
 {
 	CExcBase::AddMsg(format, msg1, msg2, msg3, msg4);
 	CExcBase::AddMsg(GetErrorMessageA(error));
 }
 
-void CWinExc::AddMsg(const wstr& msg, DWORD error)
+void CWinExc::AddMsg(const std::wstring& msg, DWORD error)
 {
 	CExcBase::AddMsg(msg);
 	CExcBase::AddMsg(GetErrorMessageA(error));
 }
 
-void CWinExc::AddMsg(const wstr& format, const wstr& msg, DWORD error)
+void CWinExc::AddMsg(const std::wstring& format, const std::wstring& msg, DWORD error)
 {
 	CExcBase::AddMsg(format, msg);
 	CExcBase::AddMsg(GetErrorMessageA(error));
 }
 
-void CWinExc::AddMsg(const wstr& format, const wstr& msg1, const wstr& msg2, DWORD error)
+void CWinExc::AddMsg(const std::wstring& format, const std::wstring& msg1, const std::wstring& msg2, DWORD error)
 {
 	CExcBase::AddMsg(format, msg1, msg2);
 	CExcBase::AddMsg(GetErrorMessageA(error));
 }
 
-void CWinExc::AddMsg(const wstr& format, const wstr& msg1, const wstr& msg2, const wstr& msg3, DWORD error)
+void CWinExc::AddMsg(const std::wstring& format, const std::wstring& msg1, const std::wstring& msg2, const std::wstring& msg3, DWORD error)
 {
 	CExcBase::AddMsg(format, msg1, msg2, msg3);
 	CExcBase::AddMsg(GetErrorMessageA(error));
 }
 
-void CWinExc::AddMsg(const wstr& format, const wstr& msg1, const wstr& msg2, const wstr& msg3, const wstr& msg4, DWORD error)
+void CWinExc::AddMsg(const std::wstring& format, const std::wstring& msg1, const std::wstring& msg2, const std::wstring& msg3, const std::wstring& msg4, DWORD error)
 {
 	CExcBase::AddMsg(format, msg1, msg2, msg3, msg4);
 	CExcBase::AddMsg(GetErrorMessageA(error));

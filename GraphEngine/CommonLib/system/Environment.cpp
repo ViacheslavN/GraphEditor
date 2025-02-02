@@ -5,20 +5,20 @@
 namespace CommonLib {
     namespace system {
 
-        void CEnvironment::SetVariable(const astr &varName, const astr &value)
+        void CEnvironment::SetVariable(const std::string &varName, const std::string &value)
         {
 #ifdef _WIN32
-            astr variable = str_format::StrFormatSafe("{0}={1}", varName, value);
+            std::string variable = str_format::StrFormatSafe("{0}={1}", varName, value);
             _putenv(variable.c_str());
 #else
 	        setenv(varName.c_str(), value.c_str(), 1);
 #endif
         }
 
-        void CEnvironment::RemoveVariable(const astr& varName)
+        void CEnvironment::RemoveVariable(const std::string& varName)
         {
 #ifdef _WIN32
-            astr variable = str_format::StrFormatSafe("{0}=", varName);
+            std::string variable = str_format::StrFormatSafe("{0}=", varName);
             _putenv(variable.c_str());
 #else
             unsetenv(varName.c_str());

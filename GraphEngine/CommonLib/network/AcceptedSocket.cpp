@@ -7,7 +7,7 @@ namespace CommonLib
 	namespace network
 	{
 
-		CAcceptedSocket::CAcceptedSocket(SocketType socket, const astr& connectedAddr) : CBaseSocketIP( socket),
+		CAcceptedSocket::CAcceptedSocket(SocketType socket, const std::string& connectedAddr) : CBaseSocketIP( socket),
 			m_connectedAddr(connectedAddr)
 		{
 
@@ -18,7 +18,7 @@ namespace CommonLib
 
 		}
 
-		const astr CAcceptedSocket::GetClientAddr() const
+		const std::string CAcceptedSocket::GetClientAddr() const
 		{
 			return m_connectedAddr;
 		}

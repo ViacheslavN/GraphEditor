@@ -72,36 +72,36 @@ TStr StrFormatSafeT(const TStr& format, const TContainer& args, TChar startSymbo
 	return result;
 }
 
-wstr str_format::StrFormatSafe(const wstr& str)
+    std::wstring str_format::StrFormatSafe(const std::wstring& str)
 {
 	return str;
 }
 
-wstr str_format::StrFormatSafe(const wstr& format, const wstrvec& args)
+    std::wstring str_format::StrFormatSafe(const std::wstring& format, const std::vector<std::wstring>& args)
 {
 	return StrFormatSafeT(format, args, L'{', L'}');
 }
 
-wstr str_format::StrFormatSafe(const wstr& format, const wstr& arg1)
+    std::wstring str_format::StrFormatSafe(const std::wstring& format, const std::wstring& arg1)
 {
-	wstrvec  args;
+    std::vector<std::wstring>  args;
 	args.push_back(arg1);
 
 	return StrFormatSafe(format, args);
 }
 
-wstr str_format::StrFormatSafe(const wstr& format, const wstr& arg1, const wstr& arg2)
+    std::wstring str_format::StrFormatSafe(const std::wstring& format, const std::wstring& arg1, const std::wstring& arg2)
 {
-	wstrvec  args;
+    std::vector<std::wstring>  args;
 	args.push_back(arg1);
 	args.push_back(arg2);
 
 	return StrFormatSafe(format, args);
 }
 
-wstr str_format::StrFormatSafe(const wstr& format, const wstr& arg1, const wstr& arg2, const wstr& arg3)
+    std::wstring str_format::StrFormatSafe(const std::wstring& format, const std::wstring& arg1, const std::wstring& arg2, const std::wstring& arg3)
 {
-	wstrvec  args;
+    std::vector<std::wstring>  args;
 	args.push_back(arg1);
 	args.push_back(arg2);
 	args.push_back(arg3);
@@ -109,9 +109,9 @@ wstr str_format::StrFormatSafe(const wstr& format, const wstr& arg1, const wstr&
 	return StrFormatSafe(format, args);
 }
 
-wstr str_format::StrFormatSafe(const wstr& format, const wstr& arg1, const wstr& arg2, const wstr& arg3, const wstr& arg4)
+    std::wstring str_format::StrFormatSafe(const std::wstring& format, const std::wstring& arg1, const std::wstring& arg2, const std::wstring& arg3, const std::wstring& arg4)
 {
-	wstrvec args;
+    std::vector<std::wstring> args;
 	args.push_back(arg1);
 	args.push_back(arg2);
 	args.push_back(arg3);
@@ -120,9 +120,9 @@ wstr str_format::StrFormatSafe(const wstr& format, const wstr& arg1, const wstr&
 	return StrFormatSafe(format, args);
 }
 
-wstr str_format::StrFormatSafe(const wstr& format, const wstr& arg1, const wstr& arg2, const wstr& arg3, const wstr& arg4, const wstr& arg5)
+    std::wstring str_format::StrFormatSafe(const std::wstring& format, const std::wstring& arg1, const std::wstring& arg2, const std::wstring& arg3, const std::wstring& arg4, const std::wstring& arg5)
 {
-	wstrvec  args;
+    std::vector<std::wstring>  args;
 	args.push_back(arg1);
 	args.push_back(arg2);
 	args.push_back(arg3);
@@ -132,9 +132,9 @@ wstr str_format::StrFormatSafe(const wstr& format, const wstr& arg1, const wstr&
 	return StrFormatSafe(format, args);
 }
 
-wstr str_format::StrFormatSafe(const wstr& format, const wstr& arg1, const wstr& arg2, const wstr& arg3, const wstr& arg4, const wstr& arg5, const wstr& arg6)
+    std::wstring str_format::StrFormatSafe(const std::wstring& format, const std::wstring& arg1, const std::wstring& arg2, const std::wstring& arg3, const std::wstring& arg4, const std::wstring& arg5, const std::wstring& arg6)
 {
-	wstrvec  args;
+    std::vector<std::wstring>  args;
 	args.push_back(arg1);
 	args.push_back(arg2);
 	args.push_back(arg3);
@@ -147,35 +147,36 @@ wstr str_format::StrFormatSafe(const wstr& format, const wstr& arg1, const wstr&
 //////////////////////////////////////////////////////////////////////////////////////
 
 
-astr str_format::StrFormatSafe(const astr& format, const astrvec& args)
+std::string str_format::StrFormatSafe(const std::string& format, const std::vector<std::string >& args)
 {
 	return StrFormatSafeT(format, args, '{', '}');
 }
 
-astr str_format::StrFormatSafe(const astr& str)
+std::string str_format::StrFormatSafe(const std::string& str)
 {
 	return str;
 }
 
-astr str_format::StrFormatSafe(const astr& format, const astr& arg1)
+std::string str_format::StrFormatSafe(const std::string& format, const std::string& arg1)
 {
-	astrvec  args;
+    std::vector<std::string >  args;
 	args.push_back(arg1);
 
 	return StrFormatSafe(format, args);
 }
-astr str_format::StrFormatSafe(const astr& format, const astr& arg1, const astr& arg2)
+
+std::string str_format::StrFormatSafe(const std::string& format, const std::string& arg1, const std::string& arg2)
 {
-	astrvec  args;
+    std::vector<std::string >  args;
 	args.push_back(arg1);
 	args.push_back(arg2);
 
 	return StrFormatSafe(format, args);
 }
 
-astr str_format::StrFormatSafe(const astr& format, const astr& arg1, const astr& arg2, const astr& arg3)
+    std::string str_format::StrFormatSafe(const std::string& format, const std::string& arg1, const std::string& arg2, const std::string& arg3)
 {
-	astrvec  args;
+    std::vector<std::string >  args;
 	args.push_back(arg1);
 	args.push_back(arg2);
 	args.push_back(arg3);
@@ -183,9 +184,9 @@ astr str_format::StrFormatSafe(const astr& format, const astr& arg1, const astr&
 	return StrFormatSafe(format, args);
 }
 
-astr str_format::StrFormatSafe(const astr& format, const astr& arg1, const astr& arg2, const astr& arg3, const astr& arg4)
+    std::string str_format::StrFormatSafe(const std::string& format, const std::string& arg1, const std::string& arg2, const std::string& arg3, const std::string& arg4)
 {
-	astrvec  args;
+    std::vector<std::string >  args;
 	args.push_back(arg1);
 	args.push_back(arg2);
 	args.push_back(arg3);
@@ -194,9 +195,9 @@ astr str_format::StrFormatSafe(const astr& format, const astr& arg1, const astr&
 	return StrFormatSafe(format, args);
 }
 
-astr str_format::StrFormatSafe(const astr& format, const astr& arg1, const astr& arg2, const astr& arg3, const astr& arg4, const astr& arg5)
+    std::string str_format::StrFormatSafe(const std::string& format, const std::string& arg1, const std::string& arg2, const std::string& arg3, const std::string& arg4, const std::string& arg5)
 {
-	astrvec  args;
+    std::vector<std::string >  args;
 	args.push_back(arg1);
 	args.push_back(arg2);
 	args.push_back(arg3);
@@ -207,9 +208,9 @@ astr str_format::StrFormatSafe(const astr& format, const astr& arg1, const astr&
 }
 
 
-astr str_format::StrFormatSafe(const astr& format, const astr& arg1, const astr& arg2, const astr& arg3, const astr& arg4, const astr& arg5, const astr& arg6)
+    std::string str_format::StrFormatSafe(const std::string& format, const std::string& arg1, const std::string& arg2, const std::string& arg3, const std::string& arg4, const std::string& arg5, const std::string& arg6)
 {
-	astrvec  args;
+    std::vector<std::string >  args;
 	args.push_back(arg1);
 	args.push_back(arg2);
 	args.push_back(arg3);
@@ -221,7 +222,7 @@ astr str_format::StrFormatSafe(const astr& format, const astr& arg1, const astr&
 }
 
 
-astr str_format::StrFormatAnySafe(const std::any& value)
+    std::string str_format::StrFormatAnySafe(const std::any& value)
 {
 
     if (auto x = std::any_cast<bool>(&value)) {

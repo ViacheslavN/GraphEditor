@@ -37,8 +37,8 @@ namespace GraphEngine
             GUnits GetOffset() const;
             const TPenTemplates& GetTemplates() const;
 
-            void Save(CommonLib::ISerializeObjPtr pObj, const astr& name) const;
-            void Load(CommonLib::ISerializeObjPtr pObj, const astr& name);
+            void Save(CommonLib::ISerializeObjPtr pObj, const std::string& name) const;
+            void Load(CommonLib::ISerializeObjPtr pObj, const std::string& name);
 
 
         private:

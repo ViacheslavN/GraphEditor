@@ -10,7 +10,7 @@ namespace CommonLib
 		CExcBase::AddMsg(GetErrorDesc(m_err));
 	}
 
-	CWinSockExc::CWinSockExc(const astr& err_msg, int err) : CExcBase(err_msg), m_err(err)
+	CWinSockExc::CWinSockExc(const std::string& err_msg, int err) : CExcBase(err_msg), m_err(err)
 	{
 		CExcBase::AddMsg(GetErrorDesc(m_err));
 	}
@@ -27,10 +27,10 @@ namespace CommonLib
 		return ptrExc;
 	}
 
-	astr CWinSockExc::GetErrorDesc(int errCode)
+    std::string CWinSockExc::GetErrorDesc(int errCode)
 	{
 		LPWSTR pBuffer = NULL;
-		astr result;
+        std::string result;
 		if (FormatMessageW(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS, NULL, errCode, 0, (LPWSTR)&pBuffer, 0, NULL))
 		{
 			if (pBuffer)

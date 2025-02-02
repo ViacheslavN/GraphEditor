@@ -24,10 +24,10 @@ namespace CommonLib
 				CXMLDoc();
 				~CXMLDoc();
 
-				virtual void Open(const astr& fileName);
+				virtual void Open(const std::string& fileName);
 				virtual void Open(CommonLib::IReadStream* pStream);
 
-				virtual void Save(const astr& fileName);
+				virtual void Save(const std::string& fileName);
 				virtual void Save(CommonLib::IWriteStream* pStream);
 
 				virtual IXMLNodePtr	GetNodes() const;
@@ -49,7 +49,7 @@ namespace CommonLib
 			private:
 
 				char  m_char;
-				astr m_token;
+                std::string m_token;
 				std::vector<char> m_vecText;
 				uint32_t m_nCurrCol;
 				uint32_t m_nCurrRow;

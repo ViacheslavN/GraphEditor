@@ -16,13 +16,13 @@ namespace CommonLib
 
 
 			void Connect(const CSocketAddr& addr);
-			void ConnectToIP(const astr& addr, unsigned short port);
-			void ConnectToHost(const astr& hostName, unsigned short port);
+			void ConnectToIP(const std::string& addr, unsigned short port);
+			void ConnectToHost(const std::string& hostName, unsigned short port);
 
-			const astr& GetEndPoint() const;
+			const std::string& GetEndPoint() const;
 
 		private:
-			astr m_connectdAddr;
+            std::string m_connectdAddr;
 		};
 	}
 }

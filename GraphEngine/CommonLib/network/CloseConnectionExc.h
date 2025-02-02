@@ -12,7 +12,7 @@ namespace CommonLib
 			{}
 
 			template<typename... Types>
-			CCloseConnection(const astr& format, Types&&... args) : CExcBase(format, std::forward<Types>(args)...)
+			CCloseConnection(const std::string& format, Types&&... args) : CExcBase(format, std::forward<Types>(args)...)
 			{
 			}
 

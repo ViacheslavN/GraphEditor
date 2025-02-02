@@ -87,12 +87,12 @@ namespace CommonLib
 			m_sockaddr.sin_addr = addr;
 		}
 
-		astr CSocketAddr::GetAddres() const
+        std::string CSocketAddr::GetAddres() const
 		{
 			return GetAddres(m_sockaddr.sin_addr, m_sockaddr.sin_port);
 		}
 
-		astr CSocketAddr::GetAddres(const in_addr& sin_addr, unsigned short port)
+        std::string CSocketAddr::GetAddres(const in_addr& sin_addr, unsigned short port)
 		{
 			return str_format::AStrFormatSafeT("{0}.{1}.{2}.{3}:{4}", int(sin_addr.s_addr & 0xFF),
 				int((sin_addr.s_addr & 0xFF00) >> 8),

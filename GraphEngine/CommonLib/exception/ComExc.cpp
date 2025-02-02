@@ -14,7 +14,7 @@ namespace CommonLib
 	{
 		if (err.Error() != S_OK)
 		{
-			wstr errDesc;
+            std::wstring errDesc;
 			bool descriptionIsNull = !err.Description();
 			if (!descriptionIsNull)
 				errDesc = err.Description();
@@ -24,11 +24,11 @@ namespace CommonLib
 		}
 	}
 
-	CComExc::CComExc(const astr& err_msg, _com_error& err) : CExcBase(err_msg), m_hr(err.Error())
+	CComExc::CComExc(const std::string& err_msg, _com_error& err) : CExcBase(err_msg), m_hr(err.Error())
 	{
 		if (err.Error() != S_OK)
 		{
-			wstr errDesc;
+            std::wstring errDesc;
 			bool descriptionIsNull = !err.Description();
 			if (!descriptionIsNull)
 				errDesc = err.Description();
@@ -38,7 +38,7 @@ namespace CommonLib
 		}
 	}
 
-	CComExc::CComExc(const astr& err_msg, HRESULT err) : CExcBase(err_msg), m_hr(err)
+	CComExc::CComExc(const std::string& err_msg, HRESULT err) : CExcBase(err_msg), m_hr(err)
 	{
 		CExcBase::AddMsg(GetComErrorDesc(m_hr));
 	}
@@ -54,7 +54,7 @@ namespace CommonLib
 		return ptrExc;
 	}
 
-	astr CComExc::GetComErrorDesc(HRESULT hr)
+    std::string CComExc::GetComErrorDesc(HRESULT hr)
 	{
 		_com_error err(hr);
 		return StringEncoding::str_w2utf8_safe(err.ErrorMessage());

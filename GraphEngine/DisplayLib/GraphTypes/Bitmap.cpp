@@ -382,7 +382,7 @@ namespace GraphEngine
 
         }
 
-		void  CBitmap::Save(CommonLib::ISerializeObjPtr pObj, const astr& name) const
+		void  CBitmap::Save(CommonLib::ISerializeObjPtr pObj, const std::string& name) const
 		{
 			try
 			{
@@ -397,7 +397,7 @@ namespace GraphEngine
 			}
 		}
 
-		void CBitmap::Load(CommonLib::ISerializeObjPtr pObj, const astr& name)
+		void CBitmap::Load(CommonLib::ISerializeObjPtr pObj, const std::string& name)
 		{
 			try
 			{

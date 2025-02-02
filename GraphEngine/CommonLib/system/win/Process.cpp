@@ -32,9 +32,9 @@ namespace CommonLib
                     std::wstring envw;
                     for ( size_t i = 0, size = envs.size(); i < size; ++i )
                     {
-                        astr variable = str_format::StrFormatSafe("{0}={1}", envs[i].GetName(), envs[i].GetValue());
+                        std::string variable = str_format::StrFormatSafe("{0}={1}", envs[i].GetName(), envs[i].GetValue());
 
-                        envw += static_cast<wstr>(StringEncoding::str_utf82w_safe(variable)) + ( wchar_t )0;
+                        envw += static_cast<std::wstring>(StringEncoding::str_utf82w_safe(variable)) + ( wchar_t )0;
                     }
                     envw += ( wchar_t )0;
 

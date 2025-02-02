@@ -38,6 +38,8 @@ namespace GraphEngine {
             virtual std::wstring ReadTextW(int32_t col) const;
             virtual void ReadBlob(int col, byte_t **pBuf, int32_t& size) const;
             virtual CommonLib::IGeoShapePtr ReadShape(int32_t col) const;
+            virtual CommonLib::CGuid  ReadGuid(int32_t col) const;
+
         protected:
             std::string CreateSQLQuery(IFieldsPtr  ptrSourceFields, IQueryFilterPtr ptrFilter, const std::string& sTableName, const std::string& sSpatialIndex, const std::string& sOIDFieldName);
         private:

@@ -6,7 +6,7 @@ namespace GraphEngine
 {
 	namespace Display
 	{
-		Color::Color(const astr& rgb, AlfaChannel a)
+		Color::Color(const std::string& rgb, AlfaChannel a)
 		{
 			int r, g, b;
 			scanf_s(rgb.c_str(), "%2X%2X%2X", &r, &g, &b);
@@ -141,7 +141,7 @@ namespace GraphEngine
             }
         }
 
-		void Color::Save(CommonLib::ISerializeObjPtr pObj, const astr& name) const
+		void Color::Save(CommonLib::ISerializeObjPtr pObj, const std::string& name) const
 		{
 			try
 			{
@@ -154,7 +154,7 @@ namespace GraphEngine
 			} 
 		}
 
-		void Color::Load(CommonLib::ISerializeObjPtr pObj, const astr& name)
+		void Color::Load(CommonLib::ISerializeObjPtr pObj, const std::string& name)
 		{
 			try
 			{

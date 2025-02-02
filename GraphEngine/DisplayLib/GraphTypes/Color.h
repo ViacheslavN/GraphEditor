@@ -24,7 +24,7 @@ namespace GraphEngine
 				Opaque = 0xff
 			};
 
-			Color(const astr& rgb, AlfaChannel a = Opaque);
+			Color(const std::string& rgb, AlfaChannel a = Opaque);
 			Color(ColorType rgb = Black, AlfaChannel a = Opaque);
 			Color(ColorComponent r, ColorComponent g, ColorComponent b, AlfaChannel a = Opaque);
 
@@ -48,8 +48,8 @@ namespace GraphEngine
             void Save(CommonLib::IWriteStream *pStream) const;
             void Load(CommonLib::IReadStream *pStream);
 
-			void Save(CommonLib::ISerializeObjPtr pObj, const astr& name) const;
-			void Load(CommonLib::ISerializeObjPtr pObj, const astr& name);
+			void Save(CommonLib::ISerializeObjPtr pObj, const std::string& name) const;
+			void Load(CommonLib::ISerializeObjPtr pObj, const std::string& name);
 
 		private:
 			static Color RndColor(Color::ColorComponent *rgb);

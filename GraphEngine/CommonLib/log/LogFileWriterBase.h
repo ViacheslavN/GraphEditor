@@ -17,10 +17,10 @@ namespace CommonLib
 		CLogFileWriterBase(size_t maxLogSize, std::shared_ptr<IlogRetention>& pLogRetention);
 		~CLogFileWriterBase();
 
-		virtual void Open(const astr& path);
+		virtual void Open(const std::string& path);
 		virtual void Close();
-		virtual const astr& GetPath() const;
-		virtual const astr& GetName() const;
+		virtual const std::string& GetPath() const;
+		virtual const std::string& GetName() const;
 		virtual size_t GetSize() const;
 
 	protected:
@@ -28,8 +28,8 @@ namespace CommonLib
 		void ChangeCurrentLogFile();
 
 	protected:
-		astr m_logName;
-		astr m_path;
+        std::string m_logName;
+        std::string m_path;
 		size_t m_maxLogSize;
 		size_t m_currSize;
 		std::shared_ptr<IlogRetention> m_logRetention;

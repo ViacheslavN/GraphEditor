@@ -16,12 +16,12 @@ namespace CommonLib
 namespace StringEncoding
 {
 
-	size_t cnv_uc16_to_utf8_length(const wstr& s)
+	size_t cnv_uc16_to_utf8_length(const std::wstring& s)
 	{
 		size_t r = 0;
 
-		wstr::const_iterator iter = s.begin();
-		wstr::const_iterator enditer = s.end();
+        std::wstring::const_iterator iter = s.begin();
+        std::wstring::const_iterator enditer = s.end();
 
 		for (; iter != enditer; ++iter)
 		{
@@ -39,7 +39,7 @@ namespace StringEncoding
 	}
 
 
-	void str_univ_w2utf8(const wstr& unicode, astr& utf8)
+	void str_univ_w2utf8(const std::wstring& unicode, std::string& utf8)
 	{
 
 		if (unicode.length() == 0)
@@ -50,9 +50,9 @@ namespace StringEncoding
 
 		utf8.resize(cnv_uc16_to_utf8_length(unicode));
 
-		astr::iterator dst_p = utf8.begin();
-		wstr::const_iterator src_iter = unicode.begin();
-		wstr::const_iterator src_enditer = unicode.end();
+        std::string::iterator dst_p = utf8.begin();
+        std::wstring::const_iterator src_iter = unicode.begin();
+        std::wstring::const_iterator src_enditer = unicode.end();
 
 		for (; src_iter != src_enditer; ++src_iter)
 		{
@@ -80,7 +80,7 @@ namespace StringEncoding
 	
 	
 
-	size_t cnv_utf8_to_uc16_length(const astr& s)
+	size_t cnv_utf8_to_uc16_length(const std::string& s)
 	{
 		size_t sl = s.length();
 		size_t utf8len = 0;
@@ -121,7 +121,7 @@ namespace StringEncoding
 		return utf8len;
 	}
 
-	void str_univ_utf82w(const astr& utf8Str, wstr& unicode)
+	void str_univ_utf82w(const std::string& utf8Str, std::wstring& unicode)
 	{
 
 		if (utf8Str.length() == 0)
@@ -139,63 +139,63 @@ namespace StringEncoding
 		{
 			if ((uint8_t(utf8Str[i]) & 0x80) == 0x00)
 			{
-				unicode[l] = wstr::value_type(uint16_t(utf8Str[i]) & 0x007f);
+				unicode[l] = std::wstring::value_type(uint16_t(utf8Str[i]) & 0x007f);
 				i++;
 			}
 			else if ((uint8_t(utf8Str[i]) & 0xe0) == 0xc0)
 			{
-				unicode[l] = (wstr::value_type(uint16_t(utf8Str[i]) & 0x001f) << 6) +
-					wstr::value_type(uint16_t(utf8Str[i + 1]) & 0x003f);
+				unicode[l] = (std::wstring::value_type(uint16_t(utf8Str[i]) & 0x001f) << 6) +
+                        std::wstring::value_type(uint16_t(utf8Str[i + 1]) & 0x003f);
 				i += 2;
 			}
 			else
 			{
-				unicode[l] = (wstr::value_type(uint16_t(utf8Str[i]) & 0x000f) << 12) +
-					(wstr::value_type(uint16_t(utf8Str[i + 1]) & 0x003f) << 6) +
-					wstr::value_type(uint16_t(utf8Str[i + 2]) & 0x003f);
+				unicode[l] = (std::wstring::value_type(uint16_t(utf8Str[i]) & 0x000f) << 12) +
+					(std::wstring::value_type(uint16_t(utf8Str[i + 1]) & 0x003f) << 6) +
+                        std::wstring::value_type(uint16_t(utf8Str[i + 2]) & 0x003f);
 				i += 3;
 			}
 		}
 	}
 
-	wstr str_univ_utf82w(const astr& stra)
+    std::wstring str_univ_utf82w(const std::string& stra)
 	{
-		wstr unicode;
+        std::wstring unicode;
 		str_univ_utf82w(stra, unicode);
 		return unicode;
 	}
 
 
-	astr str_univ_w2utf8_safe(const wstr& unicode)
+    std::string str_univ_w2utf8_safe(const std::wstring& unicode)
 	{
 		try
 		{
-			astr utf8;
+            std::string utf8;
 			str_univ_w2utf8(unicode, utf8);
 			return utf8;
 		}
 		catch (...)
 		{
-			return astr("");
+			return std::string("");
 		}
 	}
 
-	wstr str_univ_utf82w_safe(const astr& utf8Str)
+    std::wstring str_univ_utf82w_safe(const std::string& utf8Str)
 	{
 		try
 		{
-			wstr unicode;
+            std::wstring unicode;
 			str_univ_utf82w(utf8Str, unicode);
 			return unicode;
 		}
 		catch (...)
 		{
-			return wstr(L"");
+			return std::wstring(L"");
 		}
 	}
 
 
-	void str_w2utf8(const wstr& unicode, astr& utf8)
+	void str_w2utf8(const std::wstring& unicode, std::string& utf8)
 	{
 		if (unicode.length() == 0)
 		{
@@ -225,16 +225,16 @@ namespace StringEncoding
 #endif
 	}
 
-	astr str_w2utf8(const wstr& unicode)
+    std::string str_w2utf8(const std::wstring& unicode)
 	{
-		astr utf8Str;
+        std::string utf8Str;
 		str_w2utf8(unicode, utf8Str);
 
 		return utf8Str;
 
 	}
 
-	void str_utf82w(const astr& utf8, wstr& unicode)
+	void str_utf82w(const std::string& utf8, std::wstring& unicode)
 	{
 		if (utf8.length() == 0)
 		{
@@ -262,7 +262,7 @@ namespace StringEncoding
 #endif
 	}
 
-	void str_utf82w_safe(const astr& utf8, wstr& unicode)
+	void str_utf82w_safe(const std::string& utf8, std::wstring& unicode)
 	{
 		try
 		{
@@ -275,7 +275,7 @@ namespace StringEncoding
 	}
 
 
-	void str_w2utf8_safe(const wstr& unicode, astr& utf8)
+	void str_w2utf8_safe(const std::wstring& unicode, std::string& utf8)
 	{
 		try 
 		{
@@ -290,23 +290,23 @@ namespace StringEncoding
 
 
 
-	wstr str_utf82w_safe(const astr& utf8)
+    std::wstring str_utf82w_safe(const std::string& utf8)
 	{
-		wstr unicode;
+        std::wstring unicode;
 		str_utf82w_safe(utf8, unicode);
 
 		return unicode;
 	}
 
-	astr str_w2utf8_safe(const wstr& unicode)
+    std::string str_w2utf8_safe(const std::wstring& unicode)
 	{
-		astr utf8;
+        std::string utf8;
 		str_w2utf8_safe(unicode, utf8);
 
 		return utf8;
 	}
 
-	void str_w2a(const wstr& src_str, astr& stra)
+	void str_w2a(const std::wstring& src_str, std::string& stra)
 	{
 		if (src_str.length() == 0)
 		{
@@ -342,15 +342,15 @@ namespace StringEncoding
 	}
 
 
-	astr str_w2a(const wstr& src_str)
+    std::string str_w2a(const std::wstring& src_str)
 	{
-		astr str;
+        std::string str;
 		str_w2a(src_str, str);
 
 		return str;
 	}
 
-	astr str_w2a_safe(const wstr& src_str)
+    std::string str_w2a_safe(const std::wstring& src_str)
 	{
 		try
 		{
@@ -358,20 +358,20 @@ namespace StringEncoding
 		}
 		catch (...)
 		{
-			return astr("");
+			return std::string("");
 		}
 	}
 
-	wstr str_a2w(const astr& src_str)
+    std::wstring str_a2w(const std::string& src_str)
 	{
-		wstr unicode;
+        std::wstring unicode;
 		str_a2w(src_str, unicode);
 
 		return unicode;
 
 	}
 
-	wstr str_a2w_safe(const astr& src_str)
+    std::wstring str_a2w_safe(const std::string& src_str)
 	{
 		try
 		{
@@ -379,11 +379,11 @@ namespace StringEncoding
 		}
 		catch (...)
 		{
-			return wstr(L"");
+			return std::wstring(L"");
 		}
 	}
 
-	void str_a2w(const astr& src_str, wstr& unicode)
+	void str_a2w(const std::string& src_str, std::wstring& unicode)
 	{
 		if (src_str.length() == 0)
 		{
@@ -412,12 +412,12 @@ namespace StringEncoding
 		unicode = &unicode_str_buf[0];
 	}
 
-	astr str_a2utf8(const astr& src_str)
+    std::string str_a2utf8(const std::string& src_str)
 	{
 		return str_w2utf8(str_a2w(src_str));
 	}
 
-	astr str_a2utf8_safe(const astr& src_str)
+    std::string str_a2utf8_safe(const std::string& src_str)
 	{
 		try
 		{

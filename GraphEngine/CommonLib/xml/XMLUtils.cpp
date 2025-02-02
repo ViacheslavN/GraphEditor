@@ -5,7 +5,7 @@ namespace CommonLib
 	{
 		namespace xml
 		{
-			void CXMLUtils::Blob2String(const byte_t *pData, size_t size, astr& result)
+			void CXMLUtils::Blob2String(const byte_t *pData, size_t size, std::string& result)
 			{
 	 
 				if (!pData || size == 0)
@@ -22,7 +22,7 @@ namespace CommonLib
 				}
 			}
 
-			void CXMLUtils::String2Blob(const astr& str, CommonLib::Data::TVecBuffer& blob)
+			void CXMLUtils::String2Blob(const std::string& str, CommonLib::Data::TVecBuffer& blob)
 			{
 				int len = (int)str.length() / 2;
 				if (len == 0)

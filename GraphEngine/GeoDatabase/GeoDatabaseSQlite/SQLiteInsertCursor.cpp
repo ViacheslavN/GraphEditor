@@ -255,6 +255,12 @@ namespace GraphEngine {
             m_ptrStatment->BindBlob(col + 1, ptrShape->Data(), ptrShape->Size(), copy);
         }
 
+        void CSQLiteInsertCursor::BindGuid(int32_t col, const CommonLib::CGuid& guid)
+        {
+            BindText(col, guid.ToAstr(false), true);
+        }
+
+
         void CSQLiteInsertCursor::SetOID(int32_t col, int64_t  setOid)
         {
             if(m_nOIDFieldIndex == col)

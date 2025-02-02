@@ -21,17 +21,17 @@ namespace CommonLib
 			m_guid = gid;
 		}
 
-		CGuid::CGuid(const astr &gid)
+		CGuid::CGuid(const std::string &gid)
 		{
 			FromAstr(gid);
 		}
 
-		CGuid::CGuid(const wstr &gid)
+		CGuid::CGuid(const std::wstring &gid)
 		{
 			FromWstr(gid);
 		}
 
-		void CGuid::FromAstr(const astr& gid)
+		void CGuid::FromAstr(const std::string& gid)
 		{
 			const char* pStr = gid.c_str();
 			if (pStr != nullptr)
@@ -45,7 +45,7 @@ namespace CommonLib
 				throw CWinExc("Failed to convert astr: {0} to guid", gid, res);
 		}
 
-		void CGuid::FromWstr(const wstr& gid)
+		void CGuid::FromWstr(const std::wstring& gid)
 		{
 			const wchar_t* pStr = gid.c_str();
 			if (pStr != nullptr)
@@ -59,10 +59,10 @@ namespace CommonLib
 				throw CWinExc(L"Failed to convert astr: {0} to guid", gid, res);
 		}
 
-		astr CGuid::ToAstr(bool withbrackets) const
+        std::string CGuid::ToAstr(bool withbrackets) const
 		{
 			RPC_CSTR rpcs;
-			astr result;
+            std::string result;
 			if (UuidToStringA(&m_guid, &rpcs) != RPC_S_OK)
 				return result;
 			
@@ -75,10 +75,10 @@ namespace CommonLib
 			return result;
 		}
 
-		wstr CGuid::ToWstr(bool withbrackets) const
+        std::wstring CGuid::ToWstr(bool withbrackets) const
 		{
 			RPC_WSTR rpcs;
-			wstr result;
+            std::wstring result;
 			if (UuidToStringW(&m_guid, &rpcs) != RPC_S_OK)
 				return result;
 		

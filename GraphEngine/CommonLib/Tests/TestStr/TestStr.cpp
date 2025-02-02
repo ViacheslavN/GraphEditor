@@ -27,15 +27,15 @@ int main()
 	uint64_t UINT64 = uint64_t(-1);
 
 
-	wstr wtr64 = CommonLib::str_utils::WStrUint64(UINT64);
+    std::wstring wtr64 = CommonLib::str_utils::WStrUint64(UINT64);
 
 	wchar_t pFormat[] = L"{TestU8} {0}, Test int {1}, test double {2}, test float {3}, test int64 {4}, test uint64 {5} {}";
 
-	astr stra = CommonLib::str_format::AStrFormatSafeT("{TestU8} TestU8 {0}, Test int {1}, test double {2}, test float {3}, test int64 {4}, test uint64 {5} {}{{{{{",
+    std::string stra = CommonLib::str_format::AStrFormatSafeT("{TestU8} TestU8 {0}, Test int {1}, test double {2}, test float {3}, test int64 {4}, test uint64 {5} {}{{{{{",
 		uint8, uint32, dbl, flt, int64, UINT64);
-	
-	wstr strw = CommonLib::str_format::WStrFormatSafeT(pFormat, uint8, uint32, dbl, flt, int64, UINT64);
-	wstr strw1 = CommonLib::str_format::WStrFormatSafeT(L"{", uint8, uint32, dbl, flt, int64, UINT64);
+
+    std::wstring strw = CommonLib::str_format::WStrFormatSafeT(pFormat, uint8, uint32, dbl, flt, int64, UINT64);
+    std::wstring strw1 = CommonLib::str_format::WStrFormatSafeT(L"{", uint8, uint32, dbl, flt, int64, UINT64);
 	return 0;
 
 

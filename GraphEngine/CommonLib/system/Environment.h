@@ -5,8 +5,8 @@ namespace CommonLib {
 
         class CEnvironment {
         public:
-            static void SetVariable(const astr &varName, const astr &value);
-            static void RemoveVariable(const astr& varName);
+            static void SetVariable(const std::string &varName, const std::string &value);
+            static void RemoveVariable(const std::string& varName);
         };
 
         typedef std::pair<std::string, std::string> TEnvValue;

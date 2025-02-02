@@ -226,6 +226,13 @@ namespace GraphEngine {
             m_ptrStatment->ReadBlob(col + 1, pBuf, size);
         }
 
+
+        CommonLib::CGuid CSQLiteSelectCursor::ReadGuid(int32_t col) const
+        {
+            std::string text = ReadText(col);
+            return CommonLib::CGuid(text);
+        }
+
         CommonLib::IGeoShapePtr CSQLiteSelectCursor::ReadShape(int32_t col) const
         {
 

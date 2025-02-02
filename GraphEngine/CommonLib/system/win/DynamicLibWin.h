@@ -10,30 +10,30 @@ namespace win
 	class CDynamicLibraryWin
 	{
 	public:
-		CDynamicLibraryWin(const astr& path);
-		CDynamicLibraryWin(const wstr& path);
+		CDynamicLibraryWin(const std::string& path);
+		CDynamicLibraryWin(const std::wstring& path);
 		~CDynamicLibraryWin();
 
 		CDynamicLibraryWin(const CDynamicLibraryWin&) = delete;
 		CDynamicLibraryWin& operator=(const CDynamicLibraryWin&) = delete;
 
-		FARPROC  GetProcAddr(const astr& proc_name);
-		FARPROC  GetProcAddr(const wstr& proc_name);
+		FARPROC  GetProcAddr(const std::string& proc_name);
+		FARPROC  GetProcAddr(const std::wstring& proc_name);
 
 		template <typename TFunkPtrType>
-		void GetProcAddrEx(const astr& procName, TFunkPtrType& result)
+		void GetProcAddrEx(const std::string& procName, TFunkPtrType& result)
 		{
 			result = (TFunkPtrType)GetProcAddr(procName);
 		}
 
 		template <typename TFunkPtrType>
-		void GetProcAddrEx(const wstr& procName, TFunkPtrType& result)
+		void GetProcAddrEx(const std::wstring& procName, TFunkPtrType& result)
 		{
 			result = (TFunkPtrType)GetProcAddr(procName);
 		}
 		
 	private:
-		void LoadLib(const wstr& path);
+		void LoadLib(const std::wstring& path);
  
 
 	private:

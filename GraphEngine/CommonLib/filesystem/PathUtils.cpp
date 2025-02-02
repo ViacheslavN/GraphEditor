@@ -20,36 +20,36 @@ namespace CommonLib
     }
 
 
-    astr CPathUtils::GetPathDelim(const astr& path)
+    std::string CPathUtils::GetPathDelim(const std::string& path)
     {
 #ifdef _WIN32
-        if (astr::npos != path.find_last_of( '\\' ) || astr::npos == path.find_last_of('/'))
+        if (std::string::npos != path.find_last_of( '\\' ) || std::string::npos == path.find_last_of('/'))
             return "\\";
 #endif
         return "/";
     }
 
-    wstr CPathUtils::GetPathDelim(const wstr& path)
+    std::wstring CPathUtils::GetPathDelim(const std::wstring& path)
     {
 #ifdef _WIN32
-        if (wstr::npos != path.find_last_of(L'\\') || wstr::npos == path.find_last_of(L'/'))
+        if (std::wstring::npos != path.find_last_of(L'\\') || std::wstring::npos == path.find_last_of(L'/'))
             return L"\\";
 #endif
         return L"/";
     }
 
-    size_t CPathUtils::FindLastPathDelim( const wstr& path )
+    size_t CPathUtils::FindLastPathDelim( const std::wstring& path )
     {
-        return  FindLastPathDelimT<wstr, wchar_t>(path, L'/', L'\\');
+        return  FindLastPathDelimT<std::wstring, wchar_t>(path, L'/', L'\\');
     }
 
-    size_t CPathUtils::FindLastPathDelim(const astr& path)
+    size_t CPathUtils::FindLastPathDelim(const std::string& path)
     {
-        return  FindLastPathDelimT<astr, char>(path, '/', '\\');
+        return  FindLastPathDelimT<std::string, char>(path, '/', '\\');
     }
 
 
-	astr CPathUtils::FindFileName(const astr& path)
+    std::string CPathUtils::FindFileName(const std::string& path)
 	{
 		if (!path.empty())
 		{
@@ -64,9 +64,9 @@ namespace CommonLib
 		return path;
 	}
 
-	astr CPathUtils::FindOnlyFileName(const astr& path)
+    std::string CPathUtils::FindOnlyFileName(const std::string& path)
 	{
-		astr sFileName = FindFileName(path);
+        std::string sFileName = FindFileName(path);
 		if (!sFileName.empty())
 		{
 			const size_t nLen = sFileName.length();
@@ -79,11 +79,11 @@ namespace CommonLib
 		return sFileName;
 	}
 
-	astr CPathUtils::FindFileExtension(const astr& path)
+    std::string CPathUtils::FindFileExtension(const std::string& path)
 	{
-		astr sFileName = FindFileName(path);
+        std::string sFileName = FindFileName(path);
 		if (sFileName.empty())
-			return astr();
+			return std::string();
 
 		const size_t nLen =  sFileName.length();
 		for (size_t i = nLen - 1; i >= 0; --i)
@@ -92,10 +92,10 @@ namespace CommonLib
 				return StringUtils::Right(sFileName, i + 1);
 		}
 
-		return astr();
+		return std::string();
 	}
 
-	astr CPathUtils::FindFilePath(const astr& fullPath)
+    std::string CPathUtils::FindFilePath(const std::string& fullPath)
 	{
 		if (!fullPath.empty())
 		{
@@ -110,7 +110,7 @@ namespace CommonLib
 		return fullPath;
 	}
 
-	wstr CPathUtils::FindFileName(const wstr& path)
+    std::wstring CPathUtils::FindFileName(const std::wstring& path)
 	{
 		if (!path.empty())
 		{
@@ -125,9 +125,9 @@ namespace CommonLib
 		return path;
 	}
 
-	wstr CPathUtils::FindOnlyFileName(const wstr& path)
+    std::wstring CPathUtils::FindOnlyFileName(const std::wstring& path)
 	{
-		wstr sFileName = FindFileName(path);
+        std::wstring sFileName = FindFileName(path);
 		if (!sFileName.empty())
 		{
 			const size_t nLen = sFileName.length();
@@ -140,11 +140,11 @@ namespace CommonLib
 		return sFileName;
 	}
 
-	wstr CPathUtils::FindFileExtension(const wstr& path)
+    std::wstring CPathUtils::FindFileExtension(const std::wstring& path)
 	{
-		wstr sFileName = FindFileName(path);
+        std::wstring sFileName = FindFileName(path);
 		if (sFileName.empty())
-			return wstr();
+			return std::wstring();
 
 		if (sFileName.empty())
 			return sFileName;
@@ -156,10 +156,10 @@ namespace CommonLib
 				return StringUtils::Right(sFileName, i + 1);
 		}
 
-		return wstr();
+		return std::wstring();
 	}
 
-	wstr CPathUtils::FindFilePath(const wstr& fullPath)
+    std::wstring CPathUtils::FindFilePath(const std::wstring& fullPath)
 	{
 		if (!fullPath.empty())
 		{
@@ -188,13 +188,13 @@ namespace CommonLib
         return dir  + CPathUtils::GetPathDelim(dir) + localPath;
     }
 
-    astr CPathUtils::FileMergePath(const astr& dir, const astr& path)
+    std::string CPathUtils::FileMergePath(const std::string& dir, const std::string& path)
     {
-        return FileMergePathT<astr>(dir, path);
+        return FileMergePathT<std::string>(dir, path);
     }
 
-    wstr CPathUtils::FileMergePath(const wstr& dir, const wstr& path)
+    std::wstring CPathUtils::FileMergePath(const std::wstring& dir, const std::wstring& path)
     {
-        return FileMergePathT<wstr>(dir, path);
+        return FileMergePathT<std::wstring>(dir, path);
     }
 }

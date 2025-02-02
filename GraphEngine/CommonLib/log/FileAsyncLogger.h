@@ -25,19 +25,19 @@ namespace CommonLib
 		CFileAsyncLogger& operator=(const CFileAsyncLogger&) = delete;
 
 
-		static std::shared_ptr<CommonLib::IlogWriter> Create(const astr& path, size_t maxLogSize, std::shared_ptr<IlogRetention>& pLogRetention);
+		static std::shared_ptr<CommonLib::IlogWriter> Create(const std::string& path, size_t maxLogSize, std::shared_ptr<IlogRetention>& pLogRetention);
 
 
-		virtual void Write(const astr& msg);
+		virtual void Write(const std::string& msg);
 
 
 		void ChangeCurrentLogFile();
-		void WriteMessage(const astr& msg);
+		void WriteMessage(const std::string& msg);
 		void ThreadFunc();
 
 	private:
 
 		std::shared_ptr<synch::CThread> m_thread;
-		synch::TSyncQueue<astr> m_queue;
+		synch::TSyncQueue<std::string> m_queue;
 	};
 }

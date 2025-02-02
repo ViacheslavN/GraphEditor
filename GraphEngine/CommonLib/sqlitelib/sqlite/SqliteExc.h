@@ -18,10 +18,10 @@ namespace CommonLib
 				CSqlitExc(sqlite3* db, int sqliteErr);
 				CSqlitExc(sqlite3_stmt* stmt, int sqliteErr);
 				CSqlitExc(int sqliteErr);
-				CSqlitExc(const astr& err_msg, int sqliteErr);
+				CSqlitExc(const std::string& err_msg, int sqliteErr);
 
 				template<typename... Types>
-				CSqlitExc(int sqliteErr, const astr& format, Types... args) : CExcBase(format, args...), m_sqliteErr(sqliteErr)
+				CSqlitExc(int sqliteErr, const std::string& format, Types... args) : CExcBase(format, args...), m_sqliteErr(sqliteErr)
 				{
 					CExcBase::AddMsg(GetErrorDesc(sqliteErr));
 				}
@@ -29,7 +29,7 @@ namespace CommonLib
 				~CSqlitExc() noexcept;
 				virtual std::shared_ptr<CExcBase> Clone() const;
 
-				static astr GetErrorDesc(int sqliteErr);
+				static std::string GetErrorDesc(int sqliteErr);
 
 			private:
 				void AddMessages(sqlite3* db, int sqliteErr);

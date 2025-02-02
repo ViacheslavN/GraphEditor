@@ -105,7 +105,7 @@ namespace GraphEngine
             return m_vecTemplates;
         }
 
-        void CPen::Save(CommonLib::ISerializeObjPtr pObj, const astr& name) const
+        void CPen::Save(CommonLib::ISerializeObjPtr pObj, const std::string& name) const
         {
             try
             {
@@ -143,7 +143,7 @@ namespace GraphEngine
 
 
         }
-        void CPen::Load(CommonLib::ISerializeObjPtr pObj, const astr& name)
+        void CPen::Load(CommonLib::ISerializeObjPtr pObj, const std::string& name)
         {
             try
             {

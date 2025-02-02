@@ -7,6 +7,6 @@ namespace CommonLib
 	class CConsoleLogWriter : public IlogWriter
 	{
 	public:
-		virtual void Write(const astr& msg);
+		virtual void Write(const std::string& msg);
 	};
 }
