@@ -7,6 +7,7 @@
 #include "../CommonLib/exception/exc_base.h"
 #include "../CommonLib/guid/guid.h"
 #include "../CommonLib/data/blob.h"
+#include "../CommonLib/Variant/Variant.h"
 
 namespace GraphEngine
 {
@@ -48,7 +49,8 @@ namespace GraphEngine
             dtString,
             dtBlob,
             dtDate,
-            dtGuid
+            dtGuid,
+            dtGeometry
         };
 
         enum eSpatialRel {
@@ -174,15 +176,14 @@ namespace GraphEngine
             virtual bool ColumnIsNull(int32_t col) const = 0;
             virtual eDataTypes GetColumnType(int32_t col) const = 0;
 
-            virtual std::any GetValue(int32_t col) const = 0;
-            virtual CommonLib::Data::CBlobPtr GetBlobValue(int32_t col) const = 0;
-            virtual CommonLib::IGeoShapePtr GetShapeValue(int32_t col) const = 0;
+            virtual CommonLib::CVariantPtr GetValue(int32_t col) const = 0;
 
+            virtual void SetNull(int32_t col) = 0;
             virtual void SetInt8(int32_t col, int8_t val) = 0;
             virtual void SetUInt8(int32_t col, uint8_t val) = 0;
             virtual void SetInt16(int32_t col, int16_t val) = 0;
             virtual void SetUInt16(int32_t col, uint16_t val) = 0;
-            virtual void BSetInt32(int32_t col, int32_t val) = 0;
+            virtual void SetInt32(int32_t col, int32_t val) = 0;
             virtual void SetUInt32(int32_t col, uint32_t val) = 0;
             virtual void SetInt64(int32_t col, int64_t val) = 0;
             virtual void SetUInt64(int32_t col, uint64_t val) = 0;
@@ -280,6 +281,7 @@ namespace GraphEngine
             virtual void						 AddField(IFieldPtr field) = 0;
             virtual void						 DeleteField(const std::string& fieldName) = 0;
             virtual IFieldsPtr					 GetFields() const  = 0;
+            virtual IFieldSetPtr                 GetFieldsSet() const  = 0;
             virtual void						 SetFields(IFieldsPtr ptrFields)  = 0;
             virtual ISelectCursorPtr			 Search(IQueryFilterPtr filter) = 0;
             virtual ISelectCursorPtr			 Select(const std::string& sqlSelectQuery) = 0;
@@ -427,7 +429,6 @@ namespace GraphEngine
             virtual void ReadBlob(int col, byte_t **pBuf, int32_t& size) const = 0;
             virtual CommonLib::IGeoShapePtr ReadShape(int32_t col) const = 0;
             virtual CommonLib::CGuid  ReadGuid(int32_t col) const = 0;
-
             virtual IRowPtr CreateRow() const = 0;
             virtual void FillRow(IRowPtr ptrRow) const = 0;
 
@@ -482,15 +483,15 @@ namespace GraphEngine
             virtual void DeleteRow(int64_t oid) = 0;
         };
 
-        class IJoin
+        class IJoin : public CommonLib::ISerialize
         {
         public:
             IJoin(){}
             virtual ~IJoin(){}
             virtual IFieldSetPtr    GetFieldSet() const = 0;
             virtual void    SetFieldSet(IFieldSetPtr  ptrFields) = 0;
-            virtual ITablePtr GetTable() const = 0;
-            virtual void SetTable(ITablePtr ptrTable)  = 0;
+            virtual const std::string& GetTableName() const = 0;
+            virtual void SetTableName(const std::string& tableName)  = 0;
             virtual eJoinType GetJoinType() const = 0;
             virtual void SetJoinType(eJoinType type) = 0;
             virtual eJoinOperation GetJoinOperation() const = 0;

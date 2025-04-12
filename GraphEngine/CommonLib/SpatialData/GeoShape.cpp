@@ -923,7 +923,14 @@ namespace CommonLib
     {
         pt = GetPoints()[nIdx];
         return true;
+    }
 
+    IGeoShapePtr CGeoShape::Clone()
+    {
+        IGeoShapePtr ptrShape = std::make_shared<CGeoShape>();
+        ptrShape->Import(Data(), Size());
+
+        return  ptrShape;
     }
 
 }

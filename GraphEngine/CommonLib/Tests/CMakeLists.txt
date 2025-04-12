@@ -6,3 +6,4 @@ ELSE ()
 ENDIF()
 
 add_subdirectory(TestStr)
+add_subdirectory(TestVariant)

@@ -212,6 +212,8 @@ namespace CommonLib
         virtual void Import(const byte* extBuf, uint32_t extBufSize) = 0;
         virtual uint32_t  Size() const = 0;
         virtual  const byte_t * Data() const  = 0;
+        virtual  IGeoShapePtr Clone() = 0;
+
 
         static bool IsTypeSimple(eShapeType shapeType);
         static void GetTypeParams(eShapeType shapeType, eShapeType* genType = 0, bool* has_z = 0, bool* has_m = 0, bool* has_curve = 0, bool* has_id = 0);

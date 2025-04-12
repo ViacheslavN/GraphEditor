@@ -61,7 +61,7 @@ namespace GraphEngine
                                                   const std::string& viewName,  const std::string& spatialIndexName, const std::string& shapeFieldName, const std::string& sOIDFieldName, IFieldsPtr ptrFields,
                                                   CommonLib::eShapeType shapeType, Geometry::IEnvelopePtr  ptrExtent, Geometry::ISpatialReferencePtr ptrSpatialReference)
         {
-            return std::make_shared<CShapefileSpatialTable>(m_sPath, name, viewName, ptrFields);
+            return std::make_shared<CShapefileSpatialTable>(m_sPath, name, viewName, shapeFieldName,ptrFields);
         }
 
         IDatasetPtr CShapfileWorkspace::LoadDataset(const std::string& sName)

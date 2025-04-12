@@ -1,6 +1,8 @@
 #include "ShapefileRowCursor.h"
 #include "../../CommonLib/SpatialData/GeoShape.h"
 #include "ShapefileUtils.h"
+#include "../Row.h"
+#include "../Utils.h"
 
 namespace GraphEngine
 {
@@ -183,11 +185,31 @@ namespace GraphEngine
 
         CommonLib::IGeoShapePtr CShapefileRowCursor::ReadShape(int32_t col) const
         {
-
             return m_ptrGeoShapeCache;
         }
 
+        CommonLib::CGuid  CShapefileRowCursor::ReadGuid(int32_t col) const
+        {
+            try
+            {
+                std::string textGuid = ReadText(col);
+                return  CommonLib::CGuid(textGuid);
+            }
+            catch (std::exception& exc)
+            {
+                CommonLib::CExcBase::RegenExcT("CShapefileRowCursor failed to read guid, cod: {0}", col , exc);
+                throw;
+            }
+        }
 
+        IRowPtr CShapefileRowCursor::CreateRow() const
+        {
+            return std::make_shared<CRow>(m_ptrFields);
+        }
+        void CShapefileRowCursor::FillRow(IRowPtr ptrRow) const
+        {
+            CGeoDatabaseUtils::FillRow((ISelectCursor*)this, ptrRow);
+        }
 
     }
     }

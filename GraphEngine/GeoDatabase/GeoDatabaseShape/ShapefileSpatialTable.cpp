@@ -17,10 +17,11 @@ namespace GraphEngine
             LoadShapeFile(false);
         }
 
-        CShapefileSpatialTable::CShapefileSpatialTable(const std::string& sPath,const std::string& sName,  const std::string& sViewName, IFieldsPtr ptrFields):
+        CShapefileSpatialTable::CShapefileSpatialTable(const std::string& sPath,const std::string& sName,  const std::string& sViewName, const std::string& shapeFieldName, IFieldsPtr ptrFields):
                 TBase(dtSpatialTable, sName,  sViewName),
                 m_sPath(sPath)
         {
+            m_sShapeFieldName = shapeFieldName;
             m_sPath=  CShapefileUtils::NormalizePath(m_sPath);
             CreateShapeFile(ptrFields);
         }

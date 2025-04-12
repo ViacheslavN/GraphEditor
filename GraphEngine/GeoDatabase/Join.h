@@ -15,8 +15,8 @@ namespace GraphEngine
 
             virtual IFieldSetPtr    GetFieldSet() const;
             virtual void    SetFieldSet(IFieldSetPtr  ptrFields);
-            virtual ITablePtr GetTable() const;
-            virtual void SetTable(ITablePtr ptrTable);
+            virtual const std::string& GetTableName() const;
+            virtual void SetTableName(const std::string& tableName);
             virtual eJoinType GetJoinType() const;
             virtual void SetJoinType(eJoinType type);
             virtual eJoinOperation  GetJoinOperation() const;
@@ -28,9 +28,12 @@ namespace GraphEngine
             virtual const std::string& GetSecondField() const;
             virtual void SetSecondField(const std::string& field);
 
+            virtual void Save(CommonLib::ISerializeObjPtr pObj) const ;
+            virtual void Load(CommonLib::ISerializeObjPtr pObj);
+
         private:
             IFieldSetPtr m_ptrFieldSet;
-            ITablePtr m_ptrTable;
+            std::string  m_tableName;
             eJoinType m_joinType;
             eJoinOperation m_joinOp;
             std::string m_tablePrefix;

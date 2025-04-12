@@ -29,6 +29,10 @@ set(COMMON_SOURCE_FILES
         GeoDatabaseShape/ShapefileRowCursor.h
         GeoDatabaseShape/ShapefileRowCursor.cpp
         BaseRow.h
+        Row.h
+        Row.cpp
+        DatasetLoader.h
+        DatasetLoader.cpp
         GeoDatabaseShape/ShapeTree.h
         GeoDatabaseShape/ShapeTree.cpp
         CursorBase.h
@@ -59,6 +63,8 @@ set(COMMON_SOURCE_FILES
         Jont.cpp
         GeoDatabaseSQlite/SQLiteSpatialTable.h
         GeoDatabaseSQlite/SQLiteSpatialTable.cpp
+        Utils.h
+        utils.cpp
 
 )
 
@@ -70,8 +76,6 @@ IF (WIN32)
 
 ELSE()
     set(SOURCE_FILES ${COMMON_SOURCE_FILES}
-            Row.h
-            Row.cpp
 
 
     )

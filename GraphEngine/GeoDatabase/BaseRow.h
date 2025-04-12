@@ -28,14 +28,6 @@ namespace GraphEngine
                 return m_ptrFields->GetField(col)->GetName();
             }
 
-            virtual bool ColumnIsNull(int32_t col) const
-            {
-                if(col >= ColumnCount() )
-                    throw CommonLib::CExcBase("Row: failed to get is column null,  out of range: index: {0}", col);
-
-                return m_ptrFields->GetField(col)->GetIsNullable();
-            }
-
             virtual eDataTypes GetColumnType(int32_t col) const
             {
                 if(col >= ColumnCount() )

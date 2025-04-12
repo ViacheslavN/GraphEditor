@@ -198,12 +198,12 @@ namespace GraphEngine
                         for(int i = 0, sz = ptrJointFieldsSet->GetCount(); i < sz; ++i)
                         {
                             if(jointPrefix.empty())
-                                gueryFields.push_back(ptrFieldsSet->Get(i));
+                                gueryFields.push_back(ptrJointFieldsSet->Get(i));
                             else
-                                gueryFields.push_back(jointPrefix + "." + ptrFieldsSet->Get(i));
+                                gueryFields.push_back(jointPrefix + "." + ptrJointFieldsSet->Get(i));
                         }
                     }
-                    else
+                    /*else
                     {
                         IFieldsPtr jointFields = ptrJoin->GetTable()->GetFields();
                         for(int  i = 0, sz = jointFields->GetFieldCount(); i < sz; ++i)
@@ -213,7 +213,7 @@ namespace GraphEngine
                             else
                                 gueryFields.push_back(jointPrefix + "." + jointFields->GetField(i)->GetName());
                         }
-                    }
+                    }*/
                 }
 
                 if(gueryFields.empty())
@@ -259,7 +259,7 @@ namespace GraphEngine
                             break;
                     }
 
-                    sSQl += ptrJoin->GetTable()->GetDatasetName();
+                    sSQl += ptrJoin->GetTableName();
                     if(!sValPrefix.empty())
                         sSQl +=  " AS " + sValPrefix;
 

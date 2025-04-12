@@ -124,8 +124,9 @@ namespace GraphEngine {
                 for(int32_t i = 0; i <  colums; ++i)
                 {
                     IFieldPtr pField = std::make_shared<CField>();
-                    eDataTypes dtType = SQLiteType2FieldType(ptrStatment->GetColumnType(i + 1));
                     std::string sName = ptrStatment->ColumnName(i);
+                    eDataTypes dtType = SQLiteType2FieldType(ptrStatment->GetColumnType(i));
+
                     uint32_t size = ptrStatment->GetColumnBytes(i);
 
                     pField->SetName(sName);

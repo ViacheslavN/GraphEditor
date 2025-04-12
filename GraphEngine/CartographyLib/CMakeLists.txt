@@ -3,12 +3,16 @@ project(CartographyLib)
 
 
 set(SOURCE_FILES
-
+    layers/LayerBase.h
+        layers/FeatureLayer.cpp
+        "layers/FeatureLayer.h"
+        renders/RenderersLoader.h
+        renders/RenderersLoader.cpp
 )
 
 
 
-add_library(DisplayLib ${SOURCE_FILES})
+add_library(CartographyLib ${SOURCE_FILES})
 
 
 target_link_libraries(${PROJECT_NAME} PUBLIC CommonLib)
@@ -16,4 +20,4 @@ target_link_libraries(${PROJECT_NAME} PUBLIC CommonLib)
 
 target_include_directories(${PROJECT_NAME} PRIVATE ./)
 
-add_subdirectory(Tests)
+#add_subdirectory(Tests)

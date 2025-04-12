@@ -2,6 +2,7 @@
 
 #include "DataSetBase.h"
 #include "Fields.h"
+#include "FieldSet.h"
 
 namespace GraphEngine {
     namespace GeoDatabase {
@@ -38,6 +39,17 @@ namespace GraphEngine {
             {
                 return m_pFields;
             }
+
+            virtual IFieldSetPtr  GetFieldsSet() const
+            {
+                IFieldSetPtr ptrFieldSet = std::make_shared<CFieldSet>();
+
+                for(int32_t i = 0; i < m_pFields->GetFieldCount(); ++i)
+                    ptrFieldSet->Add(m_pFields->GetField(i)->GetName());
+
+                return  ptrFieldSet;
+            }
+
 
             virtual void SetFields(IFieldsPtr ptrFields)
             {

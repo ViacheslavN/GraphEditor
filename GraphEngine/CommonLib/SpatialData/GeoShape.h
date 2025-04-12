@@ -106,7 +106,7 @@ namespace CommonLib
         virtual void Create(eShapeType shapeType);
         virtual void Create(eShapeType shapeType, uint32_t npoints, uint32_t nparts = 1, uint32_t ncurves = 0, uint32_t mpatchSpecificSize = 0);
         void Create(byte_t* pBuf, uint32_t nSize, eShapeType shapeType, uint32_t npoints, uint32_t nparts = 1, uint32_t ncurves = 0);
-
+        virtual  IGeoShapePtr Clone();
 
 
         virtual void Import(const byte_t* extBuf, uint32_t extBufSize);

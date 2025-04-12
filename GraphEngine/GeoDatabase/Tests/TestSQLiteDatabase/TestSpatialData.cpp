@@ -89,6 +89,10 @@ void TestSpatialData()
                         ptrShape = ptrCursor->ReadShape(i);
                         ptrInsertCursor->BindShape(i, ptrShape, true);
                         break;
+                    case GraphEngine::GeoDatabase::dtGeometry:
+                        ptrShape = ptrCursor->ReadShape(i);
+                        ptrInsertCursor->BindShape(i, ptrShape, true);
+                        break;
                 }
             }
 
@@ -111,16 +115,24 @@ void TestSpatialData()
         GraphEngine::GeoDatabase::ISelectCursorPtr ptrSqliteSeachCursor = ptrSqliteTable->Search(ptrFilter);
 
 
-
+        GraphEngine::GeoDatabase::IRowPtr ptrRow;
         while (ptrSqliteSeachCursor->Next()) {
 
+            if(ptrRow.get() == nullptr)
+                ptrRow = ptrSqliteSeachCursor->CreateRow();
 
+            ptrSqliteSeachCursor->FillRow(ptrRow);
             for (int i = 0; i < ptrSqliteSeachCursor->ColumnCount(); ++i) {
                 GraphEngine::GeoDatabase::eDataTypes fieldType = ptrSqliteSeachCursor->GetColumnType(i);
                 int intVal;
                 double dVal;
                 std::string text;
                 CommonLib::IGeoShapePtr ptrShape;
+
+                int intVal1;
+                double dVal1;
+                std::string text1;
+                CommonLib::IGeoShapePtr ptrShape1;
                 switch (fieldType) {
                     case GraphEngine::GeoDatabase::dtInteger8:
                     case GraphEngine::GeoDatabase::dtInteger16:
@@ -131,18 +143,26 @@ void TestSpatialData()
                     case GraphEngine::GeoDatabase::dtUInteger32:
                     case GraphEngine::GeoDatabase::dtUInteger64: {
                         intVal = ptrSqliteSeachCursor->ReadInt32(i);
+                        intVal1 = ptrRow->GetValue(i)->Get<int64_t>();
                     }
                         break;
                     case GraphEngine::GeoDatabase::dtDouble:
                     case GraphEngine::GeoDatabase::dtFloat:
                         dVal = ptrSqliteSeachCursor->ReadDouble(i);
+                        dVal1 = ptrRow->GetValue(i)->Get<double>();
                         break;
 
                     case GraphEngine::GeoDatabase::dtString:
                         text = ptrSqliteSeachCursor->ReadText(i);
+                        text1 = ptrRow->GetValue(i)->Get<std::string>();
                         break;
                     case GraphEngine::GeoDatabase::dtBlob:
                         ptrShape = ptrSqliteSeachCursor->ReadShape(i);
+                        ptrShape1 = ptrRow->GetValue(i)->Get<CommonLib::IGeoShapePtr>();
+                        break;
+                    case GraphEngine::GeoDatabase::dtGeometry:
+                        ptrShape = ptrSqliteSeachCursor->ReadShape(i);
+                        ptrShape1 = ptrRow->GetValue(i)->Get<CommonLib::IGeoShapePtr>();
                         break;
                 }
             }

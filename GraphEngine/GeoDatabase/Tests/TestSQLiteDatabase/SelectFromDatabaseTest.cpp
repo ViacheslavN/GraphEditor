@@ -10,11 +10,18 @@
 
 void SelectData( GraphEngine::GeoDatabase::ISelectCursorPtr ptrCursor)
 {
+
+
     while (ptrCursor->Next())
     {
+
         int colNumber = ptrCursor->ColumnCount();
         std::string text;
         int64_t  val;
+        std::string text1;
+        int64_t  val1;
+        GraphEngine::GeoDatabase::IRowPtr ptrRow = ptrCursor->CreateRow();
+        ptrCursor->FillRow(ptrRow);
         for(int col = 0;  col < colNumber; ++col)
         {
             GraphEngine::GeoDatabase::eDataTypes type =  ptrCursor->GetColumnType(col);
@@ -23,9 +30,11 @@ void SelectData( GraphEngine::GeoDatabase::ISelectCursorPtr ptrCursor)
             {
                 case GraphEngine::GeoDatabase::eDataTypes::dtInteger64:
                     val = ptrCursor->ReadInt64(col);
+                    val1 = ptrRow->GetValue(col)->Get<int64_t >();
                     break;
                 case GraphEngine::GeoDatabase::eDataTypes::dtString:
                     text = ptrCursor->ReadText(col);
+                    text1 = ptrRow->GetValue(col)->Get< std::string >();
                     break;
             }
         }
@@ -43,14 +52,17 @@ void SelectFromDatabase() {
 
         {
             GraphEngine::GeoDatabase::IJoinPtr ptrJoin = std::make_shared<GraphEngine::GeoDatabase::CJoin>();
-            ptrJoin->SetTable(ptrTable2);
+
+            ptrJoin->SetTableName(ptrTable2->GetDatasetName());
+            ptrJoin->SetFieldSet(ptrTable2-> GetFieldsSet());
             ptrJoin->SetTablePrefix("varTable2");
             ptrJoin->SetFirstField("OID_2");
             ptrJoin->SetSecondField("OID");
 
 
             GraphEngine::GeoDatabase::IJoinPtr ptrJoin2 = std::make_shared<GraphEngine::GeoDatabase::CJoin>();
-            ptrJoin2->SetTable(ptrTable3);
+            ptrJoin2->SetTableName(ptrTable3->GetDatasetName());
+            ptrJoin2->SetFieldSet(ptrTable3-> GetFieldsSet());
             ptrJoin2->SetTablePrefix("varTable3");
             ptrJoin2->SetFirstField("OID_3");
             ptrJoin2->SetSecondField("OID");

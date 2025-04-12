@@ -51,7 +51,7 @@ namespace GraphEngine {
             {
                 try
                 {
-                    return std::make_shared<CSQLiteSelectCursor>(GetDatasetName(), GetOIDFieldName(), GetSpatialIndexName(), GetFields(), ptrFilter, GetSpatialReference() , m_ptrDatabase);
+                    return std::make_shared<CSQLiteSelectCursor>(GetDatasetName(), GetOIDFieldName(), GetSpatialIndexName(),  GetShapeFieldName() ,GetFields(), ptrFilter, GetSpatialReference() , m_ptrDatabase);
                 }
                 catch (std::exception& exc)
                 {

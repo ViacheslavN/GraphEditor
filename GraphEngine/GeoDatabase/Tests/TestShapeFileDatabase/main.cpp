@@ -80,7 +80,7 @@ int main()
                    case GraphEngine::GeoDatabase::dtString:
                        text = ptrCursor->ReadText(i);
                        break;
-                   case GraphEngine::GeoDatabase::dtGeometry:
+                   case GraphEngine::GeoDatabase::dtBlob:
                        ptrShape = ptrCursor->ReadShape(i);
                        break;
                }

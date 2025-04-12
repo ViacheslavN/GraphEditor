@@ -37,7 +37,10 @@ namespace GraphEngine
             virtual std::wstring ReadTextW(int32_t col) const;
             virtual void ReadBlob(int col, byte_t **pBuf, int32_t& size) const;
             virtual CommonLib::IGeoShapePtr ReadShape(int32_t col) const ;
+            virtual CommonLib::CGuid  ReadGuid(int32_t col) const;
 
+            virtual IRowPtr CreateRow() const;
+            virtual void FillRow(IRowPtr ptrRow) const;
 
         protected:
 

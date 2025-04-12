@@ -298,6 +298,11 @@ set(COMMON_SOURCE_FILES
 		utils/delegate.h
 		utils/PropertySet.h
 		utils/PropertySet.cpp
+		variant/Variant.h
+		variant/Variant.cpp
+		variant/VariantTypeList.h
+		variant/VariantVisitor.h
+		variant/VariantVisitor.cpp
 )
 
 set(STATIC_LIBS
