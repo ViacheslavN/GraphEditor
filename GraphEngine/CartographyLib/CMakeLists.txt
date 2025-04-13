@@ -5,9 +5,11 @@ project(CartographyLib)
 set(SOURCE_FILES
     layers/LayerBase.h
         layers/FeatureLayer.cpp
-        "layers/FeatureLayer.h"
+        layers/FeatureLayer.h
         renders/RenderersLoader.h
         renders/RenderersLoader.cpp
+        layers/Layers.h
+        layers/Layers.cpp
 )
 
 

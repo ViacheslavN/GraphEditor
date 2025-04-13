@@ -90,14 +90,14 @@ namespace GraphEngine {
 
                     ptrFilter->SetPrecision(precision);
 
-                    std::vector<IFeatureRenderer *> vecRenderes;
+                    std::vector<IFeatureRendererPtr> vecRenderes;
                     for (size_t i = 0, sz = m_vecRenderers.size(); i < sz; ++i) {
-                        IFeatureRenderer *pRender = m_vecRenderers[i].get();
-                        if (!pRender->CanRender(m_ptrTable, ptrDisplay))
+                        IFeatureRendererPtr ptrRender = m_vecRenderers[i];
+                        if (!ptrRender->CanRender(m_ptrTable, ptrDisplay))
                             continue;
 
-                        pRender->PrepareFilter(m_ptrTable, ptrFilter);
-                        vecRenderes.push_back(pRender);
+                        ptrRender->PrepareFilter(m_ptrTable, ptrFilter);
+                        vecRenderes.push_back(ptrRender);
                     }
 
                     if (vecRenderes.empty()) {
@@ -123,12 +123,8 @@ namespace GraphEngine {
                             ptrDisplay->Lock();
                         }
 
-                        GeoDatabase::IFeature *pFeature = (GeoDatabase::IFeature *) pRow.get();
-                        if (!pFeature)
-                            continue;
-
                         for (size_t i = 0, sz = vecRenderes.size(); i < sz; ++i) {
-                            vecRenderes[i]->DrawFeature(ptrDisplay, pFeature);
+                            vecRenderes[i]->DrawFeature(ptrDisplay, pRow);
                         }
 
                         nRow++;
@@ -208,6 +204,26 @@ namespace GraphEngine {
             m_sDisplayField = field;
         }
 
+        const std::string&  CFeatureLayer::GetOIDField() const
+        {
+            return m_sOIDField;
+        }
+
+        void CFeatureLayer::SetOIDField(const  std::string& sField)
+        {
+            m_sOIDField = sField;
+        }
+
+        const std::string&  CFeatureLayer::GetShapeField() const
+        {
+            return m_sShapeField;
+        }
+
+        void  CFeatureLayer::SetShapeField(const  std::string& sField)
+        {
+            m_sShapeField = sField;
+        }
+
         GeoDatabase::ITablePtr CFeatureLayer::GetLayerTable() const
         {
             return m_ptrTable;
@@ -229,7 +245,7 @@ namespace GraphEngine {
         }
         int	  CFeatureLayer::GetRendererCount() const
         {
-            return m_vecRenderers.size();
+            return (int)m_vecRenderers.size();
         }
 
         IFeatureRendererPtr	CFeatureLayer::GetRenderer(int index) const
@@ -289,7 +305,7 @@ namespace GraphEngine {
                 ptrFilter->SetOutputSpatialReference(ptrOutSpatRef);
                 ptrFilter->SetSpatialRel(GeoDatabase::srlIntersects);
                 ptrFilter->SetBB(extent);
-                ptrFilter->GetFieldSet()->Add(m_ptrTable->GetShapeFieldName());
+                //ptrFilter->GetFieldSet()->Add(m_ptrTable->GetShapeFieldName());
                 ptrFilter->GetFieldSet()->Add(m_ptrTable->GetOIDFieldName());
                 /*	double precision = pDisplay->GetTransformation()->DeviceToMapMeasure(0.25);
 
@@ -310,16 +326,22 @@ namespace GraphEngine {
 
 
 
-                GeoDatabase::ICursorPtr pCursor = m_ptrTable->Search(ptrFilter);
+                GeoDatabase::ISelectCursorPtr pCursor = m_ptrTable->Search(ptrFilter);
                 if(!pCursor.get())
                 {
                     return;
                 }
 
-                GeoDatabase::IRowPtr pRow;
+                int nOidIndex = -1;
                 while(pCursor->Next())
                 {
-                    ptrSelection->AddRow(this, pRow->GetOID());
+                    if(nOidIndex == 1) {
+                        pCursor->FindFieldByName(m_sOIDField);
+                        if(nOidIndex == -1)
+                            throw CommonLib::CExcBase("FeatureLayer: Failed to select, OID field not found");
+                    }
+
+                    ptrSelection->AddRow(GetLayerId(), pCursor->ReadInt64(nOidIndex));
                 }
             }
             catch (std::exception& exc)
@@ -376,7 +398,7 @@ namespace GraphEngine {
                 CommonLib::ISerializeObjPtr ptrRenderens = pObj->GetChild("Renderers");
                 if(ptrRenderens.get())
                 {
-                    for (size_t i = 0, sz = ptrRenderens->GetChildCnt(); i < sz; ++i)
+                    for (int32_t i = 0, sz = ptrRenderens->GetChildCnt(); i < sz; ++i)
                     {
                         CommonLib::ISerializeObjPtr ptrRenderNode = ptrRenderens->GetChild(i);
                         IFeatureRendererPtr pRenderer =  CLoaderRenderers::LoadRenderer(ptrRenderNode);

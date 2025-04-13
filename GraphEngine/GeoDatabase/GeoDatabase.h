@@ -401,6 +401,7 @@ namespace GraphEngine
             virtual bool ColumnIsNull(int32_t col) const = 0;
             virtual eDataTypes GetColumnType(int32_t col) const = 0;
             virtual int32_t GetColumnBytes(int32_t col) const = 0;
+            virtual int32_t FindFieldByName(const std::string& name) const = 0;
 
             virtual bool Next() = 0;
         };

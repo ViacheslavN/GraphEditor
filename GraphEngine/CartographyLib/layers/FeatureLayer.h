@@ -26,6 +26,10 @@ namespace GraphEngine {
             virtual void                             SetJoins(const std::vector<GeoDatabase::IJoinPtr>& joins);
             virtual const std::string&               GetDisplayField() const;
             virtual void                             SetDisplayField(const std::string& sField);
+            virtual const std::string&               GetOIDField() const;
+            virtual void                             SetOIDField(const  std::string& sField);
+            virtual const std::string&               GetShapeField() const;
+            virtual void                             SetShapeField(const  std::string& sField);
             virtual GeoDatabase::ITablePtr           GetLayerTable() const;
             virtual void                             SetLayerTable(GeoDatabase::ITablePtr ptrTable);
             virtual bool                             GetSelectable() const;
@@ -42,10 +46,10 @@ namespace GraphEngine {
             void DrawEx(eDrawPhase phase, Display::IDisplayPtr ptrDisplay, Display::ITrackCancelPtr trackCancel);
 
             virtual void Save(CommonLib::ISerializeObjPtr pObj) const;
-            virtual void Load(CommonLib::ISerializeObjPtr pObj)
+            virtual void Load(CommonLib::ISerializeObjPtr pObj);
 
 
-            virtual void  SelectFeatures(const GisBoundingBox& extent, ISelection *pSelection,  GisGeometry::ISpatialReference *pSpRef);
+            virtual void  SelectFeatures(const CommonLib::bbox& extent, ISelectionPtr ptrSelection,  Geometry::ISpatialReferencePtr ptrSpRef);
         private:
             void CalcBB(Display::IDisplayPtr ptrDisplay, CommonLib::bbox& bb);
         private:
@@ -53,6 +57,8 @@ namespace GraphEngine {
 
             std::string  m_sDisplayField;
             std::string   m_sQuery;
+            std::string  m_sOIDField;
+            std::string  m_sShapeField;
             TFeatureRenderer m_vecRenderers;
             bool m_bSelectable;
             bool m_hasReferenceScale;

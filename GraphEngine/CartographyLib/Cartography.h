@@ -106,7 +106,8 @@ namespace GraphEngine {
         public:
             ILayer(){}
             virtual ~ILayer(){}
-            virtual	uint32_t				  GetLayerID() const = 0;
+            virtual	uint32_t				  GetLayerTypeID() const = 0;
+            virtual CommonLib::CGuid          GetLayerId() const = 0;
             virtual Geometry::IEnvelopePtr    GetExtent() const = 0;
             virtual void                      Draw(eDrawPhase phase, Display::IDisplayPtr display, Display::ITrackCancelPtr ptrTrackCancel) = 0;
             virtual double                    GetMaximumScale() const = 0;
@@ -132,12 +133,16 @@ namespace GraphEngine {
             virtual ~IFeatureLayer(){};
             virtual const std::string&               GetDisplayField() const = 0;
             virtual void                             SetDisplayField(const  std::string& sField) = 0;
+            virtual const std::string&               GetOIDField() const = 0;
+            virtual void                             SetOIDField(const  std::string& sField) = 0;
+            virtual const std::string&               GetShapeField() const = 0;
+            virtual void                             SetShapeField(const  std::string& sField) = 0;
             virtual GeoDatabase::ITablePtr           GetLayerTable() const = 0;
             virtual void                             SetLayerTable(GeoDatabase::ITablePtr ptrTable) = 0;
             virtual bool                             GetSelectable() const = 0;
             virtual void                             SetSelectable(bool flag) = 0;
             virtual const std::string&  	         GetDefinitionQuery() const= 0;
-            virtual void							 SetDefinitionQuery(const std::string&& )= 0;
+            virtual void							 SetDefinitionQuery(const std::string& )= 0;
             virtual int								 GetRendererCount() const = 0;
             virtual IFeatureRendererPtr				 GetRenderer(int index) const = 0;
             virtual void							 AddRenderer(IFeatureRendererPtr ptrRenderer) = 0;
@@ -156,6 +161,7 @@ namespace GraphEngine {
             virtual ~ILayers(){}
             virtual int       GetLayerCount() const = 0;
             virtual ILayerPtr GetLayer(int index) const = 0;
+            virtual ILayerPtr GetLayerById(CommonLib::CGuid layerId) const = 0;
             virtual void      AddLayer(ILayerPtr ptrLayer) = 0;
             virtual void      InsertLayer(ILayerPtr ptrLayer, int index) = 0;
             virtual void      RemoveLayer(ILayerPtr ptrLayer) = 0;
@@ -164,15 +170,15 @@ namespace GraphEngine {
 
         };
 
-        struct ISelection
+        class ISelection
         {
-
-            virtual void                                 AddRow(ILayerPtr ptrLayer, int rowID) = 0;
+        public:
+            virtual void                                 AddRow(CommonLib::CGuid layerId, int64_t rowID) = 0;
             virtual void                                 Clear() = 0;
-            virtual void                                 ClearForLayer(ILayerPtr layer) = 0;
-            virtual void                                 RemoveFeature(ILayerPtr layer, int featureID) = 0;
+            virtual void                                 ClearForLayer(CommonLib::CGuid nLayerId) = 0;
+            virtual void                                 RemoveFeature(CommonLib::CGuid nLayerId, int64_t rowID) = 0;
             virtual const std::vector<ILayerPtr>& 		 GetLayers() const = 0;
-            virtual const std::vector<int64_t>& 	     GetFeatures(ILayerPtr layer) const = 0;
+            virtual const std::vector<int64_t>& 	     GetFeatures(CommonLib::CGuid layerId) const = 0;
             virtual void                                 Draw(Display::IDisplayPtr ptrDisplay, Display::ITrackCancelPtr trackCancel) = 0;
             virtual Display::ISymbolPtr		             GetSymbol() const = 0;
             virtual void                                 SetSymbol(Display::ISymbolPtr ptrSymbol) = 0;
@@ -269,7 +275,7 @@ namespace GraphEngine {
             virtual void                   SetShapeField(const std::string&  field) = 0;
             virtual ISymbolSelectorPtr	   GetSymbolSelector() const = 0;
             virtual void				   SetSymbolSelector(ISymbolSelectorPtr ptrAssigner) = 0;
-            virtual void                   DrawFeature(Display::IDisplayPtr ptrDisplay, GeoDatabase::IRowPtr ptrRow, Display::ISymbolPtr ptrCustomSymbol) = 0;
+            virtual void                   DrawFeature(Display::IDisplayPtr ptrDisplay, GeoDatabase::IRowPtr ptrRow, Display::ISymbolPtr ptrCustomSymbol = Display::ISymbolPtr()) = 0;
         };
 
 

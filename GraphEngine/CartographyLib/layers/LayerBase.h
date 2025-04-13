@@ -17,7 +17,7 @@ namespace GraphEngine {
             ~CLayerBase()
             {}
 
-            virtual	uint32_t	GetLayerID() const {return m_nLayerSymbolID;}
+            virtual	uint32_t	GetLayerTypeID() const {return m_nLayerSymbolID;}
 
             virtual void   Draw(eDrawPhase phase, Display::IDisplayPtr ptrDisplay, Display::ITrackCancelPtr ptrTrackCancel)
             {
@@ -92,7 +92,8 @@ namespace GraphEngine {
 
             virtual void Save(CommonLib::ISerializeObjPtr pObj) const
             {
-                pObj->AddPropertyInt32U("LayerID", GetLayerID());
+                pObj->AddPropertyInt32U("LayerTypeID", GetLayerTypeID());
+                pObj->AddPropertyString("LayerID", m_guid.ToAstr(true));
                 pObj->AddPropertyString("Name", m_sName);
                 pObj->AddPropertyBool("Visible", m_bVisible);
                 pObj->AddPropertyDouble("MinScale", m_dMinimumScale);
@@ -102,8 +103,10 @@ namespace GraphEngine {
 
             virtual void Load(CommonLib::ISerializeObjPtr pObj)
             {
-                m_sName = pObj->GetPropertyString("name", m_sName);
-                m_bVisible = pObj->GetPropertyBool("visible", m_bVisible);
+                m_nLayerSymbolID =  pObj->GetPropertyInt32U("LayerTypeID");
+                m_guid.FromAstr(pObj->GetPropertyString("LayerID"));
+                m_sName = pObj->GetPropertyString("Name", m_sName);
+                m_bVisible = pObj->GetPropertyBool("Visible", m_bVisible);
                 m_dMinimumScale = pObj->GetPropertyDouble("MinScale", m_dMinimumScale);
                 m_dMaximumScale = pObj->GetPropertyDouble("MaxScale", m_dMaximumScale);
                 m_nCheckCancelStep = pObj->GetPropertyInt32U("CheckCancelStep", m_nCheckCancelStep);
@@ -119,6 +122,7 @@ namespace GraphEngine {
             double                            m_dMaximumScale;
             uint32_t						  m_nLayerSymbolID;
             uint32_t						  m_nCheckCancelStep;
+            CommonLib::CGuid                  m_guid;
         };
     }
 }
