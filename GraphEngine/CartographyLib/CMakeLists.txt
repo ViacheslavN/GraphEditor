@@ -12,6 +12,8 @@ set(SOURCE_FILES
         layers/Layers.cpp
         Map.h
         Map.cpp
+        layers/LoaderLayers.h
+        layers/LoaderLayers.cpp
 )
 
 

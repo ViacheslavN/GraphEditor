@@ -1,5 +1,5 @@
 #pragma once
-#include "DisplayLib.h"
+#include "../DisplayLib.h"
 #include "../GraphTypes/Rect.h"
 
 namespace GraphEngine

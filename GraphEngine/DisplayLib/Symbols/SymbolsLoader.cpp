@@ -13,7 +13,7 @@ namespace GraphEngine {
             {
                 uint32_t nSymbolID = pObj->GetPropertyInt32U("SymbolID", UndefineSymbolID);
                 if(nSymbolID == UndefineSymbolID)
-                    return ISymbolPtr();
+                    throw CommonLib::CExcBase("Undefined symbol, type id: {0}", (uint32_t )nSymbolID);
 
                 ISymbolPtr pSymbol;
                 switch(nSymbolID)

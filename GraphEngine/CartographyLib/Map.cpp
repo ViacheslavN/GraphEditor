@@ -4,7 +4,7 @@
 #include "../DisplayLib/Transformation/DisplayTransformation2D.h"
 #include "../DisplayLib/Symbols/SymbolsLoader.h"
 #include "../GisGeometry/SpatialReferenceProj4/SpatialReferenceProj4.h"
-
+#include "layers/LoaderLayers.h"
 
 namespace GraphEngine {
     namespace Cartography {
@@ -221,7 +221,7 @@ namespace GraphEngine {
 
                     if(m_ptrGraphicsContainer.get())
                     {
-                        for (size_t i = 0, sz = m_ptrGraphicsContainer->GetEnumCount(); i < sz; ++i)
+                        for (uint32_t i = 0, sz = m_ptrGraphicsContainer->GetEnumCount(); i < sz; ++i)
                         {
                             IElementPtr pElement = m_ptrGraphicsContainer->GetElement(i);
                             pElement->Activate(ptrDisplay);
@@ -525,13 +525,13 @@ namespace GraphEngine {
                 CommonLib::ISerializeObjPtr pBgSymbolNode = pMapNode->GetChild("BackgroundSymbol");
                 if(pBgSymbolNode.get())
                 {
-                    m_ptrBackgroundSymbol = Display::CSymbolsLoader::LoadSymbol(pBgSymbolNode);
+                    m_ptrBackgroundSymbol = std::static_pointer_cast<Display::IFillSymbol>(Display::CSymbolsLoader::LoadSymbol(pBgSymbolNode));
                 }
 
                 CommonLib::ISerializeObjPtr pFgSymbolNode = pMapNode->GetChild("ForegroundSymbol");
                 if(pFgSymbolNode.get())
                 {
-                    m_ptrForegroundSymbol = Display::CSymbolsLoader::LoadSymbol(pFgSymbolNode);
+                    m_ptrForegroundSymbol = std::static_pointer_cast<Display::IFillSymbol>(Display::CSymbolsLoader::LoadSymbol(pFgSymbolNode));
                 }
 
                 CommonLib::ISerializeObjPtr pLayersNode = pMapNode->GetChild("Layers");
@@ -540,7 +540,7 @@ namespace GraphEngine {
                     for (int i = 0, nCount = pLayersNode->GetChildCnt();  i< nCount; ++i)
                     {
                         CommonLib::ISerializeObjPtr pLayerNode = pLayersNode->GetChild(i);
-                        ILayerPtr pLayer  =  CLoaderLayers::LoadLayer(pLayerNode.get());
+                        ILayerPtr pLayer  =  CLayersLoader::LoadLayer(pLayerNode);
                         m_ptrLayers->AddLayer(pLayer);
                     }
                 }

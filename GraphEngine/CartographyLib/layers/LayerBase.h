@@ -19,6 +19,11 @@ namespace GraphEngine {
 
             virtual	uint32_t	GetLayerTypeID() const {return m_nLayerSymbolID;}
 
+            virtual CommonLib::CGuid          GetLayerId() const
+            {
+                return  m_guid;
+            }
+
             virtual void   Draw(eDrawPhase phase, Display::IDisplayPtr ptrDisplay, Display::ITrackCancelPtr ptrTrackCancel)
             {
                 if(!ptrDisplay)

@@ -9,7 +9,7 @@ namespace GraphEngine
     namespace Display
     {
 
-        class CDisplayTransformation2D : IDisplayTransformation
+        class CDisplayTransformation2D : public IDisplayTransformation
         {
         public:
 
