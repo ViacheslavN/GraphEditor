@@ -28,7 +28,7 @@ namespace GraphEngine {
         typedef  std::shared_ptr<class IEnvelope> IEnvelopePtr;
 
 
-        class ISpatialReference : CommonLib::ISerialize
+        class ISpatialReference : public CommonLib::ISerialize
         {
         public:
             ISpatialReference(){};

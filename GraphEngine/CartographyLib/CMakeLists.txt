@@ -10,6 +10,8 @@ set(SOURCE_FILES
         renders/RenderersLoader.cpp
         layers/Layers.h
         layers/Layers.cpp
+        Map.h
+        Map.cpp
 )
 
 
