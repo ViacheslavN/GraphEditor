@@ -10,8 +10,8 @@ namespace CommonLib
 			CGuid();
 			CGuid(const CGuid &gid);
 			CGuid(const uuid_t gid);
-			CGuid(const astr &gid);
-			CGuid(const wstr &gid);
+			CGuid(const std::string &gid);
+			CGuid(const std::wstring &gid);
 
 			CGuid& operator =(const CGuid& gid);
 			~CGuid();
@@ -31,6 +31,7 @@ namespace CommonLib
 
 			static CGuid CreateNew();
 			static CGuid CreateNull();
+            static CGuid CreateFromAstr(const std::string& gid);
 		private:
 			uuid_t	m_guid;
 		};

@@ -1,4 +1,4 @@
-// TestGraphicsView.cpp : implementation of the CTestGraphicsView class
+// TestGraphicsView.cpp : implementation of the CMapView class
 //
 /////////////////////////////////////////////////////////////////////////////
 
@@ -14,13 +14,13 @@ public:
 	virtual bool Continue(){return true;}
 };*/
 
-BOOL CTestGraphicsView::PreTranslateMessage(MSG* pMsg)
+BOOL CMapView::PreTranslateMessage(MSG* pMsg)
 {
 	pMsg;
 	return FALSE;
 }
 
-LRESULT CTestGraphicsView::OnPaint(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/)
+LRESULT CMapView::OnPaint(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/)
 {
 	CPaintDC dc(m_hWnd);
 
@@ -37,6 +37,8 @@ LRESULT CTestGraphicsView::OnPaint(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lP
     m_ptrGraphics->Erase(GraphEngine::Display::Color(0, 255, 0, 255));
 
 
+
+
     ::BitBlt(dc.m_hDC, 0, 0, m_ptrGraphics->GetWidth(), m_ptrGraphics->GetHeight(), m_ptrGraphics->GetDC(), 0, 0, SRCCOPY);
 	//GisEngine::Display::CGraphicsWinGDI graphics(dc);
 	//graphics.Copy(m_pGraphicsOpenGLWin.get(), OutPoint, OutRect);*/
@@ -44,7 +46,7 @@ LRESULT CTestGraphicsView::OnPaint(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lP
 	return 0;
 
 }
-LRESULT  CTestGraphicsView::OnSize(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL& bHandled)
+LRESULT  CMapView::OnSize(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL& bHandled)
 {
 	DWORD fwSizeType = wParam;     
 	int nWidth = LOWORD(lParam);   
@@ -58,7 +60,7 @@ LRESULT  CTestGraphicsView::OnSize(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL
 	return 0;
 }
 
-LRESULT  CTestGraphicsView::OnWireRender(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/)
+LRESULT  CMapView::OnWireRender(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/)
 {
 
 
@@ -100,7 +102,7 @@ LRESULT  CTestGraphicsView::OnWireRender(WORD /*wNotifyCode*/, WORD /*wID*/, HWN
 	return 0;
 }
 
-LRESULT CTestGraphicsView::OnTriangleRender(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/)
+LRESULT CMapView::OnTriangleRender(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/)
 {
 
 

@@ -3,11 +3,17 @@
 namespace GraphEngine {
     namespace GeoDatabase {
 
-    ITablePtr CDatasetLoader::LoadTable(CommonLib::ISerializeObjPtr pObj)
+    ITablePtr CDatasetLoader::LoadTable(CommonLib::ISerializeObjPtr ptrObj)
     {
         try
         {
-            throw std::exception("Not implement");
+            CommonLib::CGuid wksId = ptrObj->GetPropertyGuid("WorkspaceId");
+            eDatasetType datasetType = (eDatasetType)ptrObj->GetPropertyInt32("DatasetType");
+            std::string sDatasetName =  ptrObj->GetPropertyString("DatasetName");
+            std::string sDatasetViewName = ptrObj->GetPropertyString("DatasetViewName");
+
+
+
         }
         catch (std::exception& exc)
         {

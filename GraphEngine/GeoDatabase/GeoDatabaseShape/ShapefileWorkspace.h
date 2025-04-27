@@ -10,12 +10,12 @@ namespace GraphEngine
         {
 
             CShapfileWorkspace();
-            CShapfileWorkspace(CommonLib::IPropertySetPtr ptrProperties, int32_t nID);
-            CShapfileWorkspace(const char *pszName, const char *pszPath, int32_t nID);
+            CShapfileWorkspace(CommonLib::IPropertySetPtr ptrProperties, CommonLib::CGuid nID);
+            CShapfileWorkspace(const char *pszName, const char *pszPath, CommonLib::CGuid nID);
         public:
             typedef  IWorkspaceBase<IDatabaseWorkspace> TBase;
 
-            static IWorkspacePtr Open(const char *pszName, const char *pszPath, int32_t nID = -1);
+            static IWorkspacePtr Open(const char *pszName, const char *pszPath, CommonLib::CGuid nID );
             static IWorkspacePtr Open(CommonLib::ISerializeObjPtr pObj);
 
             virtual ITablePtr CreateTable(const std::string& name,  const std::string& viewName, IFieldsPtr ptrFields);

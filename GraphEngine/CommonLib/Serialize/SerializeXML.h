@@ -33,6 +33,7 @@ namespace CommonLib {
         virtual void AddPropertyBool(const std::string& name, bool value);
         virtual void AddPropertyString(const std::string& name, const std::string& valueUtf8);
         virtual void AddPropertyWString(const std::string& name, const std::wstring& value);
+        virtual void AddPropertyGuid(const std::string& name, const CommonLib::CGuid& value);
 
 
         virtual bool IsPropertyExists(const std::string& name) const;
@@ -50,6 +51,7 @@ namespace CommonLib {
         virtual bool  GetPropertyBool(const std::string& name, bool defValue) const;
         virtual std::string GetPropertyString(const std::string& name, const  std::string& defValueUtf8) const;
         virtual std::wstring GetPropertyWString(const std::string& name, const  std::wstring& defValue) const;
+        virtual CommonLib::CGuid GetPropertyGuid(const std::string& name, const CommonLib::CGuid& value) const;
 
 
         virtual int16_t	GetPropertyInt16(const std::string& name) const;
@@ -61,6 +63,8 @@ namespace CommonLib {
         virtual double  GetPropertyDouble(const std::string& name) const;
         virtual bool  GetPropertyBool(const std::string& name) const;
         virtual std::string GetPropertyString(const std::string& name) const;
+        virtual CommonLib::CGuid GetPropertyGuid(const std::string& name) const;
+
     private:
         xml::IXMLNodePtr m_ptrNode;
     };

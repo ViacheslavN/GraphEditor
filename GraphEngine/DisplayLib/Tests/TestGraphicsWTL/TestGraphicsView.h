@@ -1,11 +1,11 @@
-// TestGraphicsView.h : interface of the CTestGraphicsView class
+// TestGraphicsView.h : interface of the CMapView class
 //
 /////////////////////////////////////////////////////////////////////////////
 
 #pragma once
 
 #include <vector>
-class CTestGraphicsView : public CWindowImpl<CTestGraphicsView>
+class CMapView : public CWindowImpl<CMapView>
 {
 public:
 	DECLARE_WND_CLASS(NULL)

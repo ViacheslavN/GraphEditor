@@ -120,6 +120,10 @@ namespace GraphEngine {
                 return m_spatialIndexName;
             }
 
+
+
+
+
         protected:
             IFieldsPtr         m_pFields;
             std::string m_sOIDFieldName;

@@ -23,6 +23,7 @@ add_subdirectory(DisplayLib)
 add_subdirectory(GisGeometry)
 add_subdirectory(GeoDatabase)
 add_subdirectory(CartographyLib)
+add_subdirectory(UILib)
 add_subdirectory(ThirdParty)
 
 

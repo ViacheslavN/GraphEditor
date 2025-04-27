@@ -2,6 +2,7 @@
 
 #include "GeoDatabase.h"
 #include "../CommonLib/utils/PropertySet.h"
+#include "../CommonLib/guid/guid.h"
 
 namespace GraphEngine {
     namespace GeoDatabase {
@@ -11,7 +12,7 @@ namespace GraphEngine {
         {
         public:
 
-            IWorkspaceBase(eWorkspaceType type = wtUndefined, int32_t nID = -1) : m_WorkspaceType(type), m_nID(nID)
+            IWorkspaceBase(eWorkspaceType type, CommonLib::CGuid id) : m_WorkspaceType(type), m_id(id)
             {
 
             }
@@ -90,10 +91,11 @@ namespace GraphEngine {
                 return std::static_pointer_cast<ITable>( GetDataset(sName));
             }
 
-            virtual int32_t GetID() const
+            virtual CommonLib::CGuid GetWorkspaceId() const
             {
-                return m_nID;
+                return m_id;
             }
+
 
             virtual void Save(CommonLib::ISerializeObjPtr pObj) const
             {
@@ -101,7 +103,7 @@ namespace GraphEngine {
                 {
                     pObj->AddPropertyInt32U("WksType", (uint32_t)GetWorkspaceType());
                     pObj->AddPropertyString("Name", m_sName);
-                    pObj->AddPropertyInt32U("ID", m_nID);
+                    pObj->AddPropertyGuid("ID", m_id);
                 }
                 catch (std::exception& exc)
                 {
@@ -115,14 +117,13 @@ namespace GraphEngine {
                 {
                     m_WorkspaceType = (eWorkspaceType)pObj->GetPropertyInt32U("WksType");
                     m_sName = pObj->GetPropertyString("Name", m_sName);
-                    m_nID = pObj->GetPropertyInt32U("ID", m_nID);
+                    m_id = pObj->GetPropertyGuid("ID", m_id);
                 }
                 catch (std::exception& exc)
                 {
                     CommonLib::CExcBase::RegenExc("Failed to load Workspace", exc);
                 }
             }
-
 
         protected:
 
@@ -157,7 +158,7 @@ namespace GraphEngine {
             std::string m_sName;
             CommonLib::IPropertySetPtr  m_ConnectProp;
             mutable std::mutex m_mutex;
-            int32_t m_nID;
+            CommonLib::CGuid m_id;
         };
 
     }

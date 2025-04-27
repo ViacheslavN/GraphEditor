@@ -21,17 +21,17 @@ namespace CommonLib
 			uuid_copy(m_guid, gid);
 		}
 
-		CGuid::CGuid(const astr &gid)
+		CGuid::CGuid(const std::string &gid)
 		{
 			FromAstr(gid);
 		}
 
-		CGuid::CGuid(const wstr &gid)
+		CGuid::CGuid(const std::wstring &gid)
 		{
 			FromWstr(gid);
 		}
 
-		void CGuid::FromAstr(const astr& gid)
+		void CGuid::FromAstr(const std::string& gid)
 		{
 			const char* pStr = gid.c_str();
 			if (pStr != nullptr)
@@ -44,23 +44,23 @@ namespace CommonLib
 		
 		}
 
-		void CGuid::FromWstr(const wstr& gid)
+		void CGuid::FromWstr(const std::wstring& gid)
 		{
 			FromAstr(StringEncoding::str_w2utf8_safe(gid));
 		}
 
-		astr CGuid::ToAstr(bool withbrackets) const
+        std::string CGuid::ToAstr(bool withbrackets) const
 		{
 			char str[37];
 			uuid_unparse(m_guid, str);
  
 			if(withbrackets)
-				return astr("{") + str + astr("}");
+				return std::string("{") + str + std::string("}");
 
 			return str;
 		}
 
-		wstr CGuid::ToWstr(bool withbrackets) const
+        std::wstring CGuid::ToWstr(bool withbrackets) const
 		{
 			return StringEncoding::str_utf82w_safe(ToAstr(withbrackets));
 		}
@@ -77,6 +77,11 @@ namespace CommonLib
 		{
 			return CGuid();
 		}
+
+        CGuid CGuid::CreateFromAstr(const std::string& guid)
+        {
+            return CGuid(guid);
+        }
 
 		CGuid& CGuid::operator =(const CGuid& gid)
 		{

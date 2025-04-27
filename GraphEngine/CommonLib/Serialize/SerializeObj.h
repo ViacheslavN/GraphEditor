@@ -1,6 +1,7 @@
 #pragma once
 #include "../CommonLib.h"
 #include "../data/ByteArray.h"
+#include "../guid/guid.h"
 
  namespace CommonLib
  {
@@ -34,6 +35,7 @@
          virtual void AddPropertyBool(const std::string& name, bool value) = 0;
          virtual void AddPropertyString(const std::string& name, const std::string& valueUtf8) = 0;
          virtual void AddPropertyWString(const std::string& name, const std::wstring& value) = 0;
+         virtual void AddPropertyGuid(const std::string& name, const CommonLib::CGuid& value) = 0;
 
 
          virtual bool IsPropertyExists(const std::string& name) const = 0;
@@ -51,6 +53,7 @@
          virtual bool  GetPropertyBool(const std::string& name, bool defValue) const = 0;
          virtual std::string GetPropertyString(const std::string& name, const  std::string& defValueUtf8) const = 0;
          virtual std::wstring GetPropertyWString(const std::string& name, const  std::wstring& defValue) const = 0;
+         virtual CommonLib::CGuid GetPropertyGuid(const std::string& name, const CommonLib::CGuid& value) const = 0;
 
 
          virtual int16_t	GetPropertyInt16(const std::string& name) const = 0;
@@ -62,6 +65,7 @@
          virtual double  GetPropertyDouble(const std::string& name) const = 0;
          virtual bool  GetPropertyBool(const std::string& name) const = 0;
          virtual std::string GetPropertyString(const std::string& name) const = 0;
+         virtual CommonLib::CGuid GetPropertyGuid(const std::string& name) const = 0;
      };
 
 

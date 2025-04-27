@@ -16,10 +16,11 @@ namespace GraphEngine {
 
             typedef ITableBase<I> TBase;
 
-            CSQLiteTableBase(eDatasetType datasetType, const std::string& tableName,  const std::string& viewName,
+            CSQLiteTableBase( CommonLib::CGuid workspaceId, eDatasetType datasetType, const std::string& tableName,  const std::string& viewName,
                              CommonLib::database::IDatabasePtr ptrDatabase) :
-                    TBase(datasetType, tableName, viewName),
+                    TBase(workspaceId, datasetType, tableName, viewName),
                     m_ptrDatabase(ptrDatabase)
+
             {
                 try
                 {
@@ -62,6 +63,8 @@ namespace GraphEngine {
             }
 
 
+
+
         protected:
 
 
@@ -69,6 +72,8 @@ namespace GraphEngine {
 
         protected:
             CommonLib::database::IDatabasePtr m_ptrDatabase;
+
+
         };
 
     }

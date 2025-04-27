@@ -119,6 +119,11 @@ namespace GraphEngine
                 return m_ptrFields->GetField(col)->GetLength();
             }
 
+            virtual int32_t FindFieldByName(const std::string& name) const
+            {
+                return  m_ptrFields->FindField(name);
+            }
+
         protected:
             bool IsIntegerType(int col) const
             {
@@ -303,6 +308,8 @@ namespace GraphEngine
 
                 return  sSQl;
             }
+
+
 
 
         protected:

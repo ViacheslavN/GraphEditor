@@ -9,19 +9,20 @@ namespace GraphEngine
         std::string CShapfileWorkspace::m_PathProps = "Path";
         std::string CShapfileWorkspace::m_NameProps = "Name";
 
-        CShapfileWorkspace::CShapfileWorkspace(CommonLib::IPropertySetPtr ptrProperties, int32_t nID) :
-                TBase(wtShapeFile, nID)
+        CShapfileWorkspace::CShapfileWorkspace(CommonLib::IPropertySetPtr ptrProperties, CommonLib::CGuid id) :
+                TBase(wtShapeFile, id)
         {
             m_sName = std::any_cast<std::string>(ptrProperties->GetProperty(m_NameProps));
             m_sPath = std::any_cast<std::string>(ptrProperties->GetProperty(m_PathProps));
         }
 
-        CShapfileWorkspace:: CShapfileWorkspace()
+        CShapfileWorkspace:: CShapfileWorkspace() : TBase(wtUndefined, CommonLib::CGuid::CreateNull())
+
         {
 
         }
 
-        CShapfileWorkspace::CShapfileWorkspace(const char *pszName, const char *pszPath, int32_t nID) :
+        CShapfileWorkspace::CShapfileWorkspace(const char *pszName, const char *pszPath, CommonLib::CGuid nID) :
                 TBase(wtShapeFile, nID)
 
         {
@@ -30,7 +31,7 @@ namespace GraphEngine
         }
 
 
-        IWorkspacePtr CShapfileWorkspace::Open(const char *pszName, const char *pszPath, int32_t nID)
+        IWorkspacePtr CShapfileWorkspace::Open(const char *pszName, const char *pszPath, CommonLib::CGuid nID)
         {
             return IWorkspacePtr(new CShapfileWorkspace(pszName, pszPath, nID));
         }

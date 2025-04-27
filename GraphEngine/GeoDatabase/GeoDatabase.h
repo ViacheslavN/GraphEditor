@@ -140,12 +140,12 @@ namespace GraphEngine
             IWorkspace(){}
             virtual ~IWorkspace(){}
             virtual eWorkspaceType GetWorkspaceType() const = 0;
+            virtual CommonLib::CGuid GetWorkspaceId() const = 0;
             virtual uint32_t GetDatasetCount() const = 0;
             virtual IDatasetPtr GetDataset(uint32_t nIdx) const = 0;
             virtual void RemoveDataset(uint32_t nIdx) = 0;
             virtual void RemoveDataset(IDatasetPtr ptrDataset) = 0;
-            virtual int32_t GetID() const = 0;
-        };
+         };
 
 
         class IDatabaseWorkspace : public IWorkspace
@@ -264,6 +264,7 @@ namespace GraphEngine
         public:
             IDataset(){}
             virtual ~IDataset(){}
+            virtual CommonLib::CGuid GetWorkspaceId() const = 0;
             virtual eDatasetType  GetDatasetType() const = 0;
             virtual const std::string&   GetDatasetName() const = 0;
             virtual const std::string&   GetDatasetViewName() const = 0;

@@ -9,8 +9,8 @@ namespace GraphEngine {
         std::string CSQLiteWorkspace::m_DatabasePathProps = "DatabasePath";
         std::string CSQLiteWorkspace::m_NameProps = "Name";
 
-        CSQLiteWorkspace::CSQLiteWorkspace(const char *pszName, const char *pszDatabasePath, int32_t nID, CommonLib::database::IDatabasePtr ptrDatabase) :
-                TBase(wtSqlLite, nID)
+        CSQLiteWorkspace::CSQLiteWorkspace(const char *pszName, const char *pszDatabasePath, CommonLib::CGuid id, CommonLib::database::IDatabasePtr ptrDatabase) :
+                TBase(wtSqlLite, id)
         {
             m_sName = pszName;
             m_sDatabasePath = pszDatabasePath;
@@ -18,20 +18,21 @@ namespace GraphEngine {
             m_ptrDatabase = ptrDatabase;
         }
 
-        CSQLiteWorkspace::CSQLiteWorkspace(CommonLib::IPropertySetPtr ptrProperties, int32_t nID) :
-                TBase(wtSqlLite, nID)
+        CSQLiteWorkspace::CSQLiteWorkspace(CommonLib::IPropertySetPtr ptrProperties, CommonLib::CGuid id) :
+                TBase(wtSqlLite, id)
         {
             m_sName = std::any_cast<std::string>(ptrProperties->GetProperty(m_NameProps));
             m_sDatabasePath = std::any_cast<std::string>(ptrProperties->GetProperty(m_DatabasePathProps));
         }
 
-        CSQLiteWorkspace:: CSQLiteWorkspace()
+        CSQLiteWorkspace:: CSQLiteWorkspace() :
+                TBase(wtUndefined, CommonLib::CGuid::CreateNull())
         {
 
         }
 
-        CSQLiteWorkspace::CSQLiteWorkspace(const char *pszName, const char *pszDatabasePath, int32_t nID) :
-                TBase(wtSqlLite, nID)
+        CSQLiteWorkspace::CSQLiteWorkspace(const char *pszName, const char *pszDatabasePath, CommonLib::CGuid id) :
+                TBase(wtSqlLite, id)
 
         {
             m_sName = pszName;
@@ -40,12 +41,12 @@ namespace GraphEngine {
         }
 
 
-        IDatabaseWorkspacePtr CSQLiteWorkspace::Open(const char *pszName, const char *pszPath, int32_t nID)
+        IDatabaseWorkspacePtr CSQLiteWorkspace::Open(const char *pszName, const char *pszPath, CommonLib::CGuid id)
         {
             try
             {
                 CommonLib::database::IDatabasePtr ptrDatabase = CommonLib::database::IDatabaseSQLiteCreator::Create(pszPath, uint32_t(CommonLib::database::WAL));
-                IDatabaseWorkspacePtr ptrWrks(new CSQLiteWorkspace(pszName, pszPath, nID, ptrDatabase));
+                IDatabaseWorkspacePtr ptrWrks(new CSQLiteWorkspace(pszName, pszPath, id, ptrDatabase));
                 return ptrWrks;
             }
             catch (std::exception& exc)
@@ -72,13 +73,13 @@ namespace GraphEngine {
             }
         }
 
-        IDatabaseWorkspacePtr CSQLiteWorkspace::Create(const char *pszName, const char *pszPath, int32_t nID )
+        IDatabaseWorkspacePtr CSQLiteWorkspace::Create(const char *pszName, const char *pszPath,CommonLib::CGuid id)
         {
             try
             {
 
                 CommonLib::database::IDatabasePtr ptrDatabase = CommonLib::database::IDatabaseSQLiteCreator::Create(pszPath, uint32_t(CommonLib::database::CreateDatabase | CommonLib::database::WAL));
-                IDatabaseWorkspacePtr ptrWrks(new CSQLiteWorkspace(pszName, pszPath, nID, ptrDatabase));
+                IDatabaseWorkspacePtr ptrWrks(new CSQLiteWorkspace(pszName, pszPath, id, ptrDatabase));
                 return ptrWrks;
 
             }

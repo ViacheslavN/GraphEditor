@@ -36,6 +36,7 @@ namespace CommonLib
 
 			static CGuid CreateNew();
 			static CGuid CreateNull();
+            static CGuid CreateFromAstr(const std::string& gid);
 		private:
 			GUID m_guid;
 		};

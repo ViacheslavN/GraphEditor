@@ -120,6 +120,11 @@ namespace CommonLib {
         m_ptrNode->AddPropertyWString(name, value);
     }
 
+    void CSerializeObjXML::AddPropertyGuid(const std::string& name, const CommonLib::CGuid& value)
+    {
+        m_ptrNode->AddPropertyString(name, value.ToAstr(false));
+    }
+
 
     bool CSerializeObjXML::IsPropertyExists(const std::string& name) const
     {
@@ -191,6 +196,16 @@ namespace CommonLib {
         return m_ptrNode->GetPropertyWString(name, defValue);
     }
 
+    CommonLib::CGuid CSerializeObjXML::GetPropertyGuid(const std::string& name, const CommonLib::CGuid& value) const
+    {
+        std::string strValue = m_ptrNode->GetPropertyString(name, "");
+        if(strValue.empty())
+            return value;
+
+        return CommonLib::CGuid::CreateFromAstr(strValue);
+    }
+
+
     int16_t	CSerializeObjXML::GetPropertyInt16(const std::string& name) const
     {
         return m_ptrNode->GetPropertyInt16(name);
@@ -234,5 +249,10 @@ namespace CommonLib {
     std::string CSerializeObjXML::GetPropertyString(const std::string& name) const
     {
         return m_ptrNode->GetPropertyString(name);
+    }
+
+    CommonLib::CGuid CSerializeObjXML::GetPropertyGuid(const std::string& name) const
+    {
+        return CommonLib::CGuid::CreateFromAstr(  m_ptrNode->GetPropertyString(name));
     }
 }

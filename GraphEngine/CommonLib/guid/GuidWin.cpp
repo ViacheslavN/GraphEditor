@@ -103,6 +103,11 @@ namespace CommonLib
 		{
 			return CGuid(guid_null);
 		}
+
+        CGuid CGuid::CreateFromAstr(const std::string& guid)
+        {
+            return CGuid(guid);
+        }
 		
 		CGuid& CGuid::operator =(const CGuid& gid)
 		{

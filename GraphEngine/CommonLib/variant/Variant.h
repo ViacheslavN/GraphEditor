@@ -175,7 +175,7 @@ namespace CommonLib
         T &Get()
         {
             if (m_id != (eDataTypes) type2int<T>::typeId)
-                throw CExcBase("Variant: Failed to type, type id: {0},  convert type id: {1}", m_id,
+                throw CExcBase("Variant: Failed to type, type id: {0}, convert type id: {1}", m_id,
                                (eDataTypes) type2int<T>::typeId);
 
             return *(T *) getBuffer();
@@ -185,7 +185,7 @@ namespace CommonLib
         const T &Get() const
         {
             if (m_id != (eDataTypes) type2int<T>::typeId)
-                throw CExcBase("Variant: Failed to type, type id: {0},  convert type id: {1}", m_id,
+                throw CExcBase("Variant: Failed to type, type id: {0}, convert type id: {1}", m_id,
                                (eDataTypes) type2int<T>::typeId);
 
             return *(T *) getBuffer();
@@ -194,7 +194,7 @@ namespace CommonLib
         template<typename T>
         void GetVal(T &value) const {
             if (m_id != (eDataTypes) type2int<T>::typeId)
-                throw CExcBase("Variant: Failed to type, type id: {0},  convert type id: {1}", m_id,
+                throw CExcBase("Variant: Failed to type, type id: {0}, convert type id: {1}", m_id,
                                (eDataTypes) type2int<T>::typeId);
 
             value = *(T *) getBuffer();

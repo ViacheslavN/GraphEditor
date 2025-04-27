@@ -1,6 +1,6 @@
 #pragma once
 #include "../CommonLib.h"
-#include <any>
+#include "../variant/Variant.h"
 
 namespace CommonLib
 {
@@ -14,8 +14,8 @@ namespace CommonLib
         virtual ~IPropertySet(){}
         virtual int  Count() const = 0;
         virtual bool  PropertyExists(const std::string& name) const = 0;
-        virtual const std::any&  GetProperty(const std::string& name) const = 0;
-        virtual void  SetProperty(const std::string& name, const std::any& value) = 0;
+        virtual CVariantPtr  GetProperty(const std::string& name) const = 0;
+        virtual void  SetProperty(const std::string& name, CVariantPtr value) = 0;
         virtual void  RemoveProperty(const std::string& name) = 0;
         virtual void  RemoveAllProperties() = 0;
 
@@ -29,13 +29,16 @@ namespace CommonLib
         virtual ~CPropertySet();
         virtual int  Count() const;
         virtual bool  PropertyExists(const std::string& name) const;
-        virtual const std::any&  GetProperty(const std::string& name) const;
-        virtual void  SetProperty(const std::string& name, const std::any& value);
+        virtual const CVariantPtr GetProperty(const std::string& name) const;
+        virtual void  SetProperty(const std::string& name, CVariantPtr value);
         virtual void  RemoveProperty(const std::string& name);
         virtual void  RemoveAllProperties();
 
     private:
-        typedef std::map<std::string, std::any> TMapProp;
+
+
+
+        typedef std::map<std::string, CVariantPtr> TMapProp;
         TMapProp m_mapProp;
     };
 }

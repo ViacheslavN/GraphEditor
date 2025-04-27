@@ -22,7 +22,7 @@ namespace CommonLib
          return m_mapProp.find(name) != m_mapProp.end();
      }
 
-     const std::any&  CPropertySet::GetProperty(const std::string& name) const
+     const CVariantPtr CPropertySet::GetProperty(const std::string& name) const
      {
          TMapProp::const_iterator c_it =  m_mapProp.find(name);
          if(c_it == m_mapProp.end())
@@ -31,7 +31,7 @@ namespace CommonLib
         return c_it->second;
      }
 
-     void  CPropertySet::SetProperty(const std::string& name, const std::any& value)
+     void  CPropertySet::SetProperty(const std::string& name, CVariantPtr value)
      {
          m_mapProp[name] = value;
      }
