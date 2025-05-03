@@ -66,7 +66,7 @@ namespace GraphEngine {
 
 
             void IBaseWindow::Create(DWORD dwExStyle, const std::wstring& className,  const std::wstring& windowName, DWORD dwStyle,
-                                int x, int y, int nWidth, int nHeight, HWND hWndParent, HMENU hMenu, HINSTANCE hInst )
+                                int x, int y, int nWidth, int nHeight, HWND hWndParent, HMENU hMenu, HINSTANCE hInst,  LPVOID lpParam )
             {
                 try
                 {
@@ -77,7 +77,7 @@ namespace GraphEngine {
 
                    m_hWnd = ::CreateWindowEx(dwExStyle, MAKEINTATOM(m_atom), windowName.c_str(),
                                                  dwStyle, x, y, nWidth, nHeight, hWndParent, hMenu,
-                                                 hInst, NULL);
+                                                 hInst, lpParam);
                    if(m_hWnd == NULL)
                        throw CommonLib::CWinExc("HWND is Null");
 

@@ -55,7 +55,7 @@ LRESULT CMainFrame::OnCreate(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/
     m_view.SetWindowLong( GWL_STYLE, m_view.GetWindowLong(GWL_STYLE)&~(WS_CAPTION|WS_BORDER|WS_THICKFRAME|WS_SYSMENU));
     //m_view.LoadFromResource(L"res:default.html");
 
-    m_view.LoadFromResource(L"F:\\work\\MyProject\\GraphEditor\\GraphEngine\\UILib\\Tests\\HTMLWindow\\res\\default.html");
+    m_view.LoadFromResource(L"F:\\work\\Test\\sciter-js-sdk-main\\demos\\gsciter\\res\\default.htm");
 
 	UIAddToolBar(hWndToolBar);
 	UISetCheck(ID_VIEW_TOOLBAR, 1);

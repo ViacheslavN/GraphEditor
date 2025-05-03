@@ -31,7 +31,7 @@ namespace GraphEngine {
                 virtual int64_t GetNativeHandle() const;
                 virtual void ShowWindow(bool bShow);
                 virtual void Create(DWORD dwExStyle, const std::wstring& className,  const std::wstring& name, DWORD dwStyle,
-                                      int x, int y, int nWidth, int nHeight, HWND hParent, HMENU hMenu, HINSTANCE hInst );
+                                      int x, int y, int nWidth, int nHeight, HWND hParent, HMENU hMenu, HINSTANCE hInst,  LPVOID lpParam);
 
             protected:
                 virtual WNDPROC GetWindowProc();

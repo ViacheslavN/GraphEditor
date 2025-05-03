@@ -19,7 +19,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                       ALLOW_CMODULES );
 
     CHtmlWindow window(hInstance);
-    window.Create(0, L"", L"TestHtml", WS_OVERLAPPEDWINDOW, 200, 200, 800, 800, NULL, NULL, hInstance);
+    window.Create(0, L"", L"TestHtml", WS_OVERLAPPEDWINDOW, 200, 200, 800, 800, NULL, NULL, hInstance, NULL);
     //window.LoadFromResource(L"F:\\work\\MyProject\\GraphEditor\\GraphEngine\\UILib\\Tests\\TestHTMLWindowWTL\\res\\default.html");
     window.LoadFromResource(L"F:\\work\\Test\\sciter-js-sdk-main\\demos\\gsciter\\res\\default.htm");
 

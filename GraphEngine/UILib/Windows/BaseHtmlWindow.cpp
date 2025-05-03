@@ -50,7 +50,7 @@ namespace GraphEngine {
                 if (bHandled)
                     return lResult; // Sciter handled it
 
-                return DefWindowProc(uMsg, wParam, lParam);
+                return IBaseWindow::DefWindowProc(uMsg, wParam, lParam);
             }
 
 

@@ -21,7 +21,7 @@ namespace GraphEngine {
                 if (bHandled)
                     return lResult; // Sciter handled it
 
-           return DefWindowProc(uMsg, wParam, lParam);
+           return CWindowImpl<CBaseHtmlWindowsWTL>::DefWindowProc(uMsg, wParam, lParam);
         }
 
         LRESULT CBaseHtmlWindowsWTL::OnDestroy(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/)
