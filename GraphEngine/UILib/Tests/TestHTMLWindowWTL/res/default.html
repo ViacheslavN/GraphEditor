@@ -1,0 +1,77 @@
+<html>
+<head>
+    <title></title>
+    <style>
+
+        html {
+            background: radial-gradient(75% 75%, circle farthest-side, white, orange, rgb(204,0,0));
+            color:#fff;
+        }
+
+        html:rtl {
+            mapping: left-to-right(background);
+        }
+
+
+        body {
+            size:*;
+            overflow:auto;
+        }
+
+    </style>
+    <script type="text/tiscript">
+
+        self.select("button#open").on("click", function(){
+ var result = view.sayHello("Sciter");
+          var fn = view.selectFile(#open,
+            "HTML Files (*.htm,*.html)|*.HTM;*.HTML|All Files (*.*)|*.*" , "html" );
+          if( fn )
+            view.load(fn);
+
+        });
+
+    </script>
+    <script>
+        function sayHi() {
+            var result = view.sayHello("Sciter");
+            alert(result); // should be "Hello from native C++ to Sciter"
+        }
+    </script>
+</head>
+<body>
+<button onclick='sayHi()'>Say Hi</button>
+<h1>1111Minimal Sciter MFC Application</h1>
+
+
+
+<button id="open">Open HTML file</button>
+
+
+<select>
+    <option>A</option>
+    <option>B</option>
+    <option>C</option>
+    <option>D</option>
+    <option>A</option>
+    <option>B</option>
+    <option>C</option>
+    <option>D</option>
+    <option>A</option>
+    <option>B</option>
+    <option>C</option>
+    <option>D</option>
+    <option>A</option>
+    <option>B</option>
+    <option>C</option>
+    <option>D</option>
+    <option>A</option>
+    <option>B</option>
+    <option>C</option>
+    <option>D</option>
+</select>
+
+Animated image
+<img src="sciter:busy.png">
+
+</body>
+</html>

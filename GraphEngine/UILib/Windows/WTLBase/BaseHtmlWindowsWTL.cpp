@@ -1,18 +1,27 @@
 #include "../WTLHeaders.h"
 #include "BaseHtmlWindowWTL.h"
 
+
 namespace GraphEngine {
     namespace UILib {
 
 
+
+        BOOL CBaseHtmlWindowsWTL::PreTranslateMessage(MSG* pMsg)
+        {
+            pMsg;
+            return FALSE;
+        }
+
         LRESULT CBaseHtmlWindowsWTL::OnMessageForward(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL& bHandled)
         {
+
             // Forward to Sciter's message processor
             LRESULT lResult = SciterProcND(m_hWnd, uMsg, wParam, lParam, &bHandled);
-            if (bHandled)
-                return lResult; // Sciter handled it
+                if (bHandled)
+                    return lResult; // Sciter handled it
 
-            return DefWindowProc(uMsg, wParam, lParam);
+           return DefWindowProc(uMsg, wParam, lParam);
         }
 
         LRESULT CBaseHtmlWindowsWTL::OnDestroy(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/)
@@ -25,7 +34,6 @@ namespace GraphEngine {
         {
             BOOL    bHandled;
             SciterProcND(m_hWnd, WM_CREATE, 0, 0, &bHandled);
-
             ::SciterSetOption(m_hWnd, SCITER_SET_SCRIPT_RUNTIME_FEATURES,
                               ALLOW_FILE_IO |
                               ALLOW_SOCKET_IO |
@@ -35,11 +43,8 @@ namespace GraphEngine {
 
             this->setup_callback(); // attach sciter::host callbacks
             sciter::attach_dom_event_handler(m_hWnd,this); // attach this as a DOM events
-
             return S_OK;
-
         }
-
 
         HWINDOW   CBaseHtmlWindowsWTL::get_hwnd()
         {
@@ -83,14 +88,14 @@ namespace GraphEngine {
             return (int64_t )m_hWnd;
         }
 
-        void CBaseHtmlWindowsWTL::CreateFromHtml(const std::string& html, IWindowPtr ptrParentWindow, uint64_t flags, uint64_t flagsEx)
+        void CBaseHtmlWindowsWTL::LoadHtml(const std::wstring& html)
         {
 
         }
 
-        void CBaseHtmlWindowsWTL::CreateFromResource(const std::string& resource, IWindowPtr ptrParentWindow, uint64_t flags, uint64_t flagsEx)
+        void CBaseHtmlWindowsWTL::LoadFromResource(const std::wstring& resource)
         {
-
+            bool bLoad = this->load_file(resource.c_str());
         }
 
         bool CBaseHtmlWindowsWTL::HandleMouseImpl  (HELEMENT he, MOUSE_PARAMS& params )

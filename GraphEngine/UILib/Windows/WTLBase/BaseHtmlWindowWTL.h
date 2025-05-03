@@ -5,12 +5,6 @@
 #include <vector>
 
 
-
-
-namespace GraphEngine {
-    namespace UILib {
-
-
 #define SCITER_MSG_MAP() \
 	{                       \
         BOOL    bHandled;\
@@ -21,11 +15,19 @@ namespace GraphEngine {
 	}
 
 
+namespace GraphEngine {
+    namespace UILib {
+
+
+
+
         class CBaseHtmlWindowsWTL : public CWindowImpl<CBaseHtmlWindowsWTL>,
                                     public sciter::host<CBaseHtmlWindowsWTL>, // Sciter host window primitives
                                     public sciter::event_handler_raw ,      // Sciter DOM event handling
                                     public IHtmlWindow
         {
+
+        public:
             DECLARE_WND_CLASS(NULL)
 
             BOOL PreTranslateMessage(MSG* pMsg);
@@ -34,6 +36,7 @@ namespace GraphEngine {
                         MESSAGE_HANDLER(WM_CREATE, OnCreate)
                         MESSAGE_HANDLER(WM_DESTROY, OnDestroy)
                         SCITER_MSG_MAP()
+                        ALT_MSG_MAP( 1 )
             END_MSG_MAP()
 
 
@@ -53,8 +56,8 @@ namespace GraphEngine {
             bool on_script_call(LPCSTR name, const sciter::value* args, UINT argc, sciter::value& result);
 
             virtual int64_t GetNativeHandle() const;
-            virtual void CreateFromHtml(const std::string& html, IWindowPtr ptrParentWindow = IWindowPtr(), uint64_t flags = 0, uint64_t flagsEx = 0);
-            virtual void CreateFromResource(const std::string& resource, IWindowPtr ptrParentWindow = IWindowPtr(), uint64_t flags = 0, uint64_t flagsEx = 0);
+            virtual void LoadHtml(const std::wstring& html);
+            virtual void LoadFromResource(const std::wstring& resource);
 
         protected:
 

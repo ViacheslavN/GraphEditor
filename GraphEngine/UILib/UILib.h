@@ -25,6 +25,7 @@ namespace GraphEngine {
             virtual ~IWindow(){}
 
             virtual int64_t GetNativeHandle() const = 0;
+          //  virtual void ShowWindow(bool bShow) = 0;
 
 
         };
@@ -34,8 +35,8 @@ namespace GraphEngine {
         public:
             IHtmlWindow(){}
             virtual ~IHtmlWindow(){}
-            virtual void CreateFromHtml(const std::string& html, IWindowPtr ptrParentWindow = IWindowPtr(), uint64_t flags = 0, uint64_t flagsEx = 0) = 0;
-            virtual void CreateFromResource(const std::string& resource, IWindowPtr ptrParentWindow = IWindowPtr(), uint64_t flags = 0, uint64_t flagsEx = 0) = 0;
+            virtual void LoadHtml(const std::wstring& html) = 0;
+            virtual void LoadFromResource(const std::wstring& resource) = 0;
         };
 
         class ISplitterWindows : public IWindow

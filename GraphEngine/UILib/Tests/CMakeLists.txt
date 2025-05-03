@@ -1,0 +1,2 @@
+add_subdirectory(TestHTMLWindowWTL)
+add_subdirectory(TestHTMLWindowWinApi)

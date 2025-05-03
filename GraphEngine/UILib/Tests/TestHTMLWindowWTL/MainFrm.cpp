@@ -6,20 +6,18 @@
 #include "resource.h"
 
 #include "aboutdlg.h"
-#include "MapView.h"
-#include "ProjectView.h"
+#include "HtmlView.h"
 #include "MainFrm.h"
-
 
 BOOL CMainFrame::PreTranslateMessage(MSG* pMsg)
 {
-	return CFrameWindowImpl<CMainFrame>::PreTranslateMessage(pMsg);
 
-  /*  if(CFrameWindowImpl<CMainFrame>::PreTranslateMessage(pMsg))
-        return TRUE;
+    return CFrameWindowImpl<CMainFrame>::PreTranslateMessage(pMsg);
 
-    return m_projectView.PreTranslateMessage(pMsg);*/
+	if(CFrameWindowImpl<CMainFrame>::PreTranslateMessage(pMsg))
+		return TRUE;
 
+	return m_view.PreTranslateMessage(pMsg);
 }
 
 BOOL CMainFrame::OnIdle()
@@ -47,24 +45,17 @@ LRESULT CMainFrame::OnCreate(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/
 
 	CreateSimpleStatusBar();
 
-    m_hWndClient =  m_projectView.Create(m_hWnd, rcDefault, NULL,  WS_CHILD |  WS_VISIBLE| WS_CLIPCHILDREN, WS_EX_CLIENTEDGE);
-    m_projectView.SetWindowLong( GWL_STYLE, m_projectView.GetWindowLong(GWL_STYLE)&~(WS_CAPTION|WS_BORDER|WS_THICKFRAME|WS_SYSMENU));
 
 
+	//m_hWndClient = m_view.Create(m_hWnd, rcDefault, NULL, WS_CHILD |  WS_VISIBLE| WS_CLIPCHILDREN, WS_EX_CLIENTEDGE);
+    m_hWndClient = m_view.Create(m_hWnd, rcDefault, NULL, WS_CHILD| WS_VISIBLE| WS_CLIPCHILDREN| WS_CLIPSIBLINGS , WS_EX_CLIENTEDGE);
 
 
- /*   m_hWndClient = m_wndSplitter.Create(m_hWnd, rcDefault, NULL, WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS | WS_CLIPCHILDREN);
+   // m_view.SetWindowLong( GWL_STYLE, m_view.GetWindowLong(GWL_STYLE)&~(WS_CAPTION|WS_BORDER|WS_THICKFRAME|WS_SYSMENU));
+    m_view.SetWindowLong( GWL_STYLE, m_view.GetWindowLong(GWL_STYLE)&~(WS_CAPTION|WS_BORDER|WS_THICKFRAME|WS_SYSMENU));
+    //m_view.LoadFromResource(L"res:default.html");
 
-    m_view.Create(m_wndSplitter, rcDefault, NULL, WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS | WS_CLIPCHILDREN, WS_EX_CLIENTEDGE);
-     m_projectView.Create(m_wndSplitter, rcDefault, NULL,  WS_CHILD |  WS_VISIBLE| WS_CLIPCHILDREN, WS_EX_CLIENTEDGE);
-    m_projectView.SetWindowLong( GWL_STYLE, m_projectView.GetWindowLong(GWL_STYLE)&~(WS_CAPTION|WS_BORDER|WS_THICKFRAME|WS_SYSMENU));*/
-
-	//m_hWndClient = m_view.Create(m_hWnd, rcDefault, NULL, WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS | WS_CLIPCHILDREN, WS_EX_CLIENTEDGE);
-
-  //  m_wndSplitter.SetSplitterPanes(m_projectView, m_view);
-  //  m_wndSplitter.m_cxyMin = 150;
-
-
+    m_view.LoadFromResource(L"F:\\work\\MyProject\\GraphEditor\\GraphEngine\\UILib\\Tests\\HTMLWindow\\res\\default.html");
 
 	UIAddToolBar(hWndToolBar);
 	UISetCheck(ID_VIEW_TOOLBAR, 1);

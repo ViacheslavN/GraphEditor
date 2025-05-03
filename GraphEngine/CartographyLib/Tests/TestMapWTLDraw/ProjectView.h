@@ -31,11 +31,7 @@ public:
 
     MESSAGE_HANDLER(WM_CREATE, OnCreate)
     MESSAGE_HANDLER(WM_DESTROY, OnDestroy)
-   // MESSAGE_HANDLER(WM_PAINT, OnMessageForward)
-   // MESSAGE_RANGE_HANDLER(WM_MOUSEFIRST, WM_MOUSELAST, OnMessageForward)
-   // MESSAGE_RANGE_HANDLER(WM_KEYFIRST, WM_KEYLAST, OnMessageForward)
-  //  MESSAGE_HANDLER(WM_SIZE, OnMessageForward)
-                SCITER_MSG_MAP()
+    SCITER_MSG_MAP()
     ALT_MSG_MAP( 1 )	//	Forwarded by frame
     END_MSG_MAP()
 
