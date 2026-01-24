@@ -303,6 +303,8 @@ set(COMMON_SOURCE_FILES
 		variant/VariantTypeList.h
 		variant/VariantVisitor.h
 		variant/VariantVisitor.cpp
+		filesystem/Directory.h
+		filesystem/Directory.cpp
 )
 
 set(STATIC_LIBS
@@ -425,6 +427,8 @@ set(WINDOWS_SOURCE_FILES
 		system/win/WinPipe.h
 		system/win/PipeWriteRead.cpp
 		system/win/PipeWriteRead.h
+		filesystem/DirectoryWin.h
+		filesystem/DirectoryWin.cpp
 
 )
 

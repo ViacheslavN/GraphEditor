@@ -7,3 +7,4 @@ ENDIF()
 
 add_subdirectory(TestStr)
 add_subdirectory(TestVariant)
+add_subdirectory(TestBrowsinghistory)

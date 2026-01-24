@@ -1,29 +1,13 @@
 #include "stdafx.h"
 #include "filesystem.h"
 #include "../exception/WinExc.h"
-#include "../utils/ObjHolder.h"
 #include "../str/StringEncoding.h"
 
 namespace CommonLib
 {
 
 
-	class CFindFileHandle : public TObjHolder<HANDLE>
-	{
-		public:
-			CFindFileHandle(HANDLE handle) :
-				TObjHolder<HANDLE>(handle, [](HANDLE& h) {
-				if (INVALID_HANDLE_VALUE != h)
-				{
-					FindClose(h);
-					h = INVALID_HANDLE_VALUE;
-				}
-				})
-			{
 
-			}
-
-	};
 
 
 	bool CFileUtils::IsFileExist(const std::wstring& path)
@@ -94,7 +78,7 @@ namespace CommonLib
 					break;
 			}
 
-		} while (TRUE == FindNextFile(findHandle.Get(), &searchData));
+		} while ( FindNextFile(findHandle.Get(), &searchData) != 0);
 
 	}
 
