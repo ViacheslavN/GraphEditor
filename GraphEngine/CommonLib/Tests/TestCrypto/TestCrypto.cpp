@@ -65,9 +65,9 @@ int main()
 		ptrAesCipher->SetKey(keyData);
 		ptrAesCipherSSL->SetKey(keyData);
 
-		astr plainText;
+		std::string plainText;
 		plainText.resize(16, 'a');
-		astr plainTextSSL;
+		std::string plainTextSSL;
 		plainTextSSL.resize(16, 'a');
 
 		int32_t size =  ptrAesCipher->GetBufferSize(plainText.length());
