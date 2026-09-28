@@ -14,7 +14,7 @@ namespace GraphEngine {
 
 
 
-            CSQLiteSpatialTable(const std::string& name,
+            CSQLiteSpatialTable(CommonLib::CGuid workspaceId, const std::string& name,
                                 const std::string& viewName,  const std::string& spatialIndexName,
                                 CommonLib::eShapeType shapeType, Geometry::IEnvelopePtr  ptrExtent, Geometry::ISpatialReferencePtr ptrSpatialReference,
                                 CommonLib::database::IDatabasePtr ptrDatabase);

@@ -1,16 +1,27 @@
-cmake_minimum_required(VERSION 3.8)
+cmake_minimum_required(VERSION 3.15)
+
+# Windows: static C/C++ runtime everywhere (/MT, /MTd). Requires policy CMP0091 (CMake >= 3.15),
+# which also keeps /MD out of the default CMAKE_<LANG>_FLAGS_<CONFIG>, so there is no
+# "D9025 overriding /MDd with /MTd" warning. Ignored by non-MSVC compilers.
+set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+
 project(graphengine)
+
+if(MSVC)
+    # A build folder configured before the switch to CMAKE_MSVC_RUNTIME_LIBRARY still has
+    # /MD, /MDd in its cached CMAKE_<LANG>_FLAGS_<CONFIG>; drop them so only /MT, /MTd is passed.
+    foreach(lang C CXX)
+        foreach(cfg DEBUG RELEASE RELWITHDEBINFO MINSIZEREL)
+            string(REGEX REPLACE "[/-]M[DT]d?( |$)" "" CMAKE_${lang}_FLAGS_${cfg} "${CMAKE_${lang}_FLAGS_${cfg}}")
+        endforeach()
+    endforeach()
+endif()
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_VERBOSE_MAKEFILE ON)
 set(VCPKG_INSTALL_OPTIONS "--allow-unsupported")
 add_compile_definitions(SQLITE_WITHOUT_MSIZE)
 add_compile_definitions(FT2_BUILD_LIBRARY)
-
-macro(set_static_cxx_flags)
-    string(REPLACE "/MD" "/MT" CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE}")
-    string(REPLACE "/MDd" "/MTd" CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG}")
-endmacro()
 
 # Android: only the static libraries are built (no tests, no Windows UI)
 if(ANDROID)
@@ -33,7 +44,6 @@ endif()
 
 if(WIN32)
    add_definitions(-DUNICODE -D_UNICODE)
-    set_static_cxx_flags() # Macro is used because it's needed to update variable from parent scope
 endif()
 
 

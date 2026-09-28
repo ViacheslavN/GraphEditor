@@ -33,7 +33,7 @@ namespace CommonLib
 		return IsFileExist(StringEncoding::str_w2utf8_safe(path));
 	}
 
-	void CFileUtils::RenameFile(const asstd::stringtr& oldFile, const std::string& newFile)
+	void CFileUtils::RenameFile(const std::string& oldFile, const std::string& newFile)
 	{
 		if(rename(oldFile.c_str(), newFile.c_str()) != 0)
 			throw CPosixExc(errno, "Failed to rename file {0}->{1}", oldFile, newFile);

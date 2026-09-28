@@ -9,16 +9,16 @@ namespace GraphEngine
 {
     namespace GeoDatabase {
 
-        CShapefileSpatialTable::CShapefileSpatialTable(const std::string& sPath, const std::string& sName, const std::string& sViewName) :
-            TBase(dtSpatialTable, sName,  sViewName),
+        CShapefileSpatialTable::CShapefileSpatialTable(CommonLib::CGuid workspaceid, const std::string& sPath, const std::string& sName, const std::string& sViewName) :
+            TBase(workspaceid, dtSpatialTable, sName,  sViewName),
             m_sPath(sPath)
         {
             m_sPath=  CShapefileUtils::NormalizePath(m_sPath);
             LoadShapeFile(false);
         }
 
-        CShapefileSpatialTable::CShapefileSpatialTable(const std::string& sPath,const std::string& sName,  const std::string& sViewName, const std::string& shapeFieldName, IFieldsPtr ptrFields):
-                TBase(dtSpatialTable, sName,  sViewName),
+        CShapefileSpatialTable::CShapefileSpatialTable(CommonLib::CGuid workspaceid, const std::string& sPath,const std::string& sName,  const std::string& sViewName, const std::string& shapeFieldName, IFieldsPtr ptrFields):
+                TBase(workspaceid, dtSpatialTable, sName,  sViewName),
                 m_sPath(sPath)
         {
             m_sShapeFieldName = shapeFieldName;

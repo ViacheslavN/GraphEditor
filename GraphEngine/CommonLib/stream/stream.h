@@ -219,7 +219,8 @@ public:
 class IMemoryReadStream : public IReadStream, public IMemoryStream
 {
 public:
-	virtual std::streamsize ReadSafe(byte_t* pBuffer, size_t bufLen);
+	using IReadStream::ReadSafe; // keep the typed ReadSafe(T&) overloads visible
+	virtual std::streamsize ReadSafe(byte_t* pBuffer, uint32_t bufLen) override;
 
 	IMemoryReadStream() {}
 	virtual ~IMemoryReadStream() {}
@@ -320,14 +321,18 @@ public:
 
 
 	//IMemoryStream
+	// A newly attached buffer is read/written from the beginning; keeping the old
+	// position made reused stream objects (e.g. encoder members) overrun the new buffer.
 	virtual void AttachBuffer(byte_t* pBuffer, size_t nSize, bool bCopy = false)
 	{
 		m_ptrBuffer->AttachBuffer(pBuffer, (uint32_t)nSize, bCopy);
+		m_nPos = 0;
 	}
 
 	virtual void AttachBuffer(IMemStreamBufferPtr ptrBuffer)
 	{
 		m_ptrBuffer = ptrBuffer;
+		m_nPos = 0;
 	}
 
 	virtual byte_t* DeattachBuffer()

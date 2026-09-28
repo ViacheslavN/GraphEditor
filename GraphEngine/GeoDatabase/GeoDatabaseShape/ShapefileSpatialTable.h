@@ -12,8 +12,8 @@ namespace GraphEngine
         public:
             typedef  ITableBase<ITable> TBase;
 
-            CShapefileSpatialTable(const std::string& sPath, const std::string& sName, const std::string& sViewName); //open
-            CShapefileSpatialTable(const std::string& sPath, const std::string& name,  const std::string& viewName,  const std::string& shapeFieldName, IFieldsPtr ptrFields); //create
+            CShapefileSpatialTable(CommonLib::CGuid workspaceid,  const std::string& sPath, const std::string& sName, const std::string& sViewName); //open
+            CShapefileSpatialTable(CommonLib::CGuid workspaceid, const std::string& sPath, const std::string& name,  const std::string& viewName,  const std::string& shapeFieldName, IFieldsPtr ptrFields); //create
             ~CShapefileSpatialTable();
 
 

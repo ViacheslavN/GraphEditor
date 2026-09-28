@@ -95,7 +95,7 @@ namespace GraphEngine {
         {
             CSQLiteUtils::CreateCreateTable(ptrFields, name, m_ptrDatabase);
 
-            return std::make_shared<CSQLiteTable>(name, viewName, m_ptrDatabase);
+            return std::make_shared<CSQLiteTable>(CommonLib::CGuid::CreateNew(),name, viewName, m_ptrDatabase);
 
         }
 
@@ -107,7 +107,7 @@ namespace GraphEngine {
             if(!spatialIndexName.empty())
                 CSQLiteUtils::CreateSpatialIndex(spatialIndexName, "feature_id", m_ptrDatabase);
 
-            return std::make_shared<CSQLiteSpatialTable>(name, viewName, spatialIndexName, shapeType, ptrExtent, ptrSpatialReference, m_ptrDatabase);
+            return std::make_shared<CSQLiteSpatialTable>(CommonLib::CGuid::CreateNew(),name, viewName, spatialIndexName, shapeType, ptrExtent, ptrSpatialReference, m_ptrDatabase);
 
         }
 
@@ -118,7 +118,7 @@ namespace GraphEngine {
 
         IDatasetPtr CSQLiteWorkspace::LoadTable(const std::string& sName)
         {
-            return std::make_shared<CSQLiteTable>(sName, sName, m_ptrDatabase);
+            return std::make_shared<CSQLiteTable>(CommonLib::CGuid::CreateNew(),sName, sName, m_ptrDatabase);
         }
 
         IDatasetPtr CSQLiteWorkspace::LoadSpatialTable(const std::string& sName)

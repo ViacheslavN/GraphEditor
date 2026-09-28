@@ -12,7 +12,7 @@ namespace GraphEngine {
 
             typedef CSQLiteTableBase<ITable> TBase;
 
-            CSQLiteTable(const std::string& tableName,  const std::string& viewName,
+            CSQLiteTable(CommonLib::CGuid workspaceId, const std::string& tableName,  const std::string& viewName,
                          CommonLib::database::IDatabasePtr ptrDatabase);
             virtual  ~CSQLiteTable();
 

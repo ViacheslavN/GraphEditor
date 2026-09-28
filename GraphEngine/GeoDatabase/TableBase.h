@@ -12,8 +12,8 @@ namespace GraphEngine {
         public:
             typedef IDataSetBase<I> TBase;
 
-            ITableBase(eDatasetType datasetType,  std::string sDatasetName,  std::string sDatasetViewName) : TBase(
-                     datasetType,   sDatasetName,sDatasetViewName)
+            ITableBase(CommonLib::CGuid workspaceId, eDatasetType datasetType,  std::string sDatasetName,  std::string sDatasetViewName) : TBase(
+                      workspaceId,datasetType,   sDatasetName,sDatasetViewName)
             {
                 this->m_pFields = std::make_shared<CFields>();
             }

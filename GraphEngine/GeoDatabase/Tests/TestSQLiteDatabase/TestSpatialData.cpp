@@ -17,9 +17,9 @@ void TestSpatialData()
         std::string tableName = "building";
 
         GraphEngine::GeoDatabase::IDatabaseWorkspacePtr ptrShapeWks =
-                std::dynamic_pointer_cast<GraphEngine::GeoDatabase::IDatabaseWorkspace>(GraphEngine::GeoDatabase::CShapfileWorkspace::Open("Test", path.c_str(), 1));
+                std::dynamic_pointer_cast<GraphEngine::GeoDatabase::IDatabaseWorkspace>(GraphEngine::GeoDatabase::CShapfileWorkspace::Open("Test", path.c_str(), CommonLib::CGuid::CreateNew()));
 
-        GraphEngine::GeoDatabase::IDatabaseWorkspacePtr ptrSqliteWks = GraphEngine::GeoDatabase::CSQLiteWorkspace::Open(CTestingData::m_sDatabaseName.c_str(), CTestingData::m_sDatabasePath.c_str(), 2);
+        GraphEngine::GeoDatabase::IDatabaseWorkspacePtr ptrSqliteWks = GraphEngine::GeoDatabase::CSQLiteWorkspace::Open(CTestingData::m_sDatabaseName.c_str(), CTestingData::m_sDatabasePath.c_str(), CommonLib::CGuid::CreateNew());
 
 
         GraphEngine::GeoDatabase::ITablePtr ptrShapeFile = ptrShapeWks->GetTable("building");

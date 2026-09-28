@@ -1,0 +1,113 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 25,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "android-base",
+      "hidden": true,
+      "displayName": "Android base",
+      "description": "Android NDK r30, static libraries only",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/cmake-build-${presetName}",
+      "environment": {
+        "ANDROID_NDK": "C:/Android/android-ndk-r30"
+      },
+      "toolchainFile": "$env{ANDROID_NDK}/build/cmake/android.toolchain.cmake",
+      "cacheVariables": {
+        "ANDROID_PLATFORM": "android-24",
+        "ANDROID_STL": "c++_static",
+        "GRAPHENGINE_BUILD_TESTS": "OFF"
+      }
+    },
+    {
+      "name": "android-arm64-debug",
+      "inherits": "android-base",
+      "displayName": "Android arm64-v8a Debug",
+      "cacheVariables": {
+        "ANDROID_ABI": "arm64-v8a",
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
+      "name": "android-arm64-release",
+      "inherits": "android-base",
+      "displayName": "Android arm64-v8a Release",
+      "cacheVariables": {
+        "ANDROID_ABI": "arm64-v8a",
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
+      "name": "android-armv7-debug",
+      "inherits": "android-base",
+      "displayName": "Android armeabi-v7a Debug",
+      "cacheVariables": {
+        "ANDROID_ABI": "armeabi-v7a",
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
+      "name": "android-armv7-release",
+      "inherits": "android-base",
+      "displayName": "Android armeabi-v7a Release",
+      "cacheVariables": {
+        "ANDROID_ABI": "armeabi-v7a",
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
+      "name": "android-x86_64-debug",
+      "inherits": "android-base",
+      "displayName": "Android x86_64 Debug",
+      "cacheVariables": {
+        "ANDROID_ABI": "x86_64",
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
+      "name": "android-x86_64-release",
+      "inherits": "android-base",
+      "displayName": "Android x86_64 Release",
+      "cacheVariables": {
+        "ANDROID_ABI": "x86_64",
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "android-arm64-debug",
+      "configurePreset": "android-arm64-debug",
+      "displayName": "Android arm64-v8a Debug"
+    },
+    {
+      "name": "android-arm64-release",
+      "configurePreset": "android-arm64-release",
+      "displayName": "Android arm64-v8a Release"
+    },
+    {
+      "name": "android-armv7-debug",
+      "configurePreset": "android-armv7-debug",
+      "displayName": "Android armeabi-v7a Debug"
+    },
+    {
+      "name": "android-armv7-release",
+      "configurePreset": "android-armv7-release",
+      "displayName": "Android armeabi-v7a Release"
+    },
+    {
+      "name": "android-x86_64-debug",
+      "configurePreset": "android-x86_64-debug",
+      "displayName": "Android x86_64 Debug"
+    },
+    {
+      "name": "android-x86_64-release",
+      "configurePreset": "android-x86_64-release",
+      "displayName": "Android x86_64 Release"
+    }
+  ]
+}

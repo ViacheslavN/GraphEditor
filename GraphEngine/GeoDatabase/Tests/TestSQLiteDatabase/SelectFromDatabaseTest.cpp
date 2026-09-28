@@ -45,7 +45,7 @@ void SelectFromDatabase() {
     try
     {
 
-        GraphEngine::GeoDatabase::IDatabaseWorkspacePtr ptrWks = GraphEngine::GeoDatabase::CSQLiteWorkspace::Open(CTestingData::m_sDatabaseName.c_str(), CTestingData::m_sDatabasePath.c_str(), 1);
+        GraphEngine::GeoDatabase::IDatabaseWorkspacePtr ptrWks = GraphEngine::GeoDatabase::CSQLiteWorkspace::Open(CTestingData::m_sDatabaseName.c_str(), CTestingData::m_sDatabasePath.c_str(), CommonLib::CGuid::CreateNew());
         GraphEngine::GeoDatabase::ITablePtr ptrTable1 = ptrWks->GetTable(CTestingData::m_sTestTableName_1);
         GraphEngine::GeoDatabase::ITablePtr ptrTable2 = ptrWks->GetTable(CTestingData::m_sTestTableName_2);
         GraphEngine::GeoDatabase::ITablePtr ptrTable3 = ptrWks->GetTable(CTestingData::m_sTestTableName_3);

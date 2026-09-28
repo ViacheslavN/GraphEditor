@@ -314,8 +314,8 @@ set(COMMON_SOURCE_FILES
 		filesystem/Directory.cpp
 )
 
-if(ANDROID)
-	set(STATIC_LIBS)
+if(ANDROID OR WIN32)
+	set(STATIC_LIBS)	# no libpthread on Android (Bionic) and Windows
 else()
 	set(STATIC_LIBS
 			-lpthread
@@ -462,14 +462,6 @@ ELSE()
 		add_definitions(-DSQLITE_ENABLE_RTREE)
 ENDIF()
 
-if (WIN32)
-
-	set (CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -MTd")
-	set (CMAKE_CXX_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -MTd")
-	set (CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -MT")
-	set (CMAKE_CXX_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -MT")
-
-endif()
 
 
 
