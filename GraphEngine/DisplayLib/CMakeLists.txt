@@ -116,6 +116,8 @@ target_link_libraries(${PROJECT_NAME} PUBLIC CommonLib)
 target_link_libraries(${PROJECT_NAME} PUBLIC FreeType)
 target_link_libraries(${PROJECT_NAME} PUBLIC Jpeg)
 
-target_include_directories(${PROJECT_NAME} PRIVATE ./)
+target_include_directories(${PROJECT_NAME} PUBLIC ./)
 
-add_subdirectory(Tests)
+if(GRAPHENGINE_BUILD_TESTS)
+    add_subdirectory(Tests)
+endif()

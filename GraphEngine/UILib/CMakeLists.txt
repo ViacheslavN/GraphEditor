@@ -39,4 +39,6 @@ target_link_libraries(${PROJECT_NAME} PUBLIC CommonLib)
 target_include_directories(${PROJECT_NAME} PRIVATE ../ThirdParty/WTL)
 target_include_directories(${PROJECT_NAME} PRIVATE ../ThirdParty/sciter-js-sdk/include)
 
-add_subdirectory(Tests)
+if(GRAPHENGINE_BUILD_TESTS)
+    add_subdirectory(Tests)
+endif()

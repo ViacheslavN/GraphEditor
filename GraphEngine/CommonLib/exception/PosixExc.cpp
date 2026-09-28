@@ -28,11 +28,11 @@ namespace CommonLib
 		std::vector<char> err_buf(256, 0);
 #ifdef _WIN32
 		if (strerror_s(&err_buf[0], err_buf.size(), errCode) == 0)
-			return astr(&err_buf[0]);
+			return std::string(&err_buf[0]);
 #else
 		char* err_descr = strerror_r(errCode, &err_buf[0], err_buf.size());
 		if (err_descr != 0)
-			return astr(err_descr);
+			return std::string(err_descr);
 #endif
 
 		return str_format::AStrFormatSafeT("POSIX Error: {0}", errCode);

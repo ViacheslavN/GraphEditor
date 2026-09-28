@@ -173,6 +173,20 @@ namespace CommonLib
 			return AStrUint64(val);
 		}
 
+#if !defined(_WIN32) && !defined(__LP64__)
+		// 32-bit POSIX (e.g. Android armeabi-v7a): long is a distinct type from int32_t/int64_t
+		// and is used by pthread_t, time_t, off_t...
+		static  std::string AStrFrom(const long& val)
+		{
+			return AStrInt32(static_cast<int32_t>(val));
+		}
+
+		static  std::string AStrFrom(const unsigned long& val)
+		{
+			return AStrUint32(static_cast<uint32_t>(val));
+		}
+#endif
+
 		static std::string AStrFrom(const float& val)
 		{
 			return AStrFloat(val);

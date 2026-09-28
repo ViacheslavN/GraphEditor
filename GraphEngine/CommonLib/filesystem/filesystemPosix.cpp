@@ -23,45 +23,45 @@ namespace CommonLib
 
 	};
 
-	bool CFileUtils::IsFileExist(const astr& path)
+	bool CFileUtils::IsFileExist(const std::string& path)
 	{
 		return access(path.c_str(), F_OK) != -1;
 	}
 
-	bool CFileUtils::IsFileExist(const wstr& path)
+	bool CFileUtils::IsFileExist(const std::wstring& path)
 	{
 		return IsFileExist(StringEncoding::str_w2utf8_safe(path));
 	}
 
-	void CFileUtils::RenameFile(const astr& oldFile, const astr& newFile)
+	void CFileUtils::RenameFile(const asstd::stringtr& oldFile, const std::string& newFile)
 	{
 		if(rename(oldFile.c_str(), newFile.c_str()) != 0)
 			throw CPosixExc(errno, "Failed to rename file {0}->{1}", oldFile, newFile);
 	}
 
-	void CFileUtils::RenameFile(const wstr& oldFile, const wstr& newFile)
+	void CFileUtils::RenameFile(const std::wstring& oldFile, const std::wstring& newFile)
 	{
 		RenameFile(StringEncoding::str_w2utf8_safe(oldFile), StringEncoding::str_w2utf8_safe(newFile));
 	}
  
-	void  CFileUtils::DelFile(const astr& path)
+	void  CFileUtils::DelFile(const std::string& path)
 	{
 		if (remove(path.c_str()) != 0)
 			throw CPosixExc(errno, "Failed to delete file {0}", path);
 	}
 
-	void CFileUtils::DelFile(const wstr& path)
+	void CFileUtils::DelFile(const std::wstring& path)
 	{
         DelFile(StringEncoding::str_w2utf8_safe(path));
 	}
 
-	void CFileUtils::FileDelFolder(const astr& path)
+	void CFileUtils::FileDelFolder(const std::string& path)
 	{
 		if (rmdir(path.c_str()) != 0)
 			throw CPosixExc(errno, "Failed to delete dir {0}", path);
 	}
 
-	void CFileUtils::FileDelFolder(const wstr& path)
+	void CFileUtils::FileDelFolder(const std::wstring& path)
 	{
 		FileDelFolder(StringEncoding::str_w2utf8_safe(path));
 	}
@@ -70,7 +70,7 @@ namespace CommonLib
 	class CDirHandle
 	{
 	public:
-		CDirHandle(const astr& path)
+		CDirHandle(const std::string& path)
 		{
 			m_dir = opendir(path.c_str());
 		}
@@ -93,7 +93,7 @@ namespace CommonLib
 
 
 
-	void CFileUtils::FileSearch(const astr& searchMask, const TCheckFileObj& addDir, const TCheckFileObj& addFile)
+	void CFileUtils::FileSearch(const std::string& searchMask, const TCheckFileObj& addDir, const TCheckFileObj& addFile)
 	{
 
 
@@ -130,13 +130,13 @@ namespace CommonLib
 	void CFileUtils::FileSearch(const astr& searchMask, astrvec& folders, astrvec& files)
 	{
 
-		TCheckFileObj addDir = [&folders](const astr& dir)-> bool
+		TCheckFileObj addDir = [&folders](const std::string& dir)-> bool
 		{
 			folders.push_back(dir);
 			return true;
 		};
 
-		TCheckFileObj addFile = [&files](const astr& file)-> bool
+		TCheckFileObj addFile = [&files](const std::string& file)-> bool
 		{
 			files.push_back(file);
 			return true;

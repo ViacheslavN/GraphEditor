@@ -42,7 +42,7 @@ namespace CommonLib
 
 			RPC_STATUS res = UuidFromStringA((RPC_CSTR)pStr, (UUID *)&m_guid);
 			if (res != RPC_S_OK)
-				throw CWinExc("Failed to convert astr: {0} to guid", gid, res);
+				throw CWinExc("Failed to convert std::string: {0} to guid", gid, res);
 		}
 
 		void CGuid::FromWstr(const std::wstring& gid)
@@ -56,7 +56,7 @@ namespace CommonLib
 
 			RPC_STATUS res = UuidFromStringW((RPC_WSTR)pStr, (UUID *)&m_guid);
 			if (res != RPC_S_OK)
-				throw CWinExc(L"Failed to convert astr: {0} to guid", gid, res);
+				throw CWinExc(L"Failed to convert std::string: {0} to guid", gid, res);
 		}
 
         std::string CGuid::ToAstr(bool withbrackets) const

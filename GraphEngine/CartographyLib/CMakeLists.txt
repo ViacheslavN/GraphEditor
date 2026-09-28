@@ -22,8 +22,11 @@ add_library(CartographyLib ${SOURCE_FILES})
 
 
 target_link_libraries(${PROJECT_NAME} PUBLIC CommonLib)
+target_link_libraries(${PROJECT_NAME} PUBLIC DisplayLib GeoDatabase GisGeometry)
 
 
 target_include_directories(${PROJECT_NAME} PRIVATE ./)
 
-add_subdirectory(Tests)
+if(GRAPHENGINE_BUILD_TESTS)
+    add_subdirectory(Tests)
+endif()

@@ -53,7 +53,7 @@ namespace CommonLib
 			return (0 == pthread_join(m_tid, NULL));
 		}
 
-		void CThreadPosixImpl::SetDescriptionForCurrThread(const astr& threadName)
+		void CThreadPosixImpl::SetDescriptionForCurrThread(const std::string& threadName)
 		{
 #if ( LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,9) )
 			prctl(PR_SET_NAME, threadName.c_str(), 0, 0, 0);

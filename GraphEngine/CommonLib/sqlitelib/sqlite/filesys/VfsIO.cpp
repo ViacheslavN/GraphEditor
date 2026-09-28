@@ -51,7 +51,7 @@ uint32_t sqlite3Get4byte(const byte_t *p)
 	uint32_t x;
 	memcpy(&x, p, 4);
 	return x;
-#elif SQLITE_BYTEORDER==1234 && GCC_VERSION>=4003000
+#elif SQLITE_BYTEORDER==1234 && (defined(__GNUC__) || defined(__clang__))
 	uint32_t x;
 	memcpy(&x, p, 4);
 	return __builtin_bswap32(x);

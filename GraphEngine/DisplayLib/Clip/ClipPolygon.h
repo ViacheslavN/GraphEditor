@@ -35,7 +35,7 @@ namespace GraphEngine
 					{}
 					void HandleVertex(const GPoint& pntCurrent)	// Function to handle one vertex
 					{
-						bool bCurrentInside = IsInside(pntCurrent);		// See if vertex is inside the boundary.
+						bool bCurrentInside = this->IsInside(pntCurrent);		// See if vertex is inside the boundary.
 
 						if (m_bFirst)	// If this is the first vertex...
 						{
@@ -48,13 +48,13 @@ namespace GraphEngine
 							if (bCurrentInside)	// If this vertex is inside...
 							{
 								if (!m_bPreviousInside)		// ... and the previous one was outside
-									m_NextStage.HandleVertex(Intersect(m_pntPrevious, pntCurrent));
+									m_NextStage.HandleVertex(this->Intersect(m_pntPrevious, pntCurrent));
 								// ... first output the intersection point.
 
 								m_NextStage.HandleVertex(pntCurrent);	// Output the current vertex.
 							}
 							else if (m_bPreviousInside) // If this vertex is outside, and the previous one was inside...
-								m_NextStage.HandleVertex(Intersect(m_pntPrevious, pntCurrent));
+								m_NextStage.HandleVertex(this->Intersect(m_pntPrevious, pntCurrent));
 							// ... output the intersection point.
 
 							// If neither current vertex nor the previous one are inside, output nothing.

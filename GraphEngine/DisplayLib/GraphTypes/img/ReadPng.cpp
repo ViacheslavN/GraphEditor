@@ -116,7 +116,7 @@ namespace GraphEngine {
         //aPNG --
 
         int		rowBytes = png_get_rowbytes(png_ptr, info_ptr);
-        SIZE dim = {width, height};
+        SIZE dim = {static_cast<long>(width), static_cast<long>(height)};
         int   bpp = rowBytes / width;
 
         /*if(is_animated)

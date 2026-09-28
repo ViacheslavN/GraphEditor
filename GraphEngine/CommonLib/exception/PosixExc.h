@@ -8,11 +8,11 @@ namespace CommonLib
 	{
 	public:
 		CPosixExc(int errcode);
-		CPosixExc(const astr& err_msg, int err_code);
+		CPosixExc(const std::string& err_msg, int err_code);
 
 
 		template<typename... Types>
-		CPosixExc(int err_code, const astr& format, Types&&... args) : CExcBase(format, std::forward<Types>(args)...), m_errCode(err_code)
+		CPosixExc(int err_code, const std::string& format, Types&&... args) : CExcBase(format, std::forward<Types>(args)...), m_errCode(err_code)
 		{
 			CExcBase::AddMsg(GetErrorMessageA(m_errCode));
 		}
@@ -20,7 +20,7 @@ namespace CommonLib
 		~CPosixExc() noexcept;
 		virtual std::shared_ptr<CExcBase> Clone() const;
 
-		static astr GetErrorMessageA(int errCode);
+		static std::string GetErrorMessageA(int errCode);
 	private:
 	
 	private:

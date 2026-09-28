@@ -9,7 +9,11 @@ namespace GraphEngine
 		Color::Color(const std::string& rgb, AlfaChannel a)
 		{
 			int r, g, b;
-			scanf_s(rgb.c_str(), "%2X%2X%2X", &r, &g, &b);
+#ifdef _WIN32
+			sscanf_s(rgb.c_str(), "%2X%2X%2X", &r, &g, &b);
+#else
+			sscanf(rgb.c_str(), "%2X%2X%2X", &r, &g, &b);
+#endif
 			m_rgba = (static_cast<ColorType>(ColorComponent(r))
 				| (static_cast<ColorType>(ColorComponent(g)) << 8)
 				| (static_cast<ColorType>(ColorComponent(b)) << 16)

@@ -761,9 +761,9 @@ namespace GraphEngine {
 #elif defined (ANDROID)
             // fullFontName = L"/system/fonts/DroidSans.ttf";
 			// return fullFontName;
-			 fullFontName = L"/system/fonts/";
-			 fullFontName += pFont->getFace();
-			 fullFontName += L".ttf";
+			 fullFontName = "/system/fonts/";
+			 fullFontName += pFont->GetFace();
+			 fullFontName += ".ttf";
 			 return fullFontName;
 #endif
         }

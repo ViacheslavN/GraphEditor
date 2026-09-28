@@ -7,7 +7,7 @@
 #include "../CommonLib/exception/exc_base.h"
 #include "../CommonLib/guid/guid.h"
 #include "../CommonLib/data/blob.h"
-#include "../CommonLib/Variant/Variant.h"
+#include "../CommonLib/variant/Variant.h"
 
 namespace GraphEngine
 {

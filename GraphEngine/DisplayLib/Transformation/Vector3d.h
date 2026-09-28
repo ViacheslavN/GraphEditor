@@ -132,7 +132,7 @@ namespace GraphEngine {
 
             void rotateXZBy(double degrees, const vector3d<T>& center)
             {
-                degrees *=GRAD_PI2;
+                degrees *=CDisplayMath::GRAD_PI2;
                 T cs = (T)cos(degrees);
                 T sn = (T)sin(degrees);
                 X -= center.X;
@@ -144,7 +144,7 @@ namespace GraphEngine {
 
             void rotateXYBy(double degrees, const vector3d<T>& center)
             {
-                degrees *=GRAD_PI2;
+                degrees *=CDisplayMath::GRAD_PI2;
                 T cs = (T)cos(degrees);
                 T sn = (T)sin(degrees);
                 X -= center.X;
@@ -156,7 +156,7 @@ namespace GraphEngine {
 
             void rotateYZBy(double degrees, const vector3d<T>& center)
             {
-                degrees *=GRAD_PI2;
+                degrees *=CDisplayMath::GRAD_PI2;
                 T cs = (T)cos(degrees);
                 T sn = (T)sin(degrees);
                 Z -= center.Z;
@@ -186,7 +186,7 @@ namespace GraphEngine {
                 vector3d<T> angle;
 
                 angle.Y = (T)atan2(X, Z);
-                angle.Y *= (double)GRAD_PI;
+                angle.Y *= (double)CDisplayMath::GRAD_PI;
 
                 if (angle.Y < 0.0f) angle.Y += 360.0f;
                 if (angle.Y >= 360.0f) angle.Y -= 360.0f;
@@ -195,7 +195,7 @@ namespace GraphEngine {
                 z1 = (T)sqrt(X*X + Z*Z);
 
                 angle.X = (T)atan2(z1, Y);
-                angle.X *= (double)GRAD_PI;
+                angle.X *= (double)CDisplayMath::GRAD_PI;
                 angle.X -= 90.0f;
 
                 if (angle.X < 0.0f) angle.X += 360.0f;

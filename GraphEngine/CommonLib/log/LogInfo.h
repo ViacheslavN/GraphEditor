@@ -8,13 +8,13 @@ namespace CommonLib
 	{
 	public:
 		template<typename... Types>
-		CLogInfo(CLogger log, const astr& format, Types&&... args): m_log(log), m_complete(false)
+		CLogInfo(CLogger log, const std::string& format, Types&&... args): m_log(log), m_complete(false)
 		{
 			m_msg = str_format::AStrFormatSafeT(format, std::forward<Types>(args)...);
 			m_log.Info(m_msg);
 		}
 
-		CLogInfo(CLogger log, const astr& msg) : m_log(log), m_complete(false)
+		CLogInfo(CLogger log, const std::string& msg) : m_log(log), m_complete(false)
 		{
 			m_msg = msg;
 			m_log.Info(m_msg); 
@@ -25,16 +25,16 @@ namespace CommonLib
 			Complete(m_msg + "  ok");
 		}
 
-		void Complete(const astr& msg)
+		void Complete(const std::string& msg)
 		{
 			m_complete = true;
 			m_log.Info(msg);
 		}
 
 		template<typename... Types>
-		void Complete(const astr& format, Types&&... args)
+		void Complete(const std::string& format, Types&&... args)
 		{
-			astr msg = str_format::AStrFormatSafeT(format, std::forward<Types>(args)...);
+			std::string msg = str_format::AStrFormatSafeT(format, std::forward<Types>(args)...);
 			Complete(msg);
 		}
 
@@ -59,14 +59,14 @@ namespace CommonLib
 	{
 	public:
 		template<typename... Types>
-		CLogTrace(CLogger log, const astr& format, Types&&... args) : m_log(log), m_complete(false)
+		CLogTrace(CLogger log, const std::string& format, Types&&... args) : m_log(log), m_complete(false)
 		{
 			m_msg = str_format::AStrFormatSafeT(format, std::forward<Types>(args)...);
 			m_log.Trace(m_msg);
 		}
 
 
-		CLogTrace(CLogger log, const astr& msg) : m_log(log), m_complete(false)
+		CLogTrace(CLogger log, const std::string& msg) : m_log(log), m_complete(false)
 		{
 			m_msg = msg;
 			m_log.Trace(m_msg);
@@ -77,16 +77,16 @@ namespace CommonLib
 			m_log.Trace(m_msg + "  ok");
 		}
 
-		void Complete(const astr& msg)
+		void Complete(const std::string& msg)
 		{
 			m_complete = true;
 			m_log.Trace(msg);
 		}
 
 		template<typename... Types>
-		void Complete(const astr& format, Types&&... args)
+		void Complete(const std::string& format, Types&&... args)
 		{
-			astr msg = str_format::AStrFormatSafeT(format, std::forward<Types>(args)...);
+			std::string msg = str_format::AStrFormatSafeT(format, std::forward<Types>(args)...);
 			m_log.Trace(msg);
 		}
 

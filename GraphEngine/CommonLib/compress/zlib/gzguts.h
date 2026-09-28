@@ -43,6 +43,15 @@
 #  define WIDECHAR
 #endif
 
+#ifndef _WIN32
+   /* this copy of zlib calls the MSVC CRT names (_open/_read/...) directly */
+#  include <unistd.h>
+#  define _open open
+#  define _read read
+#  define _write write
+#  define _close close
+#endif
+
 #ifdef WINAPI_FAMILY
 #  define open _open
 #  define read _read

@@ -17,22 +17,22 @@ int main()
 {
 /*	TestZlib();
 	return 0;
-	astr path = "C:\\dir1\\dir2\\file.ttt\\";
-	wstr pathw = L"C:\\dir1\\dir2\\file.ttt\\";
+	std::string path = "C:\\dir1\\dir2\\file.ttt\\";
+	std::wstring pathw = L"C:\\dir1\\dir2\\file.ttt\\";
 
 
-	astr left = CommonLib::StringUtils::Left(path, 3);
-	astr right = CommonLib::StringUtils::Right(path, 3);
+	std::string left = CommonLib::StringUtils::Left(path, 3);
+	std::string right = CommonLib::StringUtils::Right(path, 3);
 
-	astr FileExtension = CommonLib::CPathUtils::FindFileExtension(path);
-	astr FileName = CommonLib::CPathUtils::FindFileName(path);
-	astr OnlyFileName = CommonLib::CPathUtils::FindOnlyFileName(path);
-	astr Path = CommonLib::CPathUtils::FindFilePath(path);
+	std::string FileExtension = CommonLib::CPathUtils::FindFileExtension(path);
+	std::string FileName = CommonLib::CPathUtils::FindFileName(path);
+	std::string OnlyFileName = CommonLib::CPathUtils::FindOnlyFileName(path);
+	std::string Path = CommonLib::CPathUtils::FindFilePath(path);
 
-	wstr FileExtensionW = CommonLib::CPathUtils::FindFileExtension(pathw);
-	wstr FileNameW = CommonLib::CPathUtils::FindFileName(pathw);
-	wstr OnlyFileNameW = CommonLib::CPathUtils::FindOnlyFileName(pathw);
-	wstr PathW = CommonLib::CPathUtils::FindFilePath(pathw);*/
+	std::wstring FileExtensionW = CommonLib::CPathUtils::FindFileExtension(pathw);
+	std::wstring FileNameW = CommonLib::CPathUtils::FindFileName(pathw);
+	std::wstring OnlyFileNameW = CommonLib::CPathUtils::FindOnlyFileName(pathw);
+	std::wstring PathW = CommonLib::CPathUtils::FindFilePath(pathw);*/
 
 	/*bool bCycle = true;
 	while (bCycle)
@@ -44,7 +44,7 @@ int main()
 
 	CommonLib::CPosixExc posizExc(12, "{0}, {1}", 34, 45.5);
 
-	astr msg = posizExc.GetErrorMessageA(45);
+	std::string msg = posizExc.GetErrorMessageA(45);
 
 	std::shared_ptr<CommonLib::IlogLineFormat> plogLineFormat;
 	std::shared_ptr<CommonLib::IlogRetention> plogRetention;

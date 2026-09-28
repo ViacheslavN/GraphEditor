@@ -16,7 +16,7 @@ namespace CommonLib
 			~CThreadPosixImpl();
 
 			bool Wait(const int Timeout = 0xFFFFFFFF) const;
-			static void SetDescriptionForCurrThread(const astr& threadName);
+			static void SetDescriptionForCurrThread(const std::string& threadName);
 		private:
 			pthread_t m_tid;
             std::function<void()> m_threadFunk;

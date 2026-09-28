@@ -44,9 +44,9 @@ namespace CommonLib
 		static void FileSearch(const std::wstring& searchMask,  const TCheckFileObj& addDir, const TCheckFileObj& addFile);
 		static void FileSearch(const std::wstring& searchMask, std::vector<std::wstring>& folders, std::vector<std::wstring>& files);
 #elif  __linux__
-		typedef std::function<bool(const astr&)> TCheckFileObj;
-		static void FileSearch(const astr& searchMask, const TCheckFileObj& addDir, const TCheckFileObj& addFile);
-		static void FileSearch(const astr& searchMask, astrvec& folders, astrvec& files);
+		typedef std::function<bool(const std::string&)> TCheckFileObj;
+		static void FileSearch(const std::string& searchMask, const TCheckFileObj& addDir, const TCheckFileObj& addFile);
+		static void FileSearch(const std::string& searchMask, astrvec& folders, astrvec& files);
 #endif
 
 		static bool IsFileExist(const std::string& path);

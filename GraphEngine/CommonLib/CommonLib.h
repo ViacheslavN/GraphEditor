@@ -57,6 +57,20 @@
 
 typedef uint8_t byte_t;
 
+#ifndef _WIN32
+	// On Windows these come from the SDK (rpcndr.h) or are not used by the Windows code path;
+	// POSIX/Android code and some shared templates still rely on them.
+	typedef unsigned char byte;
+	typedef std::string astr;
+	typedef std::wstring wstr;
+	typedef std::vector<std::string> astrvec;
+	typedef std::vector<std::wstring> wstrvec;
+
+	// <windows.h> provides global min/max macros which the code relies on
+	using std::min;
+	using std::max;
+#endif
+
 
 
 #ifdef _WIN32

@@ -9,12 +9,12 @@ namespace CommonLib {
     namespace system {
         namespace lin {
 
-            CDynamicLibraryLin::CDynamicLibraryLin(const astr& path)
+            CDynamicLibraryLin::CDynamicLibraryLin(const std::string& path)
             {
                 LoadLib(path);
             }
 
-            CDynamicLibraryLin::CDynamicLibraryLin(const wstr& path)
+            CDynamicLibraryLin::CDynamicLibraryLin(const std::wstring& path)
             {
                 LoadLib(StringEncoding::str_w2utf8_safe(path));
             }
@@ -28,7 +28,7 @@ namespace CommonLib {
                 }
             }
 
-            void* CDynamicLibraryLin::GetProcAddr(const astr& proc_name)
+            void* CDynamicLibraryLin::GetProcAddr(const std::string& proc_name)
             {
                 void* pfnAddr = dlsym(m_handle, proc_name.c_str());
                 char* pszError = dlerror();
@@ -40,12 +40,12 @@ namespace CommonLib {
                 return pfnAddr;
             }
 
-            void* CDynamicLibraryLin::GetProcAddr(const wstr& proc_name)
+            void* CDynamicLibraryLin::GetProcAddr(const std::wstring& proc_name)
             {
                 return GetProcAddr(StringEncoding::str_w2utf8_safe(proc_name));
             }
 
-            void CDynamicLibraryLin::LoadLib(const astr& path)
+            void CDynamicLibraryLin::LoadLib(const std::string& path)
             {
                 m_handle = dlopen(path.c_str(), RTLD_LAZY);
                 if (NULL == m_handle) {

@@ -5,6 +5,7 @@
 namespace CommonLib
 {
 
+#if defined(_MSC_VER)	// prebuilt MSVC zstd; on other platforms zstd is compiled by CMake
 #ifdef _WIN64
 
 #ifdef _DEBUG
@@ -22,6 +23,7 @@ namespace CommonLib
 #endif
 
 #endif// _WIN64
+#endif// _MSC_VER
 
 
 	class ZDeStdHolder

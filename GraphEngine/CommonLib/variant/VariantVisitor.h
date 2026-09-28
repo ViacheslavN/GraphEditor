@@ -2,7 +2,7 @@
 #include "../CommonLib.h"
 #include "../data/blob.h"
 #include "../SpatialData/IGeoShape.h"
-#include "../guid/Guid.h"
+#include "../guid/guid.h"
 
 namespace CommonLib
 {

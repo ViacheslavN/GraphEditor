@@ -1,8 +1,15 @@
 cmake_minimum_required(VERSION 3.17)
 project(CommonLib)
 
-find_library(PTHREAD_LIBRARY pthread)
-find_package(OpenSSL REQUIRED)
+if(ANDROID)
+	# pthread is part of Bionic libc on Android.
+	# OpenSSL is optional: point CMake to an Android build of it (e.g. vcpkg arm64-android
+	# triplet, or -DOPENSSL_ROOT_DIR=...) to get crypto/openssllib, otherwise it is skipped.
+	find_package(OpenSSL QUIET)
+else()
+	find_library(PTHREAD_LIBRARY pthread)
+	find_package(OpenSSL REQUIRED)
+endif()
 
 
 set(CMAKE_CXX_STANDARD 17)
@@ -307,9 +314,13 @@ set(COMMON_SOURCE_FILES
 		filesystem/Directory.cpp
 )
 
-set(STATIC_LIBS
-        -lpthread
-        )
+if(ANDROID)
+	set(STATIC_LIBS)
+else()
+	set(STATIC_LIBS
+			-lpthread
+			)
+endif()
 
 set(POSIX_SOURCE_FILES
 		exception/PosixExc.cpp
@@ -351,6 +362,36 @@ set(POSIX_SOURCE_FILES
 
 )
 
+set(SQLITE_SOURCE_FILES
+		sqlitelib/CryptoContext.cpp
+		sqlitelib/CryptoContext.h
+		sqlitelib/Database.h
+		sqlitelib/sqlite
+		sqlitelib/sqlite/CryptoContextHolder.cpp
+		sqlitelib/sqlite/CryptoContextHolder.h
+		sqlitelib/sqlite/Database.cpp
+		sqlitelib/sqlite/Database.h
+		sqlitelib/sqlite/db
+		sqlitelib/sqlite/db/sqlite3.c
+		sqlitelib/sqlite/db/sqlite3.h
+		sqlitelib/sqlite/db/sqlite3ext.h
+		sqlitelib/sqlite/filesys
+		sqlitelib/sqlite/filesys/SqliteVfs.cpp
+		sqlitelib/sqlite/filesys/SqliteVfs.h
+		sqlitelib/sqlite/filesys/VfsIO.cpp
+		sqlitelib/sqlite/filesys/VfsIO.h
+		sqlitelib/sqlite/filesys/VfsProxyIo.cpp
+		sqlitelib/sqlite/filesys/VfsProxyIo.h
+		sqlitelib/sqlite/SqliteApi.cpp
+		sqlitelib/sqlite/SqliteApi.h
+		sqlitelib/sqlite/SqliteExc.cpp
+		sqlitelib/sqlite/SqliteExc.h
+		sqlitelib/sqlite/Statement.cpp
+		sqlitelib/sqlite/Statement.h
+		sqlitelib/sqlite/Transaction.cpp
+		sqlitelib/sqlite/Transaction.h
+)
+
 set(WINDOWS_SOURCE_FILES
 		crypto/winapi/aes/AESCipher.cpp
 		crypto/winapi/aes/AESCipher.h
@@ -385,33 +426,6 @@ set(WINDOWS_SOURCE_FILES
 		perf/win/PerformanceTimer.cpp
 		perf/win/PerformanceTimer.h
 
-		sqlitelib/CryptoContext.cpp
-		sqlitelib/CryptoContext.h
-		sqlitelib/Database.h
-		sqlitelib/sqlite
-		sqlitelib/sqlite/CryptoContextHolder.cpp
-		sqlitelib/sqlite/CryptoContextHolder.h
-		sqlitelib/sqlite/Database.cpp
-		sqlitelib/sqlite/Database.h
-		sqlitelib/sqlite/db
-		sqlitelib/sqlite/db/sqlite3.c
-		sqlitelib/sqlite/db/sqlite3.h
-		sqlitelib/sqlite/db/sqlite3ext.h
-		sqlitelib/sqlite/filesys
-		sqlitelib/sqlite/filesys/SqliteVfs.cpp
-		sqlitelib/sqlite/filesys/SqliteVfs.h
-		sqlitelib/sqlite/filesys/VfsIO.cpp
-		sqlitelib/sqlite/filesys/VfsIO.h
-		sqlitelib/sqlite/filesys/VfsProxyIo.cpp
-		sqlitelib/sqlite/filesys/VfsProxyIo.h
-		sqlitelib/sqlite/SqliteApi.cpp
-		sqlitelib/sqlite/SqliteApi.h
-		sqlitelib/sqlite/SqliteExc.cpp
-		sqlitelib/sqlite/SqliteExc.h
-		sqlitelib/sqlite/Statement.cpp
-		sqlitelib/sqlite/Statement.h
-		sqlitelib/sqlite/Transaction.cpp
-		sqlitelib/sqlite/Transaction.h
 
 		synch/WinThread.cpp
 		synch/WinThread.h
@@ -433,12 +447,18 @@ set(WINDOWS_SOURCE_FILES
 )
 
 IF (WIN32)
-        set(SOURCE_FILES ${COMMON_SOURCE_FILES} ${WINDOWS_SOURCE_FILES})
+        set(SOURCE_FILES ${COMMON_SOURCE_FILES} ${WINDOWS_SOURCE_FILES} ${SQLITE_SOURCE_FILES})
 		add_definitions(-DUNICODE -D_UNICODE -DSQLITE_ENABLE_RTREE)
 ELSE()
         set(SOURCE_FILES ${COMMON_SOURCE_FILES} ${POSIX_SOURCE_FILES}
+				${SQLITE_SOURCE_FILES}
 				)
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -static-libstdc++ -static-libgcc -fPIC -fvisibility=hidden")
+        if(ANDROID)
+			# STL linkage is controlled by ANDROID_STL (c++_static / c++_shared)
+			set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC -fvisibility=hidden")
+		else()
+			set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -static-libstdc++ -static-libgcc -fPIC -fvisibility=hidden")
+		endif()
 		add_definitions(-DSQLITE_ENABLE_RTREE)
 ENDIF()
 
@@ -453,11 +473,41 @@ endif()
 
 
 
+if(NOT WIN32)
+	# bundled libuuid: tell it which POSIX headers are available
+	set_source_files_properties(${POSIX_SOURCE_FILES} PROPERTIES COMPILE_DEFINITIONS
+			"HAVE_UNISTD_H;HAVE_STDLIB_H;HAVE_SYS_TIME_H;HAVE_SYS_FILE_H;HAVE_SYS_IOCTL_H;HAVE_SYS_SOCKET_H;HAVE_SYS_UN_H;HAVE_NET_IF_H;HAVE_NETINET_IN_H")
+endif()
+
+if(NOT WIN32)
+	# zstd: on Windows a prebuilt libzstd_static.lib is used (#pragma comment in ZstdDecompressionStream.cpp),
+	# elsewhere compile the bundled sources into CommonLib
+	file(GLOB ZSTD_SOURCE_FILES
+			${CMAKE_CURRENT_SOURCE_DIR}/ThirdParty/zstd/lib/common/*.c
+			${CMAKE_CURRENT_SOURCE_DIR}/ThirdParty/zstd/lib/compress/*.c
+			${CMAKE_CURRENT_SOURCE_DIR}/ThirdParty/zstd/lib/decompress/*.c)
+	set_source_files_properties(${ZSTD_SOURCE_FILES} PROPERTIES
+			COMPILE_DEFINITIONS "ZSTD_DISABLE_ASM;XXH_NAMESPACE=ZSTD_"
+			INCLUDE_DIRECTORIES "${CMAKE_CURRENT_SOURCE_DIR}/ThirdParty/zstd/lib;${CMAKE_CURRENT_SOURCE_DIR}/ThirdParty/zstd/lib/common")
+	list(APPEND SOURCE_FILES ${ZSTD_SOURCE_FILES})
+
+	# libpng: the arm/ NEON sources are not part of the build
+	file(GLOB PNG_SOURCE_FILES ${CMAKE_CURRENT_SOURCE_DIR}/ThirdParty/Png/*.c)
+	set_source_files_properties(${PNG_SOURCE_FILES} PROPERTIES COMPILE_DEFINITIONS "PNG_ARM_NEON_OPT=0")
+endif()
+
+if(NOT OpenSSL_FOUND)
+	message(STATUS "CommonLib: OpenSSL not found - crypto/openssllib is excluded from the build")
+	list(FILTER SOURCE_FILES EXCLUDE REGEX "^crypto/openssllib/")
+endif()
+
 add_library(CommonLib ${SOURCE_FILES})
 target_link_libraries(CommonLib PRIVATE ${STATIC_LIBS})
 target_include_directories(CommonLib PUBLIC .)
 target_include_directories(CommonLib PUBLIC ./compress/zlib)
-target_link_libraries(CommonLib PRIVATE OpenSSL::SSL OpenSSL::Crypto)
+if(OpenSSL_FOUND)
+	target_link_libraries(CommonLib PRIVATE OpenSSL::SSL OpenSSL::Crypto)
+endif()
 
 
 
@@ -476,4 +526,6 @@ target_link_libraries(CommonLib PRIVATE OpenSSL::SSL OpenSSL::Crypto)
 #target_link_libraries(TestLog PRIVATE  CommonLib)
 #target_include_directories(TestLog PRIVATE ../../../)
 
-add_subdirectory(Tests)
+if(GRAPHENGINE_BUILD_TESTS)
+    add_subdirectory(Tests)
+endif()

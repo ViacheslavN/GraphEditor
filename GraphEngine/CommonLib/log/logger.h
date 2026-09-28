@@ -224,31 +224,31 @@ namespace CommonLib
 		}
 		
 		template<class TArg>
-		void ExcT(const astr& format, std::exception& exc)
+		void ExcT(const std::string& format, std::exception& exc)
 		{
 			Exc(format, exc);
 		}
 
 		template<class TArg>
-		void ExcT(const astr& format, const TArg& arg, std::exception& exc)
+		void ExcT(const std::string& format, const TArg& arg, std::exception& exc)
 		{
 			Exc(format, str_utils::AStrFrom(arg), exc);
 		}
 
 		template<class TArg, class TArg1>
-		void ExcT(const astr& format, const TArg& arg, const TArg1& arg1, std::exception& exc)
+		void ExcT(const std::string& format, const TArg& arg, const TArg1& arg1, std::exception& exc)
 		{
 			Exc(format, str_utils::AStrFrom(arg), str_utils::AStrFrom(arg1), exc);
 		}
 
 		template<class TArg1, class TArg2, class TArg3>
-		void ExcT(const astr& format, const TArg1& arg1, const TArg2& arg2, const TArg3& arg3, std::exception& exc)
+		void ExcT(const std::string& format, const TArg1& arg1, const TArg2& arg2, const TArg3& arg3, std::exception& exc)
 		{
 			Exc(format, str_utils::AStrFrom(arg1), str_utils::AStrFrom(arg2), str_utils::AStrFrom(arg3), exc);
 		}
 
 		template<class TArg1, class TArg2, class TArg3, class TArg4>
-		void ExcT(const astr& format, const TArg1& arg1, const TArg2& arg2, const TArg3& arg3, const TArg4& arg4, std::exception& exc)
+		void ExcT(const std::string& format, const TArg1& arg1, const TArg2& arg2, const TArg3& arg3, const TArg4& arg4, std::exception& exc)
 		{
 			Exc(format, str_utils::AStrFrom(arg1), str_utils::AStrFrom(arg2), str_utils::AStrFrom(arg3), str_utils::AStrFrom(arg4), exc);
 		}*/

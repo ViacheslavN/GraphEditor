@@ -88,4 +88,6 @@ add_library(GeoDatabase ${SOURCE_FILES})
 target_link_libraries(${PROJECT_NAME} PUBLIC CommonLib)
 target_link_libraries(${PROJECT_NAME} PUBLIC ShapeLib)
 
-add_subdirectory(Tests)
+if(GRAPHENGINE_BUILD_TESTS)
+    add_subdirectory(Tests)
+endif()
