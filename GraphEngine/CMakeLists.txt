@@ -64,6 +64,7 @@ if(NOT ANDROID)
     add_subdirectory(UILib)   # Windows UI (WTL/sciter) only
 endif()
 add_subdirectory(ThirdParty)
+add_subdirectory(GraphEnginejni)   # GraphEnginejni.dll / libGraphEnginejni.so
 
 
 set(ignoreMe "${CMAKE_TOOLCHAIN_FILE}")

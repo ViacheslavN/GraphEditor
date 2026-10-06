@@ -93,6 +93,7 @@ namespace GraphEngine {
 
             int nBufSize = (int)line_size* height;
 			unsigned char* pBuf = new unsigned char[nBufSize];
+            m_ptrSurface = std::make_shared<CBitmap>();
 			m_ptrSurface->Attach(pBuf, size_t(width), size_t(height),BitmapFormatType32bppARGB, 0, true);
 			m_rbuf.attach(m_ptrSurface->Bits(), (int)width, (int)height, (int)(flipY ? line_size : -line_size));
 #endif

@@ -1,0 +1,4 @@
+add_subdirectory(CartographyLibJni)
+add_subdirectory(DisplayLibJni)
+add_subdirectory(GeoDatabaseLibJni)
+add_subdirectory(GisGeometryLibJni)

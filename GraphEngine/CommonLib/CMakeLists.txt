@@ -312,6 +312,7 @@ set(COMMON_SOURCE_FILES
 		variant/VariantVisitor.cpp
 		filesystem/Directory.h
 		filesystem/Directory.cpp
+		ObjectHolder/ObjectHolder.cpp
 )
 
 if(ANDROID OR WIN32)
