@@ -91,10 +91,8 @@ namespace GraphEngine {
             m_rbuf.attach(m_ptrSurface->Bits(), (int)width, (int)height, flipY ? (int)line_size : -1 *(int)line_size);
 #else
 
-            int nBufSize = (int)line_size* height;
-			unsigned char* pBuf = new unsigned char[nBufSize];
-            m_ptrSurface = std::make_shared<CBitmap>();
-			m_ptrSurface->Attach(pBuf, size_t(width), size_t(height),BitmapFormatType32bppARGB, 0, true);
+            // the bitmap owns the pixel buffer (allocated and released by its allocator)
+            m_ptrSurface = std::make_shared<CBitmap>(size_t(width), size_t(height), BitmapFormatType32bppARGB);
 			m_rbuf.attach(m_ptrSurface->Bits(), (int)width, (int)height, (int)(flipY ? line_size : -line_size));
 #endif
 
@@ -251,7 +249,8 @@ namespace GraphEngine {
                 agg::rect_i rect((int)srcPoint.x, (int)srcPoint.y, (int)(srcPoint.x + dstRect.Width() - 1), (int)(srcPoint.y + dstRect.Height() - 1));
                 m_renderer_base.blend_from(pGraphicsAgg->m_rendering_buffer, &rect, (int)(dstRect.xMin - srcPoint.x), (int)(dstRect.yMin - srcPoint.y));
             }
-            copy(pSrc, srcPoint, dstRect);
+            else
+                copy(pSrc, srcPoint, dstRect); // generic per-pixel copy for other graphics types
         }
 
         void CGraphicsAgg::copy(IGraphicsPtr pSrc, const GPoint& srcPoint, const GRect& dstRect, bool bBlend)

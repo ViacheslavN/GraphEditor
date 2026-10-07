@@ -29,6 +29,7 @@ namespace GraphEngine {
                     return "REAL";
                     break;
                 case  dtBlob:
+                case  dtGeometry:
                     return "BLOB";
                     break;
                 case  dtString:
@@ -39,8 +40,18 @@ namespace GraphEngine {
             }
         }
 
-        eDataTypes  CSQLiteUtils::SQLiteType2FieldType(const std::string& sSQLiteType)
+        eDataTypes  CSQLiteUtils::SQLiteType2FieldType(const std::string& sDeclaredType)
         {
+            // declared type, e.g. "INTEGER", "integer", "VARCHAR(10)" (SQLite type affinity rules)
+            std::string sSQLiteType = sDeclaredType;
+            std::transform(sSQLiteType.begin(), sSQLiteType.end(), sSQLiteType.begin(), [](unsigned char c){ return (char)toupper(c); });
+            if(sSQLiteType.find("INT") != std::string::npos)
+                return dtInteger64;
+            if(sSQLiteType.find("CHAR") != std::string::npos || sSQLiteType.find("CLOB") != std::string::npos)
+                return dtString;
+            if(sSQLiteType.find("REAL") != std::string::npos || sSQLiteType.find("FLOA") != std::string::npos || sSQLiteType.find("DOUB") != std::string::npos)
+                return dtDouble;
+
             if(sSQLiteType == "INTEGER")
                 return dtInteger64;
             if(sSQLiteType == "REAL")
@@ -159,12 +170,109 @@ namespace GraphEngine {
         }
 
 
+        const char* CSQLiteUtils::SpatialTablesMetaName()
+        {
+            return "GE_SPATIAL_TABLES";
+        }
+
+        void CSQLiteUtils::WriteSpatialTableInfo(const SSpatialTableInfo& info, CommonLib::database::IDatabasePtr ptrDatabase)
+        {
+            try
+            {
+                if(!ptrDatabase->IsTableExists(SpatialTablesMetaName()))
+                {
+                    std::string sql = std::string("CREATE TABLE ") + SpatialTablesMetaName() +
+                            " (TableName TEXT NOT NULL PRIMARY KEY, ViewName TEXT, ShapeField TEXT, OIDField TEXT, SpatialIndex TEXT,"
+                            " ShapeType INTEGER, XMin REAL, YMin REAL, XMax REAL, YMax REAL, SpatialReference TEXT)";
+                    ptrDatabase->Execute(sql.c_str());
+                }
+
+                std::string sql = std::string("INSERT OR REPLACE INTO ") + SpatialTablesMetaName() +
+                        " (TableName, ViewName, ShapeField, OIDField, SpatialIndex, ShapeType, XMin, YMin, XMax, YMax, SpatialReference)"
+                        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                CommonLib::database::IStatmentPtr ptrStatment = ptrDatabase->PrepareQuery(sql.c_str());
+                ptrStatment->BindText(1, info.sTableName, true);
+                ptrStatment->BindText(2, info.sViewName, true);
+                ptrStatment->BindText(3, info.sShapeField, true);
+                ptrStatment->BindText(4, info.sOIDField, true);
+                ptrStatment->BindText(5, info.sSpatialIndex, true);
+                ptrStatment->BindInt64(6, (int64_t)info.shapeType);
+                ptrStatment->BindDouble(7, info.extent.xMin);
+                ptrStatment->BindDouble(8, info.extent.yMin);
+                ptrStatment->BindDouble(9, info.extent.xMax);
+                ptrStatment->BindDouble(10, info.extent.yMax);
+                ptrStatment->BindText(11, info.sSpatialReference, true);
+                ptrStatment->Next();
+            }
+            catch (std::exception& exc)
+            {
+                CommonLib::CExcBase::RegenExc("Failed to write spatial table info, table: {0}", info.sTableName, exc);
+            }
+        }
+
+        bool CSQLiteUtils::ReadSpatialTableInfo(const std::string& sTableName, SSpatialTableInfo& info, CommonLib::database::IDatabasePtr ptrDatabase)
+        {
+            try
+            {
+                if(!ptrDatabase->IsTableExists(SpatialTablesMetaName()))
+                    return false;
+
+                std::string sql = std::string("SELECT TableName, ViewName, ShapeField, OIDField, SpatialIndex, ShapeType, XMin, YMin, XMax, YMax, SpatialReference FROM ") +
+                        SpatialTablesMetaName() + " WHERE TableName = ?";
+                CommonLib::database::IStatmentPtr ptrStatment = ptrDatabase->PrepareQuery(sql.c_str());
+                ptrStatment->BindText(1, sTableName, true);
+                if(!ptrStatment->Next())
+                    return false;
+
+                info.sTableName = ptrStatment->ReadText(0);
+                info.sViewName = ptrStatment->ReadText(1);
+                info.sShapeField = ptrStatment->ReadText(2);
+                info.sOIDField = ptrStatment->ReadText(3);
+                info.sSpatialIndex = ptrStatment->ReadText(4);
+                info.shapeType = (CommonLib::eShapeType)ptrStatment->ReadInt64(5);
+                info.extent.type = CommonLib::bbox_type_normal;
+                info.extent.xMin = ptrStatment->ReadDouble(6);
+                info.extent.yMin = ptrStatment->ReadDouble(7);
+                info.extent.xMax = ptrStatment->ReadDouble(8);
+                info.extent.yMax = ptrStatment->ReadDouble(9);
+                info.sSpatialReference = ptrStatment->ReadText(10);
+                return true;
+            }
+            catch (std::exception& exc)
+            {
+                CommonLib::CExcBase::RegenExc("Failed to read spatial table info, table: {0}", sTableName, exc);
+                throw;
+            }
+        }
+
+        std::vector<std::string> CSQLiteUtils::ReadSpatialTableNames(CommonLib::database::IDatabasePtr ptrDatabase)
+        {
+            try
+            {
+                std::vector<std::string> vecNames;
+                if(!ptrDatabase->IsTableExists(SpatialTablesMetaName()))
+                    return vecNames;
+
+                std::string sql = std::string("SELECT TableName FROM ") + SpatialTablesMetaName() + " ORDER BY TableName";
+                CommonLib::database::IStatmentPtr ptrStatment = ptrDatabase->PrepareQuery(sql.c_str());
+                while(ptrStatment->Next())
+                    vecNames.push_back(ptrStatment->ReadText(0));
+
+                return vecNames;
+            }
+            catch (std::exception& exc)
+            {
+                CommonLib::CExcBase::RegenExc("Failed to read spatial tables", exc);
+                throw;
+            }
+        }
+
         void CSQLiteUtils::CreateCreateTable(IFieldsPtr pFields, const std::string& sTableName, CommonLib::database::IDatabasePtr ptrDatabase)
         {
             try
             {
                 if(pFields->GetFieldCount() == 0)
-                    CommonLib::CExcBase("Fields aren't set");
+                    throw CommonLib::CExcBase("Fields aren't set");
 
 
                 std::vector<std::string> vecPrimaryKey;
@@ -197,7 +305,7 @@ namespace GraphEngine {
                    }
                    
                    if(!ptrField->GetIsNullable())
-                       sql += "NOT NULL ";
+                       sql += " NOT NULL ";
 
 
 

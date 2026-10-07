@@ -32,10 +32,16 @@ namespace GraphEngine {
             virtual void Save(CommonLib::ISerializeObjPtr ptrObj) const;
             virtual void Load(CommonLib::ISerializeObjPtr ptrObj);
 
+            // names of the spatial tables of the database (they are also loaded as datasets on open)
+            std::vector<std::string> GetSpatialTableNames() const;
+
         protected:
             virtual IDatasetPtr LoadDataset(const std::string& sName);
             virtual IDatasetPtr LoadTable(const std::string& sName);
             virtual IDatasetPtr LoadSpatialTable(const std::string& sName);
+
+        private:
+            void LoadSpatialTables();
 
         private:
 

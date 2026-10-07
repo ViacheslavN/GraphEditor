@@ -1,4 +1,3 @@
-#pragma once
 #include "FeatureLayer.h"
 #include "../GisGeometry/Envelope.h"
 #include "../GeoDatabase/QueryFilter.h"
@@ -9,7 +8,8 @@
 namespace GraphEngine {
     namespace Cartography {
 
-        CFeatureLayer::CFeatureLayer()
+        CFeatureLayer::CFeatureLayer() : m_bSelectable(true), m_hasReferenceScale(false),
+                                         m_dDrawingWidth(0.), m_bDrawingWidthScaleDependent(false)
         {
             m_nLayerSymbolID = FeatureLayerID;
         }
@@ -19,120 +19,192 @@ namespace GraphEngine {
 
         }
 
-        void CFeatureLayer::DrawFeatures(eDrawPhase phase, const std::vector<int64_t>& vecOids, Display::IDisplayPtr ptrDisplay, Display::ITrackCancelPtr ptrTrackCancel, Display::ISymbolPtr ptrCustomSymbol) const
+        std::string CFeatureLayer::GetOIDFieldName() const
         {
-            if(!IsValid())
-                return;
+            if(!m_sOIDField.empty())
+                return m_sOIDField;
 
-            double oldRefScale = ptrDisplay->GetTransformation()->GetReferenceScale();
+            return m_ptrTable.get() ? m_ptrTable->GetOIDFieldName() : std::string();
+        }
 
-            if(m_hasReferenceScale)
-                ptrDisplay->GetTransformation()->SetReferenceScale(m_hasReferenceScale);
+        GeoDatabase::ISpatialFilterPtr CFeatureLayer::CreateDisplayFilter(Display::IDisplayPtr ptrDisplay, bool& bIntersects)
+        {
+            bIntersects = false;
+            Display::IDisplayTransformationPtr ptrTrans = ptrDisplay->GetTransformation();
 
-            if((phase & DrawPhaseGeography))
+            CommonLib::bbox bbox = ptrTrans->GetFittedBounds();
+            CalcBB(ptrDisplay, bbox);
+
+            Geometry::ISpatialReferencePtr outSpatRef = ptrTrans->GetSpatialReference();
+            Geometry::IEnvelopePtr fullEnv = m_ptrTable->GetExtent();
+            Geometry::ISpatialReferencePtr spatRefFC = fullEnv.get() ? fullEnv->GetSpatialReference() : Geometry::ISpatialReferencePtr();
+
+            Geometry::CEnvelope env(bbox, outSpatRef);
+            if (fullEnv.get() && !env.Intersect(fullEnv))
+                return GeoDatabase::ISpatialFilterPtr();
+
+            bIntersects = true;
+
+            GeoDatabase::ISpatialFilterPtr ptrFilter = std::make_shared<GeoDatabase::CQueryFilter>();
+            ptrFilter->SetOutputSpatialReference(outSpatRef);
+            ptrFilter->SetSpatialRel(GeoDatabase::srlIntersects);
+            ptrFilter->SetBB(ptrTrans->GetFittedBounds());
+            ptrFilter->SetJoins(m_vecJoins);
+            if(!m_sQuery.empty())
+                ptrFilter->SetWhereClause(m_sQuery);
+
+            double precision = ptrTrans->DeviceToMapMeasure(0.25);
+            if (spatRefFC.get() && outSpatRef.get())
             {
+                CommonLib::bbox box = ptrTrans->GetFittedBounds();
+                box.xMin = (box.xMin + box.xMax) / 2;
+                box.yMin = (box.yMin + box.yMax) / 2;
+                box.xMax = box.xMin + precision;
+                box.yMax = box.yMin + precision;
+                if (!outSpatRef->Project(spatRefFC, box))
+                    precision = 0.0;
+                else
+                    precision = (std::min)(box.xMax - box.xMin, box.yMax - box.yMin); // (std::min): windows.h min macro
             }
 
+            ptrFilter->SetPrecision(precision);
+            return ptrFilter;
+        }
 
-            if(m_hasReferenceScale)
-                ptrDisplay->GetTransformation()->SetReferenceScale(oldRefScale);
+        void CFeatureLayer::DrawRows(GeoDatabase::ISelectCursorPtr ptrCursor, const std::vector<IFeatureRendererPtr>& vecRenderers, Display::IDisplayPtr ptrDisplay,
+                                     Display::ITrackCancelPtr ptrTrackCancel, const std::unordered_set<int64_t>* pOids, Display::ISymbolPtr ptrCustomSymbol) const
+        {
+            int32_t nOidIndex = -1;
+            if(pOids != nullptr)
+            {
+                nOidIndex = ptrCursor->FindFieldByName(GetOIDFieldName());
+                if(nOidIndex < 0)
+                    throw CommonLib::CExcBase("OID field {0} not found", GetOIDFieldName());
+            }
+
+            uint32_t nCheckCancelStep = GetCheckCancelStep() != 0 ? GetCheckCancelStep() : 100;
+            GeoDatabase::IRowPtr ptrRow = ptrCursor->CreateRow();
+            uint32_t nRow = 0;
+
+            ptrDisplay->Lock();
+            try
+            {
+                while (ptrCursor->Next())
+                {
+                    if (!(nRow % nCheckCancelStep))
+                    {
+                        if (ptrTrackCancel.get() && !ptrTrackCancel->Continue())
+                            break;
+
+                        ptrDisplay->UnLock();
+                        ptrDisplay->Lock();
+                    }
+                    nRow++;
+
+                    if(pOids != nullptr && pOids->find(ptrCursor->ReadInt64(nOidIndex)) == pOids->end())
+                        continue;
+
+                    ptrCursor->FillRow(ptrRow);
+
+                    if(ptrCustomSymbol.get())
+                    {
+                        // custom symbol (selection): draw once, renderer is used only to get the shape
+                        vecRenderers[0]->DrawFeature(ptrDisplay, ptrRow, ptrCustomSymbol);
+                        continue;
+                    }
+
+                    for (size_t i = 0, sz = vecRenderers.size(); i < sz; ++i)
+                        vecRenderers[i]->DrawFeature(ptrDisplay, ptrRow);
+                }
+            }
+            catch (...)
+            {
+                ptrDisplay->UnLock();
+                throw;
+            }
+            ptrDisplay->UnLock();
+        }
+
+        void CFeatureLayer::DrawFeatures(eDrawPhase phase, const std::vector<int64_t>& vecOids, Display::IDisplayPtr ptrDisplay, Display::ITrackCancelPtr ptrTrackCancel, Display::ISymbolPtr ptrCustomSymbol) const
+        {
+            try
+            {
+                if(!IsValid() || vecOids.empty() || !(phase & DrawPhaseGeography))
+                    return;
+
+                CFeatureLayer* pThis = const_cast<CFeatureLayer*>(this); // CalcBB changes device clip rect of the display
+                bool bIntersects = false;
+                GeoDatabase::ISpatialFilterPtr ptrFilter = pThis->CreateDisplayFilter(ptrDisplay, bIntersects);
+                if(!bIntersects)
+                    return;
+
+                std::vector<IFeatureRendererPtr> vecRenderers;
+                for (size_t i = 0, sz = m_vecRenderers.size(); i < sz; ++i)
+                {
+                    if (!m_vecRenderers[i]->CanRender(m_ptrTable, ptrDisplay))
+                        continue;
+
+                    m_vecRenderers[i]->PrepareFilter(m_ptrTable, ptrFilter);
+                    vecRenderers.push_back(m_vecRenderers[i]);
+                }
+
+                if (vecRenderers.empty())
+                    return;
+
+                std::string sOIDField = GetOIDFieldName();
+                if(ptrFilter->GetFieldSet()->Find(sOIDField) < 0)
+                    ptrFilter->GetFieldSet()->Add(sOIDField);
+
+                GeoDatabase::ISelectCursorPtr ptrCursor = m_ptrTable->Search(ptrFilter);
+                if (!ptrCursor.get())
+                    return;
+
+                std::unordered_set<int64_t> oids(vecOids.begin(), vecOids.end());
+                DrawRows(ptrCursor, vecRenderers, ptrDisplay, ptrTrackCancel, &oids, ptrCustomSymbol);
+            }
+            catch (std::exception& exc)
+            {
+                CommonLib::CExcBase::RegenExc("Failed to draw features, layer: {0}", m_sName, exc);
+            }
         }
 
         void CFeatureLayer::DrawEx(eDrawPhase phase, Display::IDisplayPtr ptrDisplay, Display::ITrackCancelPtr ptrTrackCancel)
         {
             try
             {
-                if (!IsValid())
+                if (!IsValid() || !(phase & DrawPhaseGeography))
                     return;
 
-                double oldRefScale = ptrDisplay->GetTransformation()->GetReferenceScale();
-                if (m_hasReferenceScale)
-                    ptrDisplay->GetTransformation()->SetReferenceScale(m_hasReferenceScale);
+                bool bIntersects = false;
+                GeoDatabase::ISpatialFilterPtr ptrFilter = CreateDisplayFilter(ptrDisplay, bIntersects);
+                if(!bIntersects)
+                    return;
 
-                if ((phase & DrawPhaseGeography)) {
+                std::vector<IFeatureRendererPtr> vecRenderers;
+                double scale = ptrDisplay->GetTransformation()->GetScale();
+                for (size_t i = 0, sz = m_vecRenderers.size(); i < sz; ++i)
+                {
+                    IFeatureRendererPtr ptrRender = m_vecRenderers[i];
+                    double maxScale = ptrRender->GetMaximumScale();
+                    double minScale = ptrRender->GetMinimumScale();
+                    if((maxScale != 0.0 && scale < maxScale) || (minScale != 0.0 && scale > minScale))
+                        continue;
 
-                    CommonLib::bbox bbox = ptrDisplay->GetTransformation()->GetFittedBounds();
-                    Display::GRect oldClipRect = ptrDisplay->GetTransformation()->GetDeviceClipRect();
+                    if (!ptrRender->CanRender(m_ptrTable, ptrDisplay))
+                        continue;
 
-
-                    CalcBB(ptrDisplay, bbox);
-
-                    Geometry::ISpatialReferencePtr outSpatRef = ptrDisplay->GetTransformation()->GetSpatialReference();
-
-                    Geometry::IEnvelopePtr fullEnv = m_ptrTable->GetExtent();
-                    Geometry::ISpatialReferencePtr spatRefFC = fullEnv->GetSpatialReference();
-
-                    Geometry::CEnvelope env(bbox, outSpatRef);
-
-                    if (!env.Intersect(fullEnv)) {
-                        ptrDisplay->GetTransformation()->SetReferenceScale(oldRefScale);
-                        return;
-                    }
-                    bbox = env.GetBoundingBox();
-
-                    GeoDatabase::ISpatialFilterPtr ptrFilter = std::make_shared<GeoDatabase::CQueryFilter>();
-                    ptrFilter->SetOutputSpatialReference(outSpatRef);
-                    ptrFilter->SetSpatialRel(GeoDatabase::srlIntersects);
-                    ptrFilter->SetBB(ptrDisplay->GetTransformation()->GetFittedBounds());
-                    double precision = ptrDisplay->GetTransformation()->DeviceToMapMeasure(0.25);
-
-                    if (spatRefFC.get() && outSpatRef.get()) {
-                        CommonLib::bbox box = ptrDisplay->GetTransformation()->GetFittedBounds();
-                        box.xMin = (box.xMin + box.xMax) / 2;
-                        box.yMin = (box.yMin + box.yMax) / 2;
-                        box.xMax = box.xMin + precision;
-                        box.yMax = box.yMin + precision;
-                        if (!outSpatRef->Project(spatRefFC, box))
-                            precision = 0.0;
-                        else
-                            precision = min(box.xMax - box.xMin, box.yMax - box.yMin);
-                    }
-
-                    ptrFilter->SetPrecision(precision);
-
-                    std::vector<IFeatureRendererPtr> vecRenderes;
-                    for (size_t i = 0, sz = m_vecRenderers.size(); i < sz; ++i) {
-                        IFeatureRendererPtr ptrRender = m_vecRenderers[i];
-                        if (!ptrRender->CanRender(m_ptrTable, ptrDisplay))
-                            continue;
-
-                        ptrRender->PrepareFilter(m_ptrTable, ptrFilter);
-                        vecRenderes.push_back(ptrRender);
-                    }
-
-                    if (vecRenderes.empty()) {
-                        ptrDisplay->GetTransformation()->SetReferenceScale(oldRefScale); //TO DO create holder
-                        return;
-                    }
-
-                    GeoDatabase::ICursorPtr pCursor = m_ptrTable->Search(ptrFilter);
-                    if (!pCursor.get()) {
-                        ptrDisplay->GetTransformation()->SetReferenceScale(oldRefScale); //TO DO create holder
-                        return;
-                    }
-
-                    GeoDatabase::IRowPtr pRow;
-                    uint32_t nRow = 0;
-                    ptrDisplay->Lock();
-                    while (pCursor->Next()) {
-                        if (!(nRow % GetCheckCancelStep())) {
-                            if (!ptrTrackCancel->Continue())
-                                break;
-
-                            ptrDisplay->UnLock();
-                            ptrDisplay->Lock();
-                        }
-
-                        for (size_t i = 0, sz = vecRenderes.size(); i < sz; ++i) {
-                            vecRenderes[i]->DrawFeature(ptrDisplay, pRow);
-                        }
-
-                        nRow++;
-                    }
+                    ptrRender->PrepareFilter(m_ptrTable, ptrFilter);
+                    vecRenderers.push_back(ptrRender);
                 }
 
-                if (m_hasReferenceScale)
-                    ptrDisplay->GetTransformation()->SetReferenceScale(oldRefScale);
+                if (vecRenderers.empty())
+                    return;
+
+                GeoDatabase::ISelectCursorPtr ptrCursor = m_ptrTable->Search(ptrFilter);
+                if (!ptrCursor.get())
+                    return;
+
+                DrawRows(ptrCursor, vecRenderers, ptrDisplay, ptrTrackCancel, nullptr, Display::ISymbolPtr());
             }
             catch (std::exception& exc)
             {
@@ -178,6 +250,7 @@ namespace GraphEngine {
         {
             return DrawPhaseGeography;
         }
+
         bool CFeatureLayer::IsActiveOnScale(double scale) const
         {
             if(!TBase::IsActiveOnScale(scale))
@@ -192,6 +265,11 @@ namespace GraphEngine {
             }
 
             return false;
+        }
+
+        void CFeatureLayer::SetJoins(const std::vector<GeoDatabase::IJoinPtr>& joins)
+        {
+            m_vecJoins = joins;
         }
 
         const std::string& CFeatureLayer::GetDisplayField() const
@@ -243,6 +321,7 @@ namespace GraphEngine {
         {
             m_bSelectable = flag;
         }
+
         int	  CFeatureLayer::GetRendererCount() const
         {
             return (int)m_vecRenderers.size();
@@ -250,6 +329,9 @@ namespace GraphEngine {
 
         IFeatureRendererPtr	CFeatureLayer::GetRenderer(int index) const
         {
+            if(index < 0 || index >= (int)m_vecRenderers.size())
+                throw CommonLib::CExcBase("FeatureLayer: failed to get renderer, out of range, index: {0}", index);
+
             return m_vecRenderers[index];
         }
 
@@ -260,7 +342,7 @@ namespace GraphEngine {
 
         void  CFeatureLayer::RemoveRenderer(IFeatureRendererPtr renderer)
         {
-            TFeatureRenderer::iterator it = std::find(m_vecRenderers.begin(), m_vecRenderers.end(), IFeatureRendererPtr(renderer));
+            TFeatureRenderer::iterator it = std::find(m_vecRenderers.begin(), m_vecRenderers.end(), renderer);
             if(it != m_vecRenderers.end())
                 m_vecRenderers.erase(it);
         }
@@ -284,64 +366,38 @@ namespace GraphEngine {
         {
             try
             {
-
-                if(!GetSelectable())
-                    return;
-
-                if(!m_ptrTable.get())
+                if(!GetSelectable() || !m_ptrTable.get() || !ptrSelection.get())
                     return;
 
                 Geometry::IEnvelopePtr fullEnv  = m_ptrTable->GetExtent();
-                Geometry::ISpatialReferencePtr spatRefFC = fullEnv->GetSpatialReference();
 
                 Geometry::CEnvelope env(extent, ptrOutSpatRef);
-                if(!env.Intersect(fullEnv))
-                {
+                if(fullEnv.get() && !env.Intersect(fullEnv))
                     return;
-                }
+
+                std::string sOIDField = GetOIDFieldName();
 
                 GeoDatabase::ISpatialFilterPtr ptrFilter = std::make_shared<GeoDatabase::CQueryFilter>();
-
                 ptrFilter->SetOutputSpatialReference(ptrOutSpatRef);
                 ptrFilter->SetSpatialRel(GeoDatabase::srlIntersects);
                 ptrFilter->SetBB(extent);
-                //ptrFilter->GetFieldSet()->Add(m_ptrTable->GetShapeFieldName());
-                ptrFilter->GetFieldSet()->Add(m_ptrTable->GetOIDFieldName());
-                /*	double precision = pDisplay->GetTransformation()->DeviceToMapMeasure(0.25);
-
-                    if(spatRefFC.get() && outSpatRef.get())
-                    {
-                        GisBoundingBox box = pDisplay->GetTransformation()->GetFittedBounds();
-                        box.xMin = (box.xMin + box.xMax) / 2;
-                        box.yMin = (box.yMin + box.yMax) / 2;
-                        box.xMax = box.xMin + precision;
-                        box.yMax = box.yMin + precision;
-                        if(!outSpatRef->Project(spatRefFC.get(), box))
-                            precision = 0.0;
-                        else
-                            precision = min(box.xMax - box.xMin, box.yMax - box.yMin);
-                    }
-
-                    filter.SetPrecision(precision);*/
-
-
+                ptrFilter->SetJoins(m_vecJoins);
+                if(!m_sQuery.empty())
+                    ptrFilter->SetWhereClause(m_sQuery);
+                ptrFilter->GetFieldSet()->Add(sOIDField);
 
                 GeoDatabase::ISelectCursorPtr pCursor = m_ptrTable->Search(ptrFilter);
                 if(!pCursor.get())
-                {
                     return;
-                }
 
-                int nOidIndex = -1;
+                int32_t nOidIndex = pCursor->FindFieldByName(sOIDField);
+                if(nOidIndex < 0)
+                    throw CommonLib::CExcBase("OID field {0} not found", sOIDField);
+
+                CommonLib::CGuid layerId = GetLayerId();
                 while(pCursor->Next())
                 {
-                    if(nOidIndex == 1) {
-                        pCursor->FindFieldByName(m_sOIDField);
-                        if(nOidIndex == -1)
-                            throw CommonLib::CExcBase("FeatureLayer: Failed to select, OID field not found");
-                    }
-
-                    ptrSelection->AddRow(GetLayerId(), pCursor->ReadInt64(nOidIndex));
+                    ptrSelection->AddRow(layerId, pCursor->ReadInt64(nOidIndex));
                 }
             }
             catch (std::exception& exc)
@@ -357,11 +413,14 @@ namespace GraphEngine {
             {
                 TBase::Save(pObj);
 
-
                 pObj->AddPropertyString("DisplayField", m_sDisplayField);
+                pObj->AddPropertyString("OIDField", m_sOIDField);
+                pObj->AddPropertyString("ShapeField", m_sShapeField);
                 pObj->AddPropertyString("Query", m_sQuery);
                 pObj->AddPropertyBool("Selectable", m_bSelectable);
                 pObj->AddPropertyBool("HasReferenceScale", m_hasReferenceScale);
+                pObj->AddPropertyDouble("DrawingWidth", m_dDrawingWidth);
+                pObj->AddPropertyBool("DrawingWidthScaleDependent", m_bDrawingWidthScaleDependent);
 
                 CommonLib::ISerializeObjPtr ptrRenders = pObj->CreateChildNode("Renderers");
 
@@ -391,14 +450,19 @@ namespace GraphEngine {
                 TBase::Load(pObj);
 
                 m_sDisplayField = pObj->GetPropertyString("DisplayField", m_sDisplayField);
+                m_sOIDField = pObj->GetPropertyString("OIDField", m_sOIDField);
+                m_sShapeField = pObj->GetPropertyString("ShapeField", m_sShapeField);
                 m_sQuery = pObj->GetPropertyString("Query", m_sQuery);
                 m_bSelectable = pObj->GetPropertyBool("Selectable", m_bSelectable);
                 m_hasReferenceScale = pObj->GetPropertyBool("HasReferenceScale", m_hasReferenceScale);
+                m_dDrawingWidth = pObj->GetPropertyDouble("DrawingWidth", m_dDrawingWidth);
+                m_bDrawingWidthScaleDependent = pObj->GetPropertyBool("DrawingWidthScaleDependent", m_bDrawingWidthScaleDependent);
 
-                CommonLib::ISerializeObjPtr ptrRenderens = pObj->GetChild("Renderers");
-                if(ptrRenderens.get())
+                m_vecRenderers.clear();
+                if(pObj->IsChildExists("Renderers"))
                 {
-                    for (int32_t i = 0, sz = ptrRenderens->GetChildCnt(); i < sz; ++i)
+                    CommonLib::ISerializeObjPtr ptrRenderens = pObj->GetChild("Renderers");
+                    for (uint32_t i = 0, sz = ptrRenderens->GetChildCnt(); i < sz; ++i)
                     {
                         CommonLib::ISerializeObjPtr ptrRenderNode = ptrRenderens->GetChild(i);
                         IFeatureRendererPtr pRenderer =  CLoaderRenderers::LoadRenderer(ptrRenderNode);
@@ -407,10 +471,9 @@ namespace GraphEngine {
                     }
                 }
 
-                CommonLib::ISerializeObjPtr ptrTableNode = pObj->GetChild("Table");
-                if(ptrTableNode.get())
+                if(pObj->IsChildExists("Table"))
                 {
-                    m_ptrTable = GeoDatabase::CDatasetLoader::LoadTable(ptrTableNode);
+                    m_ptrTable = GeoDatabase::CDatasetLoader::LoadTable(pObj->GetChild("Table"));
                 }
 
             }

@@ -18,6 +18,12 @@ namespace GraphEngine {
             UniqueValueSymbolSelectorID
         };
 
+        enum eFeatureRendererID
+        {
+            UndefineFeatureRendererID,
+            SimpleFeatureRendererID
+        };
+
         enum eDrawPhase
         {
             DrawPhaseNone       = 0,
@@ -47,9 +53,19 @@ namespace GraphEngine {
         typedef std::shared_ptr< class ILayers> ILayersPtr;
         typedef std::shared_ptr< class IElement> IElementPtr;
         typedef std::shared_ptr< class IGraphicsContainer> IGraphicsContainerPtr;
-        typedef std::shared_ptr< class IMapBookmar> IMapBookmarkPtr;
+        typedef std::shared_ptr< class IMapBookmark> IMapBookmarkPtr;
         typedef std::shared_ptr< class ISymbolSelector> ISymbolSelectorPtr;
         typedef std::shared_ptr< class IFeatureRenderer> IFeatureRendererPtr;
+        typedef std::shared_ptr< class ISimpleSymbolSelector> ISimpleSymbolSelectorPtr;
+        typedef std::shared_ptr< class ILegendInfo> ILegendInfoPtr;
+
+        typedef CommonLib::delegate2_t<Display::IDisplay*, eDrawPhase>  OnBeforeDraw;
+        typedef CommonLib::delegate2_t<Display::IDisplay*, eDrawPhase>  OnAfterDraw;
+        typedef CommonLib::delegate1_t<ILayers*>                        OnRemoveAllLayers;
+        typedef CommonLib::delegate2_t<ILayers*, ILayer*>               OnLayerAdded;
+        typedef CommonLib::delegate2_t<ILayers*, ILayer*>               OnLayerRemove;
+        typedef CommonLib::delegate3_t<ILayers*, ILayer*, int>          OnLayerMoved;
+        typedef CommonLib::delegate_t                                   OnSelectChange;
 
 
         class IMap :  public CommonLib::ISerialize
@@ -98,6 +114,8 @@ namespace GraphEngine {
             virtual double							  GetReferenceScale() const = 0;
             virtual void							  SetReferenceScale(double scale) = 0;
 
+            virtual void                              SetOnBeforeDraw(OnBeforeDraw* pFunck, bool bAdd) = 0;
+            virtual void                              SetOnAfterDraw(OnAfterDraw* pFunck, bool bAdd) = 0;
         };
 
 
@@ -152,6 +170,8 @@ namespace GraphEngine {
             virtual void                             DrawFeatures(eDrawPhase phase, const std::vector<int64_t>& vecOids, Display::IDisplayPtr ptrDisplay, Display::ITrackCancelPtr ptrTrackCancel, Display::ISymbolPtr ptrCustomSymbol) const = 0;
         };
 
+        typedef std::shared_ptr<IFeatureLayer> IFeatureLayerPtr;
+
 
 
         class  ILayers
@@ -168,28 +188,35 @@ namespace GraphEngine {
             virtual void      RemoveAllLayers() = 0;
             virtual void      MoveLayer(ILayerPtr ptrLayer, int index) = 0;
 
+            virtual void      SetOnRemoveAllLayers(OnRemoveAllLayers* pFunck, bool bAdd) = 0;
+            virtual void      SetOnLayerAdded(OnLayerAdded* pFunck, bool bAdd) = 0;
+            virtual void      SetOnLayerRemove(OnLayerRemove* pFunck, bool bAdd) = 0;
+            virtual void      SetOnLayerMoved(OnLayerMoved* pFunck, bool bAdd) = 0;
         };
 
         class ISelection
         {
         public:
+            ISelection(){}
+            virtual ~ISelection(){}
             virtual void                                 AddRow(CommonLib::CGuid layerId, int64_t rowID) = 0;
             virtual void                                 Clear() = 0;
             virtual void                                 ClearForLayer(CommonLib::CGuid nLayerId) = 0;
             virtual void                                 RemoveFeature(CommonLib::CGuid nLayerId, int64_t rowID) = 0;
-            virtual const std::vector<ILayerPtr>& 		 GetLayers() const = 0;
-            virtual const std::vector<int64_t>& 	     GetFeatures(CommonLib::CGuid layerId) const = 0;
+            // returned by value: the selection is shared between threads (draw / UI), a reference to internal state is not safe
+            virtual std::vector<ILayerPtr>       		 GetLayers() const = 0;
+            virtual std::vector<int64_t>         	     GetFeatures(CommonLib::CGuid layerId) const = 0;
             virtual void                                 Draw(Display::IDisplayPtr ptrDisplay, Display::ITrackCancelPtr trackCancel) = 0;
             virtual Display::ISymbolPtr		             GetSymbol() const = 0;
             virtual void                                 SetSymbol(Display::ISymbolPtr ptrSymbol) = 0;
             virtual bool                                 IsEmpty() const = 0;
-
+            virtual void                                 SetOnSelectChange(OnSelectChange* pFunck, bool bAdd) = 0;
         };
 
         class  IElement
         {
         public:
-            IElement();
+            IElement(){}
             virtual ~IElement(){}
             virtual void                      Draw(Display::IDisplayPtr ptrDisplay, Display::ITrackCancelPtr ptrTrackCancel) = 0;
             virtual void                      Activate(Display::IDisplayPtr ptrDisplay) = 0;
@@ -200,7 +227,7 @@ namespace GraphEngine {
         class  IGraphicsContainer
         {
         public:
-            IGraphicsContainer();
+            IGraphicsContainer(){}
             virtual ~IGraphicsContainer(){}
             virtual bool                   IsEmpty() const = 0;
             virtual void                   AddElement( IElementPtr ptrElement ) = 0;
@@ -278,6 +305,97 @@ namespace GraphEngine {
             virtual void                   DrawFeature(Display::IDisplayPtr ptrDisplay, GeoDatabase::IRowPtr ptrRow, Display::ISymbolPtr ptrCustomSymbol = Display::ISymbolPtr()) = 0;
         };
 
+
+        class ISimpleSymbolSelector : public ISymbolSelector
+        {
+        public:
+            ISimpleSymbolSelector(){}
+            virtual ~ISimpleSymbolSelector(){}
+            virtual const std::string&     GetDescription() const = 0;
+            virtual void                   SetDescription(const std::string& sDesc) = 0;
+            virtual const std::string&     GetLabel() const = 0;
+            virtual void                   SetLabel(const std::string& sLabel) = 0;
+            virtual Display::ISymbolPtr    GetSymbol() const = 0;
+            virtual void                   SetSymbol(Display::ISymbolPtr ptrSymbol) = 0;
+        };
+
+        class ILegendInfo
+        {
+        public:
+            ILegendInfo(){}
+            virtual ~ILegendInfo(){}
+            virtual int                    GetSymbolCount() const = 0;
+            virtual Display::ISymbolPtr    GetSymbolByIndex(int index) const = 0;
+            virtual void                   SetSymbolByIndex(int index, Display::ISymbolPtr ptrSymbol) = 0;
+        };
+
+        // Map drawer: draws the map in a background thread into an off-screen graphics,
+        // the window copies the result with Update() (ported from GisFramework of the old engine)
+        enum eMapDrawerFlags
+        {
+            MapDrawerDrawMap          = 1,
+            MapDrawerDrawLabel        = 2,
+            MapDrawerPanState         = 4,
+            MapDrawerStoppingPan      = 8,
+            MapDrawerFinishedPan      = 16,
+            MapDrawerPanAfterMap      = 32,
+            MapDrawerFinishedDrawMap  = 64,
+            MapDrawerFinishedDrawLabel = 128
+        };
+
+        typedef std::shared_ptr<class IMapDrawer> IMapDrawerPtr;
+
+        // pPoint/pRect - invalidated area (nullptr - whole window), bForce - repaint immediately
+        typedef CommonLib::delegate3_t<const Display::GPoint*, const Display::GRect*, bool> OnInvalidate;
+        // bCanceled - drawing was stopped (or failed) before the end
+        typedef CommonLib::delegate1_t<bool> OnFinishMapDrawing;
+
+        class IMapDrawer
+        {
+        public:
+            IMapDrawer(){}
+            virtual ~IMapDrawer(){}
+
+            virtual Display::IDisplayTransformationPtr GetTransformation() const = 0;      // used by the draw thread
+            virtual Display::IDisplayTransformationPtr GetCalcTransformation() const = 0;  // changed by UI (pan, zoom), applied on Redraw
+            virtual Display::IGraphicsPtr GetMapGraphics() const = 0;
+            virtual Display::IGraphicsPtr GetLabelGraphics() const = 0;
+            virtual Display::IGraphicsPtr GetOutGraphics() const = 0;
+
+            virtual IMapPtr GetMap() const = 0;
+            virtual void SetMap(IMapPtr ptrMap) = 0;
+
+            virtual void   SetResolution(double dpi) = 0;
+            virtual double GetResolution() const = 0;
+            virtual void   SetBackgroundColor(const Display::Color& color) = 0;
+
+            virtual void SetSize(int cx , int cy, bool bDraw = true) = 0;
+            virtual void Update(Display::IGraphicsPtr ptrGraphics, const Display::GPoint *pPoint, const Display::GRect* pRect) = 0;
+            virtual void Redraw(Display::IGraphicsPtr ptrGraphics = Display::IGraphicsPtr()) = 0;
+            virtual bool IsDrawing() const = 0;
+            virtual std::string GetLastError() const = 0;
+
+            virtual void ZoomIn(const Display::GRect& rect) = 0;
+            virtual void ZoomIn(const CommonLib::bbox& bb) = 0;
+            virtual void ZoomToFullExtent() = 0;
+            virtual void SetScale(double scale) = 0;
+
+            // pseudo 3D (perspective) view like in a car navigator, see Display::CDisplayTransformation3D
+            virtual void   Set3DMode(bool b3D) = 0;
+            virtual bool   Is3DMode() const = 0;
+            virtual void   SetTilt(double degrees) = 0;      // 3D view tilt, kept when the 3D mode is off
+            virtual double GetTilt() const = 0;
+            virtual void   SetRotation(double degrees) = 0;  // map rotation around the window center
+            virtual double GetRotation() const = 0;
+
+            virtual void StartPan(const Display::GPoint& pt) = 0;
+            virtual void MovePan(const Display::GPoint& pt) = 0;
+            virtual void StopPan(const Display::GPoint& pt) = 0;
+            virtual void StopDraw(bool bWait = true) = 0;
+
+            virtual void SetOnInvalidate(OnInvalidate* pFunck, bool bAdd) = 0;
+            virtual void SetOnFinishMapDrawing(OnFinishMapDrawing* pFunck, bool bAdd) = 0;
+        };
 
     }
 }

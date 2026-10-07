@@ -277,13 +277,14 @@ namespace CommonLib
 
 	bool str_utils::AStr2Bool(const std::string& val)
 	{
-		if (StrCaseIcmp(val, "true"))
+		// StrCaseIcmp returns 0 when the strings are equal
+		if (StrCaseIcmp(val, "true") == 0)
 			return true;
-		else if (StrCaseIcmp(val, "1"))
+		else if (StrCaseIcmp(val, "1") == 0)
 			return true;
-		else if (StrCaseIcmp(val, "0"))
+		else if (StrCaseIcmp(val, "0") == 0)
 			return false;
-		else if (StrCaseIcmp(val, "false"))
+		else if (StrCaseIcmp(val, "false") == 0)
 			return false;
 	 
 		throw CExcBase("Failed convert str to bool, {0}", val);

@@ -33,7 +33,7 @@ namespace CommonLib
 				}
 				catch (std::exception& exc)
 				{
-					CommonLib::CExcBase::RegenExc("Failed to open xml file: %1", fileName, exc);
+					CommonLib::CExcBase::RegenExc("Failed to open xml file: {0}", fileName, exc);
 				}		 			
 			}
 
@@ -60,7 +60,7 @@ namespace CommonLib
 							else
 							{
 								Clear();
-								throw CommonLib::CExcBase("Open tag waiting, but found: %s, row: %d, col %d", m_token.c_str(), m_nCurrRow, m_nCurrCol);
+								throw CommonLib::CExcBase("Open tag waiting, but found: {0}, row: {1}, col {2}", m_token, m_nCurrRow, m_nCurrCol);
 					
 							}
 							break;
@@ -125,7 +125,7 @@ namespace CommonLib
 								else
 								{
 									Clear();
-									throw CommonLib::CExcBase("Missed close branch in node: %s, row: %d, col %d", pNode->GetName(), m_nCurrRow, m_nCurrCol);
+									throw CommonLib::CExcBase("Missed close branch in node: {0}, row: {1}, col {2}", pNode->GetName(), m_nCurrRow, m_nCurrCol);
 								}
 							}
 							else if (m_token == ">")
@@ -150,7 +150,7 @@ namespace CommonLib
 								if (m_token != "=")
 								{
 									Clear();
-									throw CommonLib::CExcBase("Expected '=' but found: %s, row: %d, col %d", m_token.c_str(), m_nCurrRow, m_nCurrCol);
+									throw CommonLib::CExcBase("Expected '=' but found: {0}, row: {1}, col {2}", m_token, m_nCurrRow, m_nCurrCol);
 								}
 								get_string(pStream);
 								if (!m_vecText.empty())
@@ -166,7 +166,7 @@ namespace CommonLib
 							if (m_token.c_str() != pNode->GetName())
 							{
 								Clear();
-								throw CommonLib::CExcBase("Error not close tag: %s, row: %d, col %d", m_token.c_str(), m_nCurrRow, m_nCurrCol);
+								throw CommonLib::CExcBase("Error not close tag: {0}, row: {1}, col {2}", m_token, m_nCurrRow, m_nCurrCol);
 							}
 							else
 							{
@@ -287,7 +287,7 @@ namespace CommonLib
 				}
 				catch (std::exception& exc)
 				{
-					CommonLib::CExcBase::RegenExc("Failed to save xml file: %1", fileName, exc);
+					CommonLib::CExcBase::RegenExc("Failed to save xml file: {0}", fileName, exc);
 				}
 
 			}

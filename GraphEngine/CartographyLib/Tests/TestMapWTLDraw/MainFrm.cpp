@@ -7,23 +7,27 @@
 
 #include "aboutdlg.h"
 #include "MapView.h"
-#include "ProjectView.h"
 #include "MainFrm.h"
 
+namespace
+{
+	const TCHAR ProjectFilter[] = _T("Map project (*.xml)\0*.xml\0All Files (*.*)\0*.*\0");
+}
 
 BOOL CMainFrame::PreTranslateMessage(MSG* pMsg)
 {
-	return CFrameWindowImpl<CMainFrame>::PreTranslateMessage(pMsg);
+	if(CFrameWindowImpl<CMainFrame>::PreTranslateMessage(pMsg))
+		return TRUE;
 
-  /*  if(CFrameWindowImpl<CMainFrame>::PreTranslateMessage(pMsg))
-        return TRUE;
-
-    return m_projectView.PreTranslateMessage(pMsg);*/
-
+	return m_view.PreTranslateMessage(pMsg);
 }
 
 BOOL CMainFrame::OnIdle()
 {
+	bool b3D = m_view.Is3DMode();
+	UISetCheck(ID_VIEW_3D, b3D ? 1 : 0);
+	UIEnable(ID_TILT_UP, b3D);
+	UIEnable(ID_TILT_DOWN, b3D);
 	UIUpdateToolBar();
 	return FALSE;
 }
@@ -47,24 +51,8 @@ LRESULT CMainFrame::OnCreate(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/
 
 	CreateSimpleStatusBar();
 
-    m_hWndClient =  m_projectView.Create(m_hWnd, rcDefault, NULL,  WS_CHILD |  WS_VISIBLE| WS_CLIPCHILDREN, WS_EX_CLIENTEDGE);
-    m_projectView.SetWindowLong( GWL_STYLE, m_projectView.GetWindowLong(GWL_STYLE)&~(WS_CAPTION|WS_BORDER|WS_THICKFRAME|WS_SYSMENU));
-
-
-
-
- /*   m_hWndClient = m_wndSplitter.Create(m_hWnd, rcDefault, NULL, WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS | WS_CLIPCHILDREN);
-
-    m_view.Create(m_wndSplitter, rcDefault, NULL, WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS | WS_CLIPCHILDREN, WS_EX_CLIENTEDGE);
-     m_projectView.Create(m_wndSplitter, rcDefault, NULL,  WS_CHILD |  WS_VISIBLE| WS_CLIPCHILDREN, WS_EX_CLIENTEDGE);
-    m_projectView.SetWindowLong( GWL_STYLE, m_projectView.GetWindowLong(GWL_STYLE)&~(WS_CAPTION|WS_BORDER|WS_THICKFRAME|WS_SYSMENU));*/
-
-	//m_hWndClient = m_view.Create(m_hWnd, rcDefault, NULL, WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS | WS_CLIPCHILDREN, WS_EX_CLIENTEDGE);
-
-  //  m_wndSplitter.SetSplitterPanes(m_projectView, m_view);
-  //  m_wndSplitter.m_cxyMin = 150;
-
-
+	m_hWndClient = m_view.Create(m_hWnd, rcDefault, NULL, WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS | WS_CLIPCHILDREN, WS_EX_CLIENTEDGE);
+	m_view.SetStatusBar(m_hWndStatusBar);
 
 	UIAddToolBar(hWndToolBar);
 	UISetCheck(ID_VIEW_TOOLBAR, 1);
@@ -76,6 +64,7 @@ LRESULT CMainFrame::OnCreate(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/
 	pLoop->AddMessageFilter(this);
 	pLoop->AddIdleHandler(this);
 
+	UpdateTitle();
 	return 0;
 }
 
@@ -91,6 +80,14 @@ LRESULT CMainFrame::OnDestroy(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*
 	return 1;
 }
 
+void CMainFrame::UpdateTitle()
+{
+	std::wstring sTitle = L"TestMapDraw";
+	if(!m_sProjectFile.empty())
+		sTitle += L" - " + m_sProjectFile;
+	SetWindowText(sTitle.c_str());
+}
+
 LRESULT CMainFrame::OnFileExit(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/)
 {
 	PostMessage(WM_CLOSE);
@@ -99,8 +96,47 @@ LRESULT CMainFrame::OnFileExit(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCt
 
 LRESULT CMainFrame::OnFileNew(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/)
 {
-	// TODO: add code to initialize document
+	m_view.NewProject();
+	m_sProjectFile.clear();
+	UpdateTitle();
+	return 0;
+}
 
+LRESULT CMainFrame::OnFileOpen(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/)
+{
+	CFileDialog fileDlg(TRUE, _T("xml"), NULL, OFN_HIDEREADONLY | OFN_FILEMUSTEXIST, ProjectFilter, m_hWnd);
+	if ( fileDlg.DoModal() != IDOK )
+		return 0;
+
+	if(m_view.OpenProject(fileDlg.m_szFileName))
+		m_sProjectFile = fileDlg.m_szFileName;
+	else
+		m_sProjectFile.clear();
+
+	UpdateTitle();
+	return 0;
+}
+
+LRESULT CMainFrame::OnFileSave(WORD wNotifyCode, WORD /*wID*/, HWND hWndCtl, BOOL& bHandled)
+{
+	if(m_sProjectFile.empty())
+		return OnFileSaveAs(wNotifyCode, ID_FILE_SAVE_AS, hWndCtl, bHandled);
+
+	m_view.SaveProject(m_sProjectFile.c_str());
+	return 0;
+}
+
+LRESULT CMainFrame::OnFileSaveAs(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/)
+{
+	CFileDialog fileDlg(FALSE, _T("xml"), NULL, OFN_HIDEREADONLY | OFN_OVERWRITEPROMPT, ProjectFilter, m_hWnd);
+	if ( fileDlg.DoModal() != IDOK )
+		return 0;
+
+	if(m_view.SaveProject(fileDlg.m_szFileName))
+	{
+		m_sProjectFile = fileDlg.m_szFileName;
+		UpdateTitle();
+	}
 	return 0;
 }
 
@@ -131,9 +167,3 @@ LRESULT CMainFrame::OnAppAbout(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCt
 	dlg.DoModal();
 	return 0;
 }
-/*LRESULT CMainFrame::OnWireRender(WORD wNotifyCode, WORD wID, HWND hWndCtl, BOOL& bHandled)
-{
-
-	m_view.OnWireRender();
-	return 0;
-}*/

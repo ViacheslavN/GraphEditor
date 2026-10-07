@@ -33,14 +33,14 @@ namespace CommonLib
 
 		void CGuid::FromAstr(const std::string& gid)
 		{
-			const char* pStr = gid.c_str();
-			if (pStr != nullptr)
-			{
-				if (*pStr == '{')
-					++pStr;
-			}		
+			// accept both "xxxxxxxx-..." and "{xxxxxxxx-...}" (ToAstr(true) writes brackets)
+			std::string str = gid;
+			if (!str.empty() && str.front() == '{')
+				str.erase(0, 1);
+			if (!str.empty() && str.back() == '}')
+				str.pop_back();
 
-			RPC_STATUS res = UuidFromStringA((RPC_CSTR)pStr, (UUID *)&m_guid);
+			RPC_STATUS res = UuidFromStringA((RPC_CSTR)str.c_str(), (UUID *)&m_guid);
 			if (res != RPC_S_OK)
 				throw CWinExc("Failed to convert std::string: {0} to guid", gid, res);
 		}

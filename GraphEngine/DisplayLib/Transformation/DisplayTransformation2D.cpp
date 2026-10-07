@@ -2,37 +2,61 @@
 #include "Matrix4.h"
 #include "../GraphTypes/Rect.h"
 
+#include <cmath>
+#include <cstring>
+#include <algorithm>
+
 namespace GraphEngine
 {
     namespace Display
     {
-        const int MAXCLIENT = 500000;
-        const int MINCLIENT = -MAXCLIENT;
+        namespace
+        {
+            // device coordinates are limited, the rasterizer works with int (or 24.8 fixed point) coordinates
+            const double MAXCLIENT = 500000.;
+            const double MINCLIENT = -MAXCLIENT;
+#ifdef _FLOAT_GUNITS_
+            const double MinPointDistance = 0.25; // pixels, GUnits are double (subpixel drawing)
+#else
+            const double MinPointDistance = 0.5;  // the same pixel
+#endif
+
+            void AddToBox(CommonLib::bbox& box, double x, double y, bool bFirst)
+            {
+                if (bFirst)
+                {
+                    box.xMin = box.xMax = x;
+                    box.yMin = box.yMax = y;
+                    return;
+                }
+                box.xMin = (std::min)(box.xMin, x);
+                box.xMax = (std::max)(box.xMax, x);
+                box.yMin = (std::min)(box.yMin, y);
+                box.yMax = (std::max)(box.yMax, y);
+            }
+        }
 
         CDisplayTransformation2D::CDisplayTransformation2D(double resolution, CommonLib::Units map_units, const GRect &dev_rect , double scale) :
+                m_bClipExists(false),
                 m_dRefScale(0.0),
+                m_dCurScale(scale > 0. ? scale : 1.),
                 m_dScaleRatio(1.0),
-                m_dCurScale(scale),
-                m_dResolution(resolution),
+                m_dResolution(resolution > 0. ? resolution : 96.),
                 m_mapUnits(map_units),
-                m_bVerticalFlip(false),
-                m_bHorizontalFlip(false),
                 m_dAngle(0),
-                m_bPseudo3D(false),
-                m_bClipExists(false)
+                m_bVerticalFlip(false),
+                m_bHorizontalFlip(false)
         {
             memset(&m_AnchorDev, 0, sizeof(m_AnchorDev));
             memset(&m_AnchorMap, 0, sizeof(m_AnchorMap));
             memset(&m_MatrixDev2Map, 0, sizeof(m_MatrixDev2Map));
             memset(&m_MatrixMap2Dev, 0, sizeof(m_MatrixMap2Dev));
+            m_mapCurFittedExtent.type = CommonLib::bbox_type_null;
 
-            UpdateScaleRatio();
             SetClientRect(dev_rect);
-
-            m_clipPolygon.SetPointDst(&m_vecPoints);
-            m_ClipLine.SetPointDst(&m_vecPoints, &m_vecParts);
-
+            UpdateScaleRatio();
         }
+
         CDisplayTransformation2D::~CDisplayTransformation2D()
         {
         }
@@ -49,54 +73,13 @@ namespace GraphEngine
 
         void CDisplayTransformation2D::SetMapVisibleRect( const CommonLib::bbox& bound )
         {
-            if (!(bound.type & CommonLib::bbox_type_normal) || (bound.xMin == bound.xMax) || (bound.yMin == bound.yMax))
-            {
+            if (bound.type != CommonLib::bbox_type_normal || !(bound.xMin < bound.xMax) || !(bound.yMin < bound.yMax))
                 return;
-            }
 
             if (m_ClientRect.IsEmpty())
-            {
                 return;
-            }
 
-            class local
-            {
-            public:
-                local(const matrix4 &mat, double centerx, double centery) :
-                        m_mat(mat),  m_dCenterX(centerx), m_dCenterY(centery)
-                {
-                    m_box.type = CommonLib::bbox_type_null;
-                }
-                void operator()(double x, double y)
-                {
-                    double xm = x - m_dCenterX;
-                    double ym = y - m_dCenterY;
-                    double xn = xm * m_mat(0, 0) + ym * m_mat(1, 0);
-                    double yn = xm * m_mat(0, 1) + ym * m_mat(1, 1);
-                    if (!(m_box.type & CommonLib::bbox_type_normal))
-                    {
-                        m_box.xMin = m_box.xMax = xn;
-                        m_box.yMin = m_box.yMax = yn;
-                        m_box.type = CommonLib::bbox_type_normal;
-                    }
-                    else
-                    {
-                        if (m_box.xMin > xn)
-                            m_box.xMin = xn;
-                        if (m_box.xMax < xn)
-                            m_box.xMax = xn;
-                        if (m_box.yMin > yn)
-                            m_box.yMin = yn;
-                        if (m_box.yMax < yn)
-                            m_box.yMax = yn;
-                    }
-                }
-                const CommonLib::bbox &result() const {return m_box;}
-            private:
-                matrix4 m_mat;
-                double m_dCenterX, m_dCenterY;
-                CommonLib::bbox m_box;
-            };
+            // the box corners relative to the box center, rotated and flipped as on the screen (without the scale)
             matrix4 mat;
             mat.setRotationDegrees(vector3df(0, 0, m_dAngle));
 
@@ -108,30 +91,37 @@ namespace GraphEngine
             double centerx = (bound.xMin + bound.xMax) / 2;
             double centery = (bound.yMin + bound.yMax) / 2;
 
-            local wrk(mat, centerx, centery);
+            const double corners[4][2] = { {bound.xMin, bound.yMin}, {bound.xMin, bound.yMax}, {bound.xMax, bound.yMax}, {bound.xMax, bound.yMin} };
+            CommonLib::bbox box;
+            for (int i = 0; i < 4; ++i)
+            {
+                double xm = corners[i][0] - centerx;
+                double ym = corners[i][1] - centery;
+                double xn = xm * mat(0, 0) + ym * mat(1, 0);
+                double yn = xm * mat(0, 1) + ym * mat(1, 1);
+                AddToBox(box, xn, yn, i == 0);
+            }
 
-            wrk(bound.xMin, bound.yMin);
-            wrk(bound.xMin, bound.yMax);
-            wrk(bound.xMax, bound.yMax);
-            wrk(bound.xMax, bound.yMin);
+            // map units per pixel so that every side of the box fits between the window center and the window edge
+            const double edges[4][2] = {
+                    {box.xMin, double(m_ClientRect.xMin) - m_AnchorDev[0]},
+                    {box.xMax, double(m_ClientRect.xMax) - m_AnchorDev[0]},
+                    {box.yMin, double(m_ClientRect.yMin) - m_AnchorDev[1]},
+                    {box.yMax, double(m_ClientRect.yMax) - m_AnchorDev[1]}
+            };
 
-            if(!((wrk.result().xMin < 0) && (wrk.result().xMax > 0) && (wrk.result().yMin < 0) && (wrk.result().yMax > 0)))
-                throw CommonLib::CExcBase("DisplayTransformation2D: Wrong bound box size");
+            double sr = 0.;
+            for (int i = 0; i < 4; ++i)
+            {
+                double pixels = std::fabs(edges[i][1]);
+                sr = (std::max)(sr, std::fabs(edges[i][0]) / (pixels > 0. ? pixels : 1.));
+            }
 
-            int w = int(m_ClientRect.xMin - m_AnchorDev[0]);
-            double sr = fabs(wrk.result().xMin / (w ? w : 1));
-            w = int(m_ClientRect.xMax - m_AnchorDev[0]);
+            if (!(sr > 0.))
+                return;
 
-            sr = std::max<double>(sr, fabs(wrk.result().xMax / (w ? w : 1)));
-            w = int(m_ClientRect.yMin - m_AnchorDev[1]);
-
-            sr = std::max<double>(sr, fabs(wrk.result().yMin / (w ? w : 1)));
-            w = int(m_ClientRect.yMax - m_AnchorDev[1]);
-
-            sr = std::max<double>(sr, fabs(wrk.result().yMax / (w ? w : 1)));
-
-            m_dCurScale = sr * m_dResolution / CalcMapUnitPerInch();
             m_dScaleRatio = sr;
+            m_dCurScale = sr * m_dResolution / CalcMapUnitPerInch();
             m_AnchorMap[0] = centerx;
             m_AnchorMap[1] = centery;
             SetMatrix();
@@ -141,7 +131,6 @@ namespace GraphEngine
 
         void CDisplayTransformation2D::SetMapPos(const CommonLib::GisXYPoint &map_pos, double new_scale)
         {
-
             m_AnchorMap[0] = map_pos.x;
             m_AnchorMap[1] = map_pos.y;
             if ((new_scale > 0) && (new_scale != m_dCurScale))
@@ -158,7 +147,6 @@ namespace GraphEngine
 
         CommonLib::GisXYPoint CDisplayTransformation2D::GetMapPos() const
         {
-
             CommonLib::GisXYPoint mp = {m_AnchorMap[0], m_AnchorMap[1]};
             return mp;
         }
@@ -167,16 +155,16 @@ namespace GraphEngine
         {
             return m_mapCurFittedExtent;
         }
+
         void CDisplayTransformation2D::SetDeviceClipRect(const GRect& devRect)
         {
             m_devClipRect = devRect;
-            m_clipPolygon.SetClipBox(m_devClipRect);
-            m_ClipLine.SetClipBox(m_devClipRect);
+            UpdateFlatClip();
         }
+
         const GRect& CDisplayTransformation2D::GetDeviceClipRect() const
         {
             return m_devClipRect;
-
         }
 
         bool CDisplayTransformation2D::UseReferenceScale() const
@@ -186,6 +174,7 @@ namespace GraphEngine
 
             return true;
         }
+
         double CDisplayTransformation2D::GetScale() const
         {
             return m_dCurScale;
@@ -202,15 +191,15 @@ namespace GraphEngine
 
                 case DisplayTransformationPreserveCenterExtent:
                 {
-                    GUnits bound_size_min = min(bound.Width(), bound.Height());
-                    GUnits client_size_min = min(m_ClientRect.Width(), m_ClientRect.Height());
+                    GUnits bound_size_min = (std::min)(bound.Width(), bound.Height());
+                    GUnits client_size_min = (std::min)(m_ClientRect.Width(), m_ClientRect.Height());
                     if(bound_size_min <= 0)
                         throw CommonLib::CExcBase("DisplayTransformation2D: Wrong bound size");
 
-
-                    if (!bound_size_min || !client_size_min || (bound_size_min == client_size_min))
+                    if (client_size_min <= 0 || bound_size_min == client_size_min)
                     {
-                        if (!client_size_min && bound_size_min && (m_mapCurFittedExtent.type & CommonLib::bbox_type_normal))
+                        // the first real window size: show the extent that was set for the empty window
+                        if (client_size_min <= 0 && m_mapCurFittedExtent.type == CommonLib::bbox_type_normal)
                         {
                             CommonLib::bbox extent = m_mapCurFittedExtent;
                             SetClientRect(bound);
@@ -237,7 +226,6 @@ namespace GraphEngine
             return m_ClientRect;
         }
 
-
         void CDisplayTransformation2D::SetReferenceScale( double lScale )
         {
             m_dRefScale = lScale;
@@ -263,7 +251,6 @@ namespace GraphEngine
             return m_dAngle;
         }
 
-
         void CDisplayTransformation2D::SetResolution( double pDpi )
         {
             if(pDpi <= 0)
@@ -272,7 +259,7 @@ namespace GraphEngine
             // number of pixel in device inch width
             m_dResolution = pDpi;
             UpdateScaleRatio();
-            OnResolutionChangedEvent((IDisplayTransformation*)this);
+            OnResolutionChangedEvent.fire((IDisplayTransformation*)this);
         }
 
         double CDisplayTransformation2D::GetResolution()
@@ -280,13 +267,13 @@ namespace GraphEngine
             return m_dResolution;
         }
 
-
         void CDisplayTransformation2D::SetUnits( CommonLib::Units units)
         {
             if ( m_mapUnits != units )
             {
                 m_mapUnits = units;
-                OnUnitsChangedEvent((IDisplayTransformation*)this);
+                UpdateScaleRatio(); // the same scale is another number of map units per pixel
+                OnUnitsChangedEvent.fire((IDisplayTransformation*)this);
             }
         }
 
@@ -294,7 +281,6 @@ namespace GraphEngine
         {
             return m_mapUnits ;
         }
-
 
         void CDisplayTransformation2D::SetSpatialReference( Geometry::ISpatialReferencePtr ptrSp )
         {
@@ -306,340 +292,250 @@ namespace GraphEngine
             return m_pSpatialRef;
         }
 
-        int CDisplayTransformation2D::MapToDeviceOpt(const CommonLib::GisXYPoint *pIn, GPoint *pOutOrig, int nPts, CommonLib::eShapeType type)
+        // ---------------------------------------------------------------------------------------------
+        // flat coordinates and the projection
+
+        void CDisplayTransformation2D::MapToFlat(double mapX, double mapY, double& flatX, double& flatY) const
         {
-            GPoint *pOut = pOutOrig;
-            int lag;
-            if(type == CommonLib::shape_type_general_point || type == CommonLib::shape_type_general_multipoint)
-                lag = std::min<int>(nPts, 0);
-            else if(type == CommonLib::shape_type_general_polyline)
-                lag = std::min<int>(nPts, 2);
-            else
-                lag = std::min<int>(nPts, 4);
-
-            bool first = true;
-            GUnits xd_prev = 0, yd_prev = 0;
-            for (; nPts > 0; ++pIn, --nPts)
-            {
-
-                double xm = pIn->x - m_AnchorMap[0];
-                double ym = pIn->y - m_AnchorMap[1];
-#ifdef _FLOAT_GUNITS_
-                GUnits xd = static_cast<GUnits>((xm * m_MatrixMap2Dev[0][0] + ym * m_MatrixMap2Dev[0][1]));
-                GUnits yd = static_cast<GUnits>((xm * m_MatrixMap2Dev[1][0] + ym * m_MatrixMap2Dev[1][1]));
-#else
-                GUnits xd = static_cast<GUnits>(floor(xm * m_MatrixMap2Dev[0][0] + ym * m_MatrixMap2Dev[0][1] + 0.5));
-				GUnits yd = static_cast<GUnits>(floor(xm * m_MatrixMap2Dev[1][0] + ym * m_MatrixMap2Dev[1][1] + 0.5));
-#endif
-
-
-                xd += m_AnchorDev[0];
-                yd += m_AnchorDev[1];
-
-                if (first || (xd != xd_prev) || (yd != yd_prev))
-                {
-                    pOut->x = xd;
-                    pOut->y = yd;
-                    ++pOut;
-                    --lag;
-                    first = false;
-                    xd_prev = xd;
-                    yd_prev = yd;
-                }
-            }
-            for (;lag > 0; --lag, ++pOut)
-            {
-                pOut->x = xd_prev;
-                pOut->y = yd_prev;
-            }
-
-            return static_cast<int>(pOut - pOutOrig);
-
+            double xm = mapX - m_AnchorMap[0];
+            double ym = mapY - m_AnchorMap[1];
+            flatX = xm * m_MatrixMap2Dev[0][0] + ym * m_MatrixMap2Dev[0][1];
+            flatY = xm * m_MatrixMap2Dev[1][0] + ym * m_MatrixMap2Dev[1][1];
         }
+
+        void CDisplayTransformation2D::FlatToMap(double flatX, double flatY, double& mapX, double& mapY) const
+        {
+            mapX = flatX * m_MatrixDev2Map[0][0] + flatY * m_MatrixDev2Map[0][1] + m_AnchorMap[0];
+            mapY = flatX * m_MatrixDev2Map[1][0] + flatY * m_MatrixDev2Map[1][1] + m_AnchorMap[1];
+        }
+
+        void CDisplayTransformation2D::FlatToDevice(double flatX, double flatY, double& devX, double& devY) const
+        {
+            devX = flatX + m_AnchorDev[0];
+            devY = flatY + m_AnchorDev[1];
+        }
+
+        void CDisplayTransformation2D::DeviceToFlat(double devX, double devY, double& flatX, double& flatY) const
+        {
+            flatX = devX - m_AnchorDev[0];
+            flatY = devY - m_AnchorDev[1];
+        }
+
+        void CDisplayTransformation2D::UpdateFlatClip()
+        {
+            if (m_devClipRect.IsEmpty())
+            {
+                m_flatClip.Clear();
+                return;
+            }
+
+            m_flatClip.SetClipRect(double(m_devClipRect.xMin) - m_AnchorDev[0], double(m_devClipRect.yMin) - m_AnchorDev[1],
+                                   double(m_devClipRect.xMax) - m_AnchorDev[0], double(m_devClipRect.yMax) - m_AnchorDev[1]);
+        }
+
+        GUnits CDisplayTransformation2D::ToDevice(double v)
+        {
+            if (!(v > MINCLIENT)) // NaN too
+                v = MINCLIENT;
+            else if (v > MAXCLIENT)
+                v = MAXCLIENT;
+#ifdef _FLOAT_GUNITS_
+            return static_cast<GUnits>(v);
+#else
+            return static_cast<GUnits>(std::floor(v + 0.5));
+#endif
+        }
+
+        // ---------------------------------------------------------------------------------------------
+        // conversions
+
         void CDisplayTransformation2D::MapToDevicePoint(const CommonLib::GisXYPoint& ptIn, GPoint& ptOut)
         {
-
-            double xm = ptIn.x - m_AnchorMap[0];
-            double ym = ptIn.y - m_AnchorMap[1];
-#ifdef _FLOAT_GUNITS_
-            GUnits xd = static_cast<GUnits>((xm * m_MatrixMap2Dev[0][0] + ym * m_MatrixMap2Dev[0][1]));
-            GUnits yd = static_cast<GUnits>((xm * m_MatrixMap2Dev[1][0] + ym * m_MatrixMap2Dev[1][1]));
-#else
-            GUnits xd = static_cast<GUnits>(floor(xm * m_MatrixMap2Dev[0][0] + ym * m_MatrixMap2Dev[0][1] + 0.5));
-			GUnits yd = static_cast<GUnits>(floor(xm * m_MatrixMap2Dev[1][0] + ym * m_MatrixMap2Dev[1][1] + 0.5));
-#endif
-
-            xd += m_AnchorDev[0];
-            yd += m_AnchorDev[1];
-
-            ptOut.x = xd;
-            ptOut.y = yd;
-
-        }
-
-
-        void CDisplayTransformation2D::MapToDevice(const CommonLib::IGeoShapePtr geom, GPoint **pOut, int** partCounts, int* count)
-        {
-
-            CommonLib::bbox bb = geom->GetBB();
-            GRect gBB;
-            MapToDevice(bb, gBB);
-            bool bAllPointInBox = m_devClipRect.IsInRect(gBB);
-            if (!bAllPointInBox)
-            {
-                if (!m_devClipRect.IsIntersect(gBB))
-                {
-                    *partCounts = nullptr;
-                    *pOut = nullptr;
-                    *count = 0;
-
-                    return;
-                }
-            }
-
-            uint32_t nInPartSize = (int)geom->GetPartCount();
-            uint32_t nInPointCnt = (int)geom->GetPartCount();
-
-            nInPartSize = (nInPartSize > 0 ? nInPartSize : 1);
-
-            //TO DO alloc
-            m_vecPoints.clear();
-            m_vecParts.clear();
-
-            CommonLib::GisXYPoint pt;
-            GPoint ptPoint;
-            GPoint ptPrev;
-
-            if (geom->GeneralType() == CommonLib::shape_type_general_polygon)
-            {
-
-                for (size_t part = 0, offset = 0; part < nInPartSize; part++)
-                {
-                    uint32_t nPartPoints = geom->NextPart((uint32_t)part);
-                    uint32_t nNewCount = (uint32_t)m_vecPoints.size();
-                    int nClipPoint = 0;
-                    //	bool bPointInRect = false;
-
-                    m_clipPolygon.BeginPolygon();
-                    for (uint32_t i = 0; i < nPartPoints; ++i)
-                    {
-                        geom->NextPoint(i + (uint32_t)offset, pt);
-                        MapToDevicePoint(pt, ptPoint);
-
-                        if (i != 0 && ptPrev == ptPoint)
-                            continue;
-
-
-                        nClipPoint += 1;
-                        m_clipPolygon.AddVertex(ptPoint, bAllPointInBox);
-                        ptPrev = ptPoint;
-                    }
-
-                    if (nClipPoint < 4)
-                    {
-                        for (int i = 0; i < nClipPoint; ++i)
-                        {
-                            m_clipPolygon.AddVertex(ptPrev, bAllPointInBox);
-                        }
-
-                    }
-                    m_clipPolygon.EndPolygon(bAllPointInBox);
-                    nNewCount = (uint32_t)m_vecPoints.size() - nNewCount;
-                    offset += nPartPoints;
-                    if (nNewCount != 0)
-                    {
-                        m_vecParts.push_back((int)nNewCount);
-                    }
-                }
-
-                if (!m_vecPoints.empty())
-                    *pOut = &m_vecPoints[0];
-                else
-                    *pOut = nullptr;
-
-                if (!m_vecPoints.empty())
-                    *partCounts = &m_vecParts[0];
-                else
-                    *partCounts = nullptr;
-
-                *count = (int)m_vecParts.size();
-                return;
-            }
-
-            if (geom->GeneralType() == CommonLib::shape_type_general_polyline)
-            {
-
-                for (size_t part = 0, offset = 0; part < nInPartSize; part++)
-                {
-                    int nPartPoints = (int)geom->NextPart((uint32_t)part);
-                    int nClipPoint = 0;
-                    m_ClipLine.BeginLine(bAllPointInBox);
-                    for (uint32_t i = 0; i < (uint32_t)nPartPoints; ++i)
-                    {
-                        geom->NextPoint(i + (uint32_t)offset, pt);
-                        MapToDevicePoint(pt, ptPoint);
-
-                        if (i != 0 && ptPrev == ptPoint)
-                            continue;
-
-                        nClipPoint += 1;
-                        m_ClipLine.AddVertex(ptPoint, bAllPointInBox);
-                        ptPrev = ptPoint;
-                    }
-
-                    if (nClipPoint < 2)
-                    {
-                        for (int i = 0; i < nClipPoint; ++i)
-                        {
-                            m_ClipLine.AddVertex(ptPrev, bAllPointInBox);
-                        }
-
-                    }
-                    m_ClipLine.EndLine(bAllPointInBox);
-
-                }
-
-                if (!m_vecPoints.empty())
-                    *pOut = &m_vecPoints[0];
-                else
-                    *pOut = nullptr;
-
-                if (!m_vecPoints.empty())
-                    *partCounts = &m_vecParts[0];
-                else
-                    *partCounts = nullptr;
-
-                *count = (int)m_vecParts.size();
-                return;
-            }
-
-            if (geom->GeneralType() == CommonLib::shape_type_general_point || geom->GeneralType() == CommonLib::shape_type_general_multipoint)
-            {
-                for (uint32_t i = 0; i < nInPointCnt; ++i)
-                {
-                    for (uint32_t i = 0; i < nInPointCnt; ++i)
-                    {
-                        geom->NextPoint(i, pt);
-                        MapToDevicePoint(pt, ptPoint);
-                        if (m_devClipRect.PointInRect(ptPoint))
-                        {
-                            m_vecPoints.push_back(ptPoint);
-                        }
-                    }
-
-                }
-                m_vecParts[0] = (int)m_vecPoints.size();
-
-                *pOut = &m_vecPoints[0];
-                *partCounts = &m_vecParts[0];
-                *count = 1;
-
-            }
-        }
-
-        /*	void CDisplayTransformation2D::MapToDevice(const CommonLib::IGeoShape *geom, GPoint **pOut, int** partCounts, int* count)
-            {
-                uint32_t nInPartSize = (int)geom->GetPartCount();
-                uint32_t nInPointCnt = (int)geom->GetPointCnt();
-
-                nInPartSize = (nInPartSize > 0 ? nInPartSize : 1);
-
-                //TO DO alloc
-                m_vecPoints.clear();
-                m_vecParts.clear();
-                int nOutPartCount = 0;
-
-                auto pPoints =geom->GetPoints();
-                auto pParts = geom->GetParts();
-
-
-                if (m_vecPoints.size() < nInPointCnt)
-                    m_vecPoints.resize(nInPointCnt);
-
-                if (m_vecParts.size() < nInPartSize)
-                    m_vecParts.resize(nInPointCnt);
-
-                int *parts = &m_vecParts[0];
-                GPoint *buffer = &m_vecPoints[0];
-
-                    const CommonLib::GisXYPoint* points = geom->GetPoints();
-                    if (geom->GeneralType() == CommonLib::shape_type_general_point || geom->GeneralType() == CommonLib::shape_type_general_multipoint)
-                    {
-                        int newCount = MapToDeviceOpt(geom->GetPoints(), buffer, (int)geom->GetPointCnt(), geom->GeneralType());
-                        *pOut = buffer;
-                        parts[0] = newCount;
-                        *count = 1;
-                        *partCounts = parts;
-                        return;
-                    }
-
-                    int nCount = 0;
-                    for (size_t part = 0, offset = 0, buf_offset = 0, partCount = geom->GetPartCount(); part < partCount; part++)
-                    {
-                        int newCount = MapToDeviceOpt(points + offset, buffer + buf_offset, (int)geom->GetPart(part), geom->GeneralType());
-                        nCount += newCount;
-                        offset += geom->GetPart(part);
-                        parts[part] = newCount;
-                        buf_offset += newCount;
-                    }
-
-                    int partCount = (int)geom->GetPartCount();
-
-
-                    if (m_pClipper.get())
-                    {
-                        GRect rect = m_devClipRect;
-    #ifdef _FLOAT_GUNITS_
-                        rect.inflate(ceill(GUnits(rect.width() * 0.1)), ceill(GUnits(rect.height() * 0.1)));
-    #else
-                        rect.Inflate(GUnits(rect.width() * 0.1), GUnits(rect.height() * 0.1));
-    #endif
-                        if (geom.generalType() == CommonLib::shape_type_general_polyline)
-                            m_pClipper->clipLine(rect, &buffer, &parts, &partCount);
-                        else if (geom.generalType() == CommonLib::shape_type_general_polygon)
-                            m_pClipper->clipPolygon(rect, &buffer, &parts, &partCount);
-                    }
-
-                    *pOut = buffer;
-                    *partCounts = parts;
-                    *count = partCount;
-        }*/
-
-        void CDisplayTransformation2D::DeviceToMap(const GPoint *pIn, CommonLib::GisXYPoint *pOut, int nPoints )
-        {
-
-            double shift_map_x = m_AnchorMap[0];
-            double shift_map_y = m_AnchorMap[1];
-            for (; nPoints > 0; --nPoints, ++pIn, ++pOut)
-            {
-                GUnits xd = pIn->x - m_AnchorDev[0];
-                GUnits yd = pIn->y - m_AnchorDev[1];
-
-                pOut->x = xd * m_MatrixDev2Map[0][0] + yd * m_MatrixDev2Map[0][1] + shift_map_x;
-                pOut->y = xd * m_MatrixDev2Map[1][0] + yd * m_MatrixDev2Map[1][1] + shift_map_y;
-
-            }
+            double fx, fy, dx, dy;
+            MapToFlat(ptIn.x, ptIn.y, fx, fy);
+            FlatToDevice(fx, fy, dx, dy);
+            ptOut.x = ToDevice(dx);
+            ptOut.y = ToDevice(dy);
         }
 
         void CDisplayTransformation2D::MapToDevice(const CommonLib::GisXYPoint *pIn, GPoint *pOut, int nPts )
         {
-
-            double shift_map_x = m_AnchorMap[0];
-            double shift_map_y = m_AnchorMap[1];
             for (; nPts > 0; ++pIn, ++pOut, --nPts)
+                MapToDevicePoint(*pIn, *pOut);
+        }
+
+        int CDisplayTransformation2D::MapToDeviceOpt(const CommonLib::GisXYPoint *pIn, GPoint *pOutOrig, int nPts, CommonLib::eShapeType type)
+        {
+            // converts and removes the repeated device points, keeps the minimum number of points for the shape type
+            GPoint *pOut = pOutOrig;
+            int lag;
+            if(type == CommonLib::shape_type_general_point || type == CommonLib::shape_type_general_multipoint)
+                lag = 0;
+            else if(type == CommonLib::shape_type_general_polyline)
+                lag = (std::min)(nPts, 2);
+            else
+                lag = (std::min)(nPts, 4);
+
+            bool first = true;
+            GPoint prev;
+            for (; nPts > 0; ++pIn, --nPts)
             {
-                double xm = pIn->x - shift_map_x;
-                double ym = pIn->y - shift_map_y;
-                GUnits xd = static_cast<GUnits>(floor(xm * m_MatrixMap2Dev[0][0] + ym * m_MatrixMap2Dev[0][1] + 0.5));
-                GUnits yd = static_cast<GUnits>(floor(xm * m_MatrixMap2Dev[1][0] + ym * m_MatrixMap2Dev[1][1] + 0.5));
+                GPoint pt;
+                MapToDevicePoint(*pIn, pt);
+                if (first || pt != prev)
+                {
+                    *pOut++ = pt;
+                    --lag;
+                    first = false;
+                    prev = pt;
+                }
+            }
+            for (;lag > 0; --lag, ++pOut)
+                *pOut = prev;
 
-                xd += m_AnchorDev[0];
-                yd += m_AnchorDev[1];
+            return static_cast<int>(pOut - pOutOrig);
+        }
 
-                pOut->x = (xd <= MINCLIENT)	? MINCLIENT	: ((xd >= MAXCLIENT) ? MAXCLIENT : xd);
-                pOut->y = (yd <= MINCLIENT)	? MINCLIENT	: ((yd >= MAXCLIENT) ? MAXCLIENT : yd);
+        void CDisplayTransformation2D::AddDevicePart(const DPoint* pFlat, size_t nCount, size_t nMinPoints)
+        {
+            size_t nBegin = m_vecPoints.size();
+            for (size_t i = 0; i < nCount; ++i)
+            {
+                double dx, dy;
+                FlatToDevice(pFlat[i].x, pFlat[i].y, dx, dy);
+                GPoint pt(ToDevice(dx), ToDevice(dy));
+                if (m_vecPoints.size() > nBegin)
+                {
+                    // skip the points that are too close to the previous one, they do not change the picture
+                    const GPoint& prev = m_vecPoints.back();
+                    if (std::fabs(double(pt.x - prev.x)) < MinPointDistance && std::fabs(double(pt.y - prev.y)) < MinPointDistance)
+                        continue;
+                }
+
+                m_vecPoints.push_back(pt);
             }
 
+            size_t nNew = m_vecPoints.size() - nBegin;
+            if (nNew == 0)
+                return;
+
+            // a tiny shape is still drawn (as a dot)
+            GPoint last = m_vecPoints.back();
+            for (; nNew < nMinPoints; ++nNew)
+                m_vecPoints.push_back(last);
+
+            m_vecParts.push_back((int)nNew);
+        }
+
+        void CDisplayTransformation2D::MapToDevice(const CommonLib::IGeoShapePtr geom, GPoint **pOut, int** partCounts, int* count)
+        {
+            *pOut = nullptr;
+            *partCounts = nullptr;
+            *count = 0;
+
+            m_vecPoints.clear();
+            m_vecParts.clear();
+
+            if (!geom.get() || m_flatClip.IsEmpty())
+                return;
+
+            // quick test of the shape bounding box against the visible area
+            CommonLib::bbox bb = geom->GetBB();
+            DPoint corners[4];
+            const double cornersMap[4][2] = { {bb.xMin, bb.yMin}, {bb.xMax, bb.yMin}, {bb.xMax, bb.yMax}, {bb.xMin, bb.yMax} };
+            for (int i = 0; i < 4; ++i)
+                MapToFlat(cornersMap[i][0], cornersMap[i][1], corners[i].x, corners[i].y);
+
+            CConvexClipper::eRelation relation = m_flatClip.Relation(corners, 4);
+            if (relation == CConvexClipper::RelationOutside)
+                return;
+
+            bool bAllInside = relation == CConvexClipper::RelationInside;
+
+            CommonLib::eShapeType generalType = geom->GeneralType();
+            uint32_t nPointCnt = geom->GetPointCnt();
+            uint32_t nPartCnt = geom->GetPartCount();
+            CommonLib::GisXYPoint pt;
+
+            if (generalType == CommonLib::shape_type_general_point || generalType == CommonLib::shape_type_general_multipoint)
+            {
+                for (uint32_t i = 0; i < nPointCnt; ++i)
+                {
+                    geom->NextPoint(i, pt);
+                    DPoint fp;
+                    MapToFlat(pt.x, pt.y, fp.x, fp.y);
+                    if (bAllInside || m_flatClip.IsInside(fp.x, fp.y))
+                    {
+                        double dx, dy;
+                        FlatToDevice(fp.x, fp.y, dx, dy);
+                        m_vecPoints.push_back(GPoint(ToDevice(dx), ToDevice(dy)));
+                    }
+                }
+
+                if (!m_vecPoints.empty())
+                    m_vecParts.push_back((int)m_vecPoints.size());
+            }
+            else if (generalType == CommonLib::shape_type_general_polygon || generalType == CommonLib::shape_type_general_polyline)
+            {
+                bool bPolygon = generalType == CommonLib::shape_type_general_polygon;
+                uint32_t nParts = nPartCnt > 0 ? nPartCnt : 1;
+                for (uint32_t part = 0, offset = 0; part < nParts && offset < nPointCnt; ++part)
+                {
+                    uint32_t nPartPoints = nPartCnt > 0 ? geom->NextPart(part) : nPointCnt;
+                    if (offset + nPartPoints > nPointCnt)
+                        nPartPoints = nPointCnt - offset;
+
+                    m_vecFlat.resize(nPartPoints);
+                    for (uint32_t i = 0; i < nPartPoints; ++i)
+                    {
+                        geom->NextPoint(offset + i, pt);
+                        MapToFlat(pt.x, pt.y, m_vecFlat[i].x, m_vecFlat[i].y);
+                    }
+                    offset += nPartPoints;
+
+                    if (m_vecFlat.empty())
+                        continue;
+
+                    if (bAllInside)
+                    {
+                        AddDevicePart(m_vecFlat.data(), m_vecFlat.size(), bPolygon ? 4 : 2);
+                    }
+                    else if (bPolygon)
+                    {
+                        m_flatClip.ClipPolygon(m_vecFlat.data(), (int)m_vecFlat.size(), m_vecClipped);
+                        if (!m_vecClipped.empty())
+                            AddDevicePart(m_vecClipped.data(), m_vecClipped.size(), 4);
+                    }
+                    else
+                    {
+                        m_vecClipped.clear();
+                        m_vecClippedParts.clear();
+                        m_flatClip.ClipPolyline(m_vecFlat.data(), (int)m_vecFlat.size(), m_vecClipped, m_vecClippedParts);
+                        for (size_t i = 0, pos = 0; i < m_vecClippedParts.size(); ++i)
+                        {
+                            AddDevicePart(m_vecClipped.data() + pos, (size_t)m_vecClippedParts[i], 2);
+                            pos += (size_t)m_vecClippedParts[i];
+                        }
+                    }
+                }
+            }
+
+            if (m_vecParts.empty())
+                return;
+
+            *pOut = m_vecPoints.data();
+            *partCounts = m_vecParts.data();
+            *count = (int)m_vecParts.size();
+        }
+
+        void CDisplayTransformation2D::DeviceToMap(const GPoint *pIn, CommonLib::GisXYPoint *pOut, int nPoints )
+        {
+            for (; nPoints > 0; --nPoints, ++pIn, ++pOut)
+            {
+                double fx, fy;
+                DeviceToFlat(double(pIn->x), double(pIn->y), fx, fy);
+                FlatToMap(fx, fy, pOut->x, pOut->y);
+            }
         }
 
         void CDisplayTransformation2D::MapToDevice(const CommonLib::bbox &mapBox, GRect &rect )
@@ -656,15 +552,16 @@ namespace GraphEngine
             rect.Set(pts[0].x, pts[0].y, pts[0].x, pts[0].y);
             for (int i = 1; i < 4; ++i)
             {
-                rect.xMin = min( rect.xMin, pts[i].x );
-                rect.xMax = max( rect.xMax, pts[i].x );
-                rect.yMin = min( rect.yMin, pts[i].y );
-                rect.yMax = max( rect.yMax, pts[i].y );
+                rect.xMin = (std::min)( rect.xMin, pts[i].x );
+                rect.xMax = (std::max)( rect.xMax, pts[i].x );
+                rect.yMin = (std::min)( rect.yMin, pts[i].y );
+                rect.yMax = (std::max)( rect.yMax, pts[i].y );
             }
         }
 
         void CDisplayTransformation2D::DeviceToMap(const GRect &rect, CommonLib::bbox &mapBox )
         {
+            // the visible area of a rect is convex (also in 3D), its corners give the bounding box
             GPoint pts[4] =
                     {
                             GPoint(rect.xMin, rect.yMin),
@@ -674,18 +571,11 @@ namespace GraphEngine
                     };
             CommonLib::GisXYPoint mapXY[4];
             DeviceToMap(pts, mapXY, 4);
-            mapBox.xMin = mapBox.xMax = mapXY[0].x;
-            mapBox.yMin = mapBox.yMax = mapXY[0].y;
-            for (int i = 1; i < 4; ++i)
-            {
-                mapBox.xMin = min(mapBox.xMin, mapXY[i].x);
-                mapBox.yMin = min(mapBox.yMin, mapXY[i].y);
-                mapBox.xMax = max(mapBox.xMax, mapXY[i].x);
-                mapBox.yMax = max(mapBox.yMax, mapXY[i].y);
-            }
+            for (int i = 0; i < 4; ++i)
+                AddToBox(mapBox, mapXY[i].x, mapXY[i].y, i == 0);
+
             mapBox.type = CommonLib::bbox_type_normal;
         }
-
 
         void CDisplayTransformation2D::SetVerticalFlip( bool  flag )
         {
@@ -714,6 +604,7 @@ namespace GraphEngine
             m_ClientRect = arg;
             m_AnchorDev[0] = m_ClientRect.CenterPoint().x;
             m_AnchorDev[1] = m_ClientRect.CenterPoint().y;
+            UpdateFlatClip(); // the clip rect is relative to the anchor
         }
 
         void CDisplayTransformation2D::UpdateScaleRatio()
@@ -733,9 +624,9 @@ namespace GraphEngine
             memset( m_MatrixMap2Dev, 0, sizeof(m_MatrixMap2Dev));
             memset(m_MatrixDev2Map, 0, sizeof(m_MatrixDev2Map));
 
-
             double S = (m_dScaleRatio != 0)? (1.0 / m_dScaleRatio) : (1.0);
 
+            // device y goes down: without the vertical flip the map y axis is inverted (north is up)
             matrix4 mat;
             mat.setRotationDegrees(vector3df(0, 0, m_dAngle));
 
@@ -755,24 +646,21 @@ namespace GraphEngine
             m_MatrixMap2Dev[0][1] = d10;
             m_MatrixMap2Dev[1][0] = d01;
 
-
-
             m_MatrixDev2Map[1][1] = d00 / grDet;
             m_MatrixDev2Map[0][0] = d11 / grDet;
-            m_MatrixDev2Map[1][0] = -d10 / grDet;
-            m_MatrixDev2Map[0][1] = -d01 / grDet;
-
+            m_MatrixDev2Map[1][0] = -d01 / grDet;
+            m_MatrixDev2Map[0][1] = -d10 / grDet;
 
             UpdateFittedBounds();
         }
 
         void CDisplayTransformation2D::UpdateFittedBounds()
         {
+            if (m_ClientRect.IsEmpty())
+                return;
+
             DeviceToMap(m_ClientRect, m_mapCurFittedExtent);
-
         }
-
-
 
         const GRect& CDisplayTransformation2D::GetClipRect() const
         {
@@ -794,15 +682,6 @@ namespace GraphEngine
         {
             m_bClipExists = false;
         }
-
-        /*void CDisplayTransformation2D::SetClipper(IClip *pClip)
-        {
-            m_pClipper = pClip;
-        }
-        IClipPtr CDisplayTransformation2D::GetClipper() const
-        {
-            return m_pClipper;
-        }*/
 
         void CDisplayTransformation2D::SetOnDeviceFrameChanged(OnDeviceFrameChanged* pFunck, bool bAdd)
         {

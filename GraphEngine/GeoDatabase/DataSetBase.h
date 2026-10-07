@@ -11,7 +11,7 @@ namespace GraphEngine {
         public:
 
               IDataSetBase(CommonLib::CGuid workspaceId, eDatasetType datasetType,  std::string sDatasetName,  std::string sDatasetViewName) :
-                    m_DatasetType(dtUndefined)
+                    m_DatasetType(datasetType)
                     ,m_sDatasetName(sDatasetName)
                     ,m_sDatasetViewName(sDatasetViewName)
                     ,m_workspaceId(workspaceId)

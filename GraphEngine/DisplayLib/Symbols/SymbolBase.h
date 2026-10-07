@@ -10,7 +10,7 @@ namespace GraphEngine {
         {
         public:
 
-            CSymbolBase(): m_bScaleDependent(false), m_bDrawToBuffers(false), m_nSymbolID(UndefineSymbolID),
+            CSymbolBase(): m_bScaleDependent(false), m_bDrawToBuffers(false), m_nSymbolID(UndefineSymbolID), m_bDirty(true),
                            m_dLastScale(0.), m_dLastDpi(0.), m_dLastRotation(0.)
             {
 

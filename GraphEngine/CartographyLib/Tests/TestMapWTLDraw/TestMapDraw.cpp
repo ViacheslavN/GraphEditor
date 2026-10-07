@@ -1,4 +1,4 @@
-// TestGraphics.cpp : main source file for TestGraphics.exe
+// TestMapDraw.cpp : main source file for TestMapWTLDraw.exe
 //
 
 #include "stdafx.h"
@@ -6,18 +6,17 @@
 #include "resource.h"
 
 #include "MapView.h"
-#include "ProjectView.h"
 #include "aboutdlg.h"
 #include "MainFrm.h"
 
 CAppModule _Module;
 
-int Run(LPTSTR /*lpstrCmdLine*/ = NULL, int nCmdShow = SW_SHOWDEFAULT)
+int Run(LPTSTR lpstrCmdLine = NULL, int nCmdShow = SW_SHOWDEFAULT)
 {
 	CMessageLoop theLoop;
 	_Module.AddMessageLoop(&theLoop);
 
-    CMainFrame wndMain;
+	CMainFrame wndMain;
 
 	if(wndMain.CreateEx() == NULL)
 	{
@@ -26,6 +25,24 @@ int Run(LPTSTR /*lpstrCmdLine*/ = NULL, int nCmdShow = SW_SHOWDEFAULT)
 	}
 
 	wndMain.ShowWindow(nCmdShow);
+
+	// TestMapWTLDraw.exe file.shp | file.sqlite - opens the data at start
+	if(lpstrCmdLine && lpstrCmdLine[0] != 0)
+	{
+		std::wstring sFile = lpstrCmdLine;
+		if(sFile.size() > 1 && sFile.front() == L'"' && sFile.back() == L'"')
+			sFile = sFile.substr(1, sFile.size() - 2);
+
+		std::wstring sExt;
+		size_t nDot = sFile.find_last_of(L'.');
+		if(nDot != std::wstring::npos)
+			sExt = sFile.substr(nDot);
+
+		if(_wcsicmp(sExt.c_str(), L".sqlite") == 0 || _wcsicmp(sExt.c_str(), L".db") == 0)
+			wndMain.m_view.AddSQLiteDatabase(sFile.c_str());
+		else
+			wndMain.m_view.AddShapeFile(sFile.c_str());
+	}
 
 	int nRet = theLoop.Run();
 
@@ -36,24 +53,12 @@ int Run(LPTSTR /*lpstrCmdLine*/ = NULL, int nCmdShow = SW_SHOWDEFAULT)
 int WINAPI _tWinMain(HINSTANCE hInstance, HINSTANCE /*hPrevInstance*/, LPTSTR lpstrCmdLine, int nCmdShow)
 {
 	HRESULT hRes = ::CoInitialize(NULL);
-// If you are running on NT 4.0 or higher you can use the following call instead to 
-// make the EXE free threaded. This means that calls come in on a random RPC thread.
-//	HRESULT hRes = ::CoInitializeEx(NULL, COINIT_MULTITHREADED);
 	ATLASSERT(SUCCEEDED(hRes));
 
 	// this resolves ATL window thunking problem when Microsoft Layer for Unicode (MSLU) is used
 	::DefWindowProc(NULL, 0, 0, 0L);
 
 	AtlInitCommonControls(ICC_COOL_CLASSES | ICC_BAR_CLASSES);	// add flags to support other controls
-
-
-    SciterSetOption(NULL, SCITER_SET_SCRIPT_RUNTIME_FEATURES,
-                    ALLOW_FILE_IO |
-                    ALLOW_SOCKET_IO |
-                    ALLOW_EVAL |
-                    ALLOW_SYSINFO);
-
-    SciterSetOption(NULL, SCITER_SET_DEBUG_MODE, TRUE);
 
 	hRes = _Module.Init(NULL, hInstance);
 	ATLASSERT(SUCCEEDED(hRes));

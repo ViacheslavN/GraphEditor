@@ -65,6 +65,12 @@ namespace CommonLib
 	{
 		FileDelFolder(StringEncoding::str_w2utf8_safe(path));
 	}
+
+	void CFileUtils::CreateDirectory(const std::string& path)
+	{
+		if (mkdir(path.c_str(), 0755) != 0)
+			throw CPosixExc(errno, "Failed to create directory {0}", path);
+	}
 	
 
 	class CDirHandle

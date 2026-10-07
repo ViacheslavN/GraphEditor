@@ -46,10 +46,12 @@ namespace GraphEngine {
 
         void CEnvelope::Expand(IEnvelopePtr ptrEnvelope)
         {
-            if(ptrEnvelope.get() != nullptr)
+            if(ptrEnvelope.get() == nullptr)
                 return;
 
             CommonLib::bbox box = ptrEnvelope->GetBoundingBox();
+            if(!(box.type & CommonLib::bbox_type_normal))
+                return;
             ISpatialReferencePtr sr = ptrEnvelope->GetSpatialReference();
             if(sr.get() && m_pSpatialRef.get() && sr.get() != m_pSpatialRef.get())
                 sr->Project(m_pSpatialRef, box);

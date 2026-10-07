@@ -6,9 +6,9 @@
 #pragma once
 
 // Change these values to use different versions
-#define WINVER		0x0500
-#define _WIN32_WINNT	0x0501
-#define _WIN32_IE	0x0501
+#define WINVER		0x0601
+#define _WIN32_WINNT	0x0601
+#define _WIN32_IE	0x0700
 #define _RICHEDIT_VER	0x0500
 
 #include <atlbase.h>
@@ -22,9 +22,10 @@ extern CAppModule _Module;
 #include <atlctrls.h>
 #include <atldlgs.h>
 #include <atlctrlw.h>
-#include <atlsplit.h>
+
 #include "../../../CommonLib/CommonLib.h"
-#include "../../DisplayLib/DisplayLib.h"
+#include "../../../DisplayLib/DisplayLib.h"
+#include "../../Cartography.h"
 
 
 #if defined _M_IX86

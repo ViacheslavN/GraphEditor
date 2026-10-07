@@ -164,8 +164,9 @@ namespace GraphEngine {
             if(col >= ColumnCount() )
                 throw CommonLib::CExcBase("Row: failed to set shape, out of range, index: {0}", col);
 
-            if(m_Values[col]->IsType<CommonLib::Data::CBlobPtr>())
+            if(m_Values[col]->IsType<CommonLib::IGeoShapePtr>() && m_Values[col]->Get<CommonLib::IGeoShapePtr>().get() != nullptr)
             {
+                // reuse the shape buffer of the row
                 CommonLib::IGeoShapePtr ptrValShape = m_Values[col]->Get<CommonLib::IGeoShapePtr>();
                 ptrValShape->Import(ptrShape->Data(), ptrShape->Size());
             }

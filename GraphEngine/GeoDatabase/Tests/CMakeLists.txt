@@ -1,2 +1,3 @@
 add_subdirectory(TestShapeFileDatabase)
 add_subdirectory(TestSQLiteDatabase)
+add_subdirectory(Catch)

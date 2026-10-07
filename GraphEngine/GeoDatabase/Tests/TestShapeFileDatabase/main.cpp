@@ -26,10 +26,10 @@ int main()
         CommonLib::CFileUtils::CreateDirectory(pathExport);
 
         GraphEngine::GeoDatabase::IDatabaseWorkspacePtr ptrSrcWks =
-            std::dynamic_pointer_cast<GraphEngine::GeoDatabase::IDatabaseWorkspace>(GraphEngine::GeoDatabase::CShapfileWorkspace::Open("Test", path.c_str(), 1));
+            std::dynamic_pointer_cast<GraphEngine::GeoDatabase::IDatabaseWorkspace>(GraphEngine::GeoDatabase::CShapfileWorkspace::Open("Test", path.c_str(), CommonLib::CGuid::CreateNew()));
 
         GraphEngine::GeoDatabase::IDatabaseWorkspacePtr ptrExportWks =
-                std::dynamic_pointer_cast<GraphEngine::GeoDatabase::IDatabaseWorkspace>(GraphEngine::GeoDatabase::CShapfileWorkspace::Open("TestExport", pathExport.c_str(), 2));
+                std::dynamic_pointer_cast<GraphEngine::GeoDatabase::IDatabaseWorkspace>(GraphEngine::GeoDatabase::CShapfileWorkspace::Open("TestExport", pathExport.c_str(), CommonLib::CGuid::CreateNew()));
 
         GraphEngine::GeoDatabase::ITablePtr ptrShapeFile = ptrSrcWks->GetTable("building");
         GraphEngine::Geometry::IEnvelopePtr ptrExtent =  ptrShapeFile->GetExtent();

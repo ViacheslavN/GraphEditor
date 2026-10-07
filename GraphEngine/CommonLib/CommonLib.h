@@ -52,6 +52,12 @@
 #include <cstring>
 #include <stack>
 #include <algorithm>
+#include <string>
+#include <cmath>
+#include <cfloat>
+#include <climits>
+#include <cstdlib>
+#include <stdexcept>
 
 
 

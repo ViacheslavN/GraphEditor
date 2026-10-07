@@ -2,7 +2,7 @@
    declare STDCALL interfaces even if an application is built against it
    using MinGW */
 
-#ifdef ANDROID
+#ifndef _WIN32 /* Linux, Android */
 	#define CPL_DISABLE_STDCALL
 
 	#include <fcntl.h>
@@ -33,7 +33,7 @@
 
 /* gmt_notunix.h from GMT project also redefines getcwd. See #3138 */
 
-#ifndef ANDROID
+#ifdef _WIN32
 	#ifndef getcwd
 		#define getcwd _getcwd
 	#endif
@@ -51,7 +51,11 @@
 #define HAVE_FCNTL_H 1
 
 /* Define if you have the <unistd.h> header file.  */
+#ifdef _WIN32
 #undef HAVE_UNISTD_H
+#else
+#define HAVE_UNISTD_H 1
+#endif
 
 /* Define if you have the <stdint.h> header file.  */
 #undef HAVE_STDINT_H
@@ -71,7 +75,7 @@
 #define HAVE_SEARCH_H 1
 
 /* Define to 1 if you have the <direct.h> header file. */
-#ifndef ANDROID
+#ifdef _WIN32
 	#define HAVE_DIRECT_H
 #endif
 
@@ -87,13 +91,21 @@
 #define SIZEOF_INT 4
 
 /* The size of a `long', as computed by sizeof. */
+#if defined(_WIN32) || !(defined(__LP64__) || defined(_LP64))
 #define SIZEOF_LONG 4
+#else
+#define SIZEOF_LONG 8
+#endif
 
 /* The size of a `unsigned long', as computed by sizeof. */
+#if defined(_WIN32) || !(defined(__LP64__) || defined(_LP64))
 #define SIZEOF_UNSIGNED_LONG 4
+#else
+#define SIZEOF_UNSIGNED_LONG 8
+#endif
 
 /* The size of `void*', as computed by sizeof. */
-#ifdef _WIN64
+#if defined(_WIN64) || defined(__LP64__) || defined(_LP64)
 # define SIZEOF_VOIDP 8
 #else
 # define SIZEOF_VOIDP 4
@@ -114,12 +126,14 @@
 #  endif
 #endif
 
+#ifdef _WIN32
 #define lfind _lfind
+#endif
 
 #if defined(_MSC_VER) && (_MSC_VER < 1310)
 #  define VSI_STAT64 _stat
 #  define VSI_STAT64_T _stat
-#elif defined(ANDROID)
+#elif !defined(_WIN32)
 
 #else
 #  define VSI_STAT64 _stat64
@@ -131,7 +145,9 @@
     typedef int intptr_t;
 #endif
 
+#ifdef _MSC_VER
 #pragma warning(disable: 4786)
+#endif
 
 /* #define CPL_DISABLE_DLL */
   

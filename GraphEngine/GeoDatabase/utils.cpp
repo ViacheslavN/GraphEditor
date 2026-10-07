@@ -9,6 +9,12 @@ namespace GraphEngine {
             {
                 for (int i = 0; i < ptrCursor-> ColumnCount(); ++i)
                 {
+                    if(ptrCursor->ColumnIsNull(i))
+                    {
+                        ptrRow->SetNull(i);
+                        continue;
+                    }
+
                     switch(ptrCursor->GetColumnType(i))
                     {
                         case dtNull:
@@ -27,7 +33,7 @@ namespace GraphEngine {
                             ptrRow->SetUInt16(i, ptrCursor->ReadUInt16(i));
                             break;
                         case dtInteger32:
-                            ptrRow->SetUInt32(i, ptrCursor->ReadUInt32(i));
+                            ptrRow->SetInt32(i, ptrCursor->ReadInt32(i));
                             break;
                         case dtUInteger32:
                             ptrRow->SetUInt32(i, ptrCursor->ReadUInt32(i));
@@ -39,7 +45,7 @@ namespace GraphEngine {
                             ptrRow->SetUInt64(i, ptrCursor->ReadUInt64(i));
                             break;
                         case dtFloat:
-                            ptrRow->SetDouble(i, ptrCursor->ReadDouble(i));
+                            ptrRow->SetFloat(i, ptrCursor->ReadFloat(i));
                             break;
                         case dtDouble:
                             ptrRow->SetDouble(i, ptrCursor->ReadDouble(i));
@@ -77,7 +83,7 @@ namespace GraphEngine {
             }
             catch (std::exception& exc)
             {
-                CommonLib::CExcBase::RegenExcT("CShapefileRowCursor failed to fill row ",  exc);
+                CommonLib::CExcBase::RegenExc("Failed to fill row", exc);
                 throw;
             }
         }

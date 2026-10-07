@@ -50,17 +50,9 @@ endif()
 add_subdirectory(CommonLib)
 add_subdirectory(DisplayLib)
 add_subdirectory(GisGeometry)
-if(ANDROID)
-    # GeoDatabase / CartographyLib are work in progress and do not compile yet
-    # (ctor mismatch in SQLite tables). Targets exist but are not part of 'all';
-    # build them explicitly (cmake --build ... --target GeoDatabase) once fixed.
-    add_subdirectory(GeoDatabase EXCLUDE_FROM_ALL)
-    add_subdirectory(CartographyLib EXCLUDE_FROM_ALL)
-else()
-    add_subdirectory(GeoDatabase)
-    add_subdirectory(CartographyLib)
-endif()
-if(NOT ANDROID)
+add_subdirectory(GeoDatabase)
+add_subdirectory(CartographyLib)
+if(WIN32)
     add_subdirectory(UILib)   # Windows UI (WTL/sciter) only
 endif()
 add_subdirectory(ThirdParty)

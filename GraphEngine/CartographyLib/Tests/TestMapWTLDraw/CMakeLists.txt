@@ -2,31 +2,31 @@ cmake_minimum_required(VERSION 3.17)
 project(TestMapWTLDraw)
 set(BIN_NAME TestMapWTLDraw)
 
+# WTL test application for CartographyLib: shape files as layers, background map drawing
+# (CMapDrawer), pan / wheel zoom, selection, project save / load. Windows only.
+
 set(SOURCE_FILES
-        MainFrm.cpp
+        stdafx.h
         stdafx.cpp
-        TestMapDrow.cpp
+        resource.h
+        TestMapDraw.h
+        TestMapDraw.cpp
+        MainFrm.h
+        MainFrm.cpp
+        MapView.h
         MapView.cpp
+        MapProject.h
+        MapProject.cpp
+        AboutDlg.h
         AboutDlg.cpp
-        TestGraphics.rc
-        ProjectView.h
-        ProjectView.cpp
-        HtmlWindow.h
-        HtmlWindow.cpp
+        TestMapDraw.rc
 )
 
-add_compile_definitions(_WINDOWS)
-add_compile_definitions(WIN64)
-set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} /SUBSYSTEM:WINDOWS")
-
-#set_target_properties(TestGraphicsWTL PROPERTIES LINK_FLAGS " /MANIFEST:NO")
-
 add_executable(${BIN_NAME} WIN32 ${SOURCE_FILES})
-target_link_libraries(${PROJECT_NAME} PRIVATE   CommonLib)
-target_link_libraries(${PROJECT_NAME} PRIVATE   DisplayLib)
-target_link_libraries(${PROJECT_NAME} PRIVATE   FreeType)
-target_link_libraries(${PROJECT_NAME} PRIVATE   Jpeg)
+target_compile_definitions(${BIN_NAME} PRIVATE _WINDOWS)
 
+target_link_libraries(${BIN_NAME} PRIVATE CartographyLib)
+target_link_libraries(${BIN_NAME} PRIVATE FreeType)
+target_link_libraries(${BIN_NAME} PRIVATE Jpeg)
 
-target_include_directories(${PROJECT_NAME} PRIVATE ../../../ThirdParty/WTL)
-target_include_directories(${PROJECT_NAME} PRIVATE ../../../ThirdParty/sciter-js-sdk/include)
+target_include_directories(${BIN_NAME} PRIVATE ../../../ThirdParty/WTL)

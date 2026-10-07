@@ -45,7 +45,7 @@ namespace CommonLib
 				if (m_Nodes.size() > nIndex)
 					return m_Nodes[nIndex];
 
-				throw CommonLib::CExcBase("XML::GetChild out of range, nodes %1, index %2", m_Nodes.size(), nIndex);
+				throw CommonLib::CExcBase("XML::GetChild out of range, nodes {0}, index {1}", m_Nodes.size(), nIndex);
 			}
 
 			bool CXMLNode::IsChildExists(const std::string& name) const
@@ -58,7 +58,7 @@ namespace CommonLib
 			{
 				TNodesByName::const_iterator it = m_NodeByName.find(name);
 				if (it == m_NodeByName.end())
-					throw CommonLib::CExcBase("XML::GetChild not found node with name %1", name);
+					throw CommonLib::CExcBase("XML::GetChild not found node with name {0}", name);
 
 				return GetChild(it->second);
 			}
@@ -196,7 +196,7 @@ namespace CommonLib
 				if (c_it != m_PropsByName.end())
 					return m_Props[c_it->second].second;
 
-				throw CommonLib::CExcBase("XML::GetProperty not found property with name %1", name);
+				throw CommonLib::CExcBase("XML::GetProperty not found property with name {0}", name);
 
 			}
 			uint32_t CXMLNode::GetPropertyCnt() const
@@ -209,7 +209,7 @@ namespace CommonLib
 				if (m_Props.size() > nIndex)
 					return m_Props[nIndex].second;
 
-				throw CommonLib::CExcBase("XML::GetProperty out of range, nodes %1, index %2", m_Props.size(), nIndex);
+				throw CommonLib::CExcBase("XML::GetProperty out of range, nodes {0}, index {1}", m_Props.size(), nIndex);
 			}
 
 			int16_t	CXMLNode::GetPropertyInt16(const std::string& name, int16_t defValue) const
@@ -328,7 +328,7 @@ namespace CommonLib
 				try
 				{
                     std::string sName;
-					sName = CommonLib::str_format::AStrFormatSafeT("<%1", m_name);
+					sName = CommonLib::str_format::AStrFormatSafeT("<{0}", m_name);
 					if (m_Props.empty() && m_textUtf8.empty() && m_caData.empty() && m_Nodes.empty())
 					{
 						sName += "/>\n";
@@ -396,7 +396,7 @@ namespace CommonLib
 				}
 				catch (std::exception& exc)
 				{
-					CommonLib::CExcBase::RegenExc("Failed to save node: %1", m_name, exc);
+					CommonLib::CExcBase::RegenExc("Failed to save node: {0}", m_name, exc);
 				}
 			
 			}

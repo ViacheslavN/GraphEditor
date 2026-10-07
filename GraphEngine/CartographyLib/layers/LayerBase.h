@@ -11,7 +11,7 @@ namespace GraphEngine {
         public:
 
             CLayerBase() : m_bVisible(false), m_dMinimumScale(0.), m_dMaximumScale(0.), m_nLayerSymbolID(UndefineLayerID),
-                           m_nCheckCancelStep(100)
+                           m_nCheckCancelStep(100), m_guid(CommonLib::CGuid::CreateNew())
             {}
 
             ~CLayerBase()

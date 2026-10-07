@@ -4,6 +4,8 @@
 #include "../../CommonLib/SpatialData/GeoShape.h"
 #include "SQLiteUtils.h"
 #include "../Row.h"
+#include "../Fields.h"
+#include "../Field.h"
 #include "../Utils.h"
 
 namespace GraphEngine {
@@ -32,6 +34,7 @@ namespace GraphEngine {
             {
                 std::string sqlSelectQuery =  CreateSQLQuery(ptrSourceFields, ptrFilter, sTableName, "", "");
                 m_ptrStatment = ptrDatabase->PrepareQuery(sqlSelectQuery.c_str());
+                InitFields(ptrSourceFields);
             }
             catch (std::exception& exc)
             {
@@ -46,6 +49,7 @@ namespace GraphEngine {
             {
                     std::string sqlSelectQuery =  CreateSQLQuery(ptrSourceFields, ptrFilter, sTableName, sSpatialIndex, sOIDName);
                     m_ptrStatment = ptrDatabase->PrepareQuery(sqlSelectQuery.c_str());
+                    InitFields(ptrSourceFields);
             }
             catch (std::exception& exc)
             {
@@ -53,6 +57,34 @@ namespace GraphEngine {
             }
         }
 
+
+        void CSQLiteSelectCursor::InitFields(IFieldsPtr ptrSourceFields)
+        {
+            if(!ptrSourceFields.get())
+                return;
+
+            IFieldsPtr ptrFields = std::make_shared<CFields>();
+            for(int32_t i = 0, sz = m_ptrStatment->ColumnCount(); i < sz; ++i)
+            {
+                std::string sName = m_ptrStatment->ColumnName(i);
+                IFieldPtr ptrField;
+                int nIndex = ptrSourceFields->FindField(sName);
+                if(nIndex >= 0)
+                    ptrField = ptrSourceFields->GetField(nIndex)->Clone();
+                else
+                {
+                    ptrField = std::make_shared<CField>();
+                    ptrField->SetName(sName);
+                    ptrField->SetType(dtUnknown);
+                }
+
+                if(!m_sShapeFieldName.empty() && sName == m_sShapeFieldName)
+                    ptrField->SetType(dtGeometry);
+
+                ptrFields->AddField(ptrField);
+            }
+            m_ptrFields = ptrFields;
+        }
 
         std::string CSQLiteSelectCursor::CreateSQLQuery(IFieldsPtr  ptrSourceFields, IQueryFilterPtr ptrFilter, const std::string& sTableName, const std::string& sSpatialIndex, const std::string& sOIDFieldName)
         {
@@ -70,7 +102,9 @@ namespace GraphEngine {
 
 
 
-            if(!sSpatialIndex.empty())
+            bool bSpatialQuery = !sSpatialIndex.empty() && m_ptrExtentSource.get() != nullptr &&
+                    (m_ptrExtentSource->GetBoundingBox().type == CommonLib::bbox_type_normal);
+            if(bSpatialQuery)
             {
                 strSqlQuery += ", " +  sSpatialIndex  + " AS " + "spatialIndexValue ";
             }
@@ -81,22 +115,24 @@ namespace GraphEngine {
             }
 
 
-            if(!sSpatialIndex.empty())
+            if(bSpatialQuery)
             {
 
                 strSqlQuery += " WHERE ";
 
                 CommonLib::bbox& bbox = m_ptrExtentSource->GetBoundingBox();
 
+                // full double precision: the default number formatting keeps only 3 decimals
+                auto toStr = [](double val) { std::ostringstream stream; stream.precision(17); stream << val; return stream.str(); };
                 if(m_spatialRel == srlUndefined || m_spatialRel == srlIntersects)
                 {
-                    strSqlQuery += CommonLib::str_format::AStrFormatSafeT("( spatialIndexValue.maxX>={0} AND spatialIndexValue.minX<={1} AND spatialIndexValue.maxY>={2} AND spatialIndexValue.minY<={3} ",
-                                      bbox.xMin, bbox.xMax, bbox.yMin, bbox.yMax);
+                    strSqlQuery += "( spatialIndexValue.maxX>=" + toStr(bbox.xMin) + " AND spatialIndexValue.minX<=" + toStr(bbox.xMax) +
+                                   " AND spatialIndexValue.maxY>=" + toStr(bbox.yMin) + " AND spatialIndexValue.minY<=" + toStr(bbox.yMax) + " ";
                 }
                 else
                 {
-                    strSqlQuery +=  CommonLib::str_format::AStrFormatSafeT("( spatialIndexValue.minX>={0} AND spatialIndexValue.maxX<={1} AND spatialIndexValue.minY>={2} AND spatialIndexValue.maxY<={3} ",
-                                      bbox.xMin, bbox.xMax, bbox.yMin, bbox.yMax);
+                    strSqlQuery += "( spatialIndexValue.minX>=" + toStr(bbox.xMin) + " AND spatialIndexValue.maxX<=" + toStr(bbox.xMax) +
+                                   " AND spatialIndexValue.minY>=" + toStr(bbox.yMin) + " AND spatialIndexValue.maxY<=" + toStr(bbox.yMax) + " ";
                 }
 
                 std::string sOIDName;
@@ -115,10 +151,10 @@ namespace GraphEngine {
 
             if(!whereClause.empty())
             {
-                if(sSpatialIndex.empty())
-                    strSqlQuery += " WHERE ";
-
-                strSqlQuery += whereClause;
+                if(bSpatialQuery)
+                    strSqlQuery += " AND (" + whereClause + ")";
+                else
+                    strSqlQuery += " WHERE " + whereClause;
 
             }
 

@@ -671,8 +671,7 @@ namespace CommonLib
         switch (genType)
         {
             case shape_type_general_point:
-                buf += 4; //cnt
-                break;
+                break; // flag, type, x, y - a point has no count (see CalcSize / InitShapeBufferBuffer)
             case shape_type_general_multipoint:
                 buf += 8 * 4 + 4; //bbox, cnt
                 break;
@@ -705,8 +704,7 @@ namespace CommonLib
         switch (genType)
         {
             case shape_type_general_point:
-                buf += 4; //cnt
-                break;
+                break; // flag, type, x, y - a point has no count (see CalcSize / InitShapeBufferBuffer)
             case shape_type_general_multipoint:
                 buf += 8 * 4 + 4; //bbox, cnt
                 break;
@@ -863,6 +861,19 @@ namespace CommonLib
     bbox CGeoShape::GetBB() const
     {
         bbox bb;
+
+        if (GeneralType() == shape_type_general_point)
+        {
+            // a point has no stored bounds: the box of the point itself
+            if (PointCount() == 0)
+                return bb;
+
+            const GisXYPoint* pPoint = GetPoints();
+            bb.type = CommonLib::bbox_type_normal;
+            bb.xMin = bb.xMax = pPoint->x;
+            bb.yMin = bb.yMax = pPoint->y;
+            return bb;
+        }
 
         auto xy_bounds = GetBBoxVals(GeneralType());
         if (!xy_bounds)

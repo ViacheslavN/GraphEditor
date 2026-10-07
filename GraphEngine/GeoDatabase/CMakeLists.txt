@@ -33,6 +33,10 @@ set(COMMON_SOURCE_FILES
         Row.cpp
         DatasetLoader.h
         DatasetLoader.cpp
+        WorkspaceHolder.h
+        WorkspaceHolder.cpp
+        TableCopier.h
+        TableCopier.cpp
         GeoDatabaseShape/ShapeTree.h
         GeoDatabaseShape/ShapeTree.cpp
         CursorBase.h

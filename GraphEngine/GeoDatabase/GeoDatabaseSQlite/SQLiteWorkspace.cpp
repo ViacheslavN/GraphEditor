@@ -3,6 +3,8 @@
 #include "SQLiteUtils.h"
 #include "SQLiteTransaction.h"
 #include "SQLiteSpatialTable.h"
+#include "../../GisGeometry/SpatialReferenceProj4/SpatialReferenceProj4.h"
+#include "../../GisGeometry/Envelope.h"
 
 namespace GraphEngine {
     namespace GeoDatabase {
@@ -46,7 +48,8 @@ namespace GraphEngine {
             try
             {
                 CommonLib::database::IDatabasePtr ptrDatabase = CommonLib::database::IDatabaseSQLiteCreator::Create(pszPath, uint32_t(CommonLib::database::WAL));
-                IDatabaseWorkspacePtr ptrWrks(new CSQLiteWorkspace(pszName, pszPath, id, ptrDatabase));
+                std::shared_ptr<CSQLiteWorkspace> ptrWrks(new CSQLiteWorkspace(pszName, pszPath, id, ptrDatabase));
+                ptrWrks->LoadSpatialTables();
                 return ptrWrks;
             }
             catch (std::exception& exc)
@@ -95,7 +98,7 @@ namespace GraphEngine {
         {
             CSQLiteUtils::CreateCreateTable(ptrFields, name, m_ptrDatabase);
 
-            return std::make_shared<CSQLiteTable>(CommonLib::CGuid::CreateNew(),name, viewName, m_ptrDatabase);
+            return std::make_shared<CSQLiteTable>(GetWorkspaceId(), name, viewName, m_ptrDatabase);
 
         }
 
@@ -103,27 +106,100 @@ namespace GraphEngine {
                                                        const std::string& viewName,  const std::string& spatialIndexName, const std::string& shapeFieldName, const std::string& sOIDFieldName, IFieldsPtr ptrFields,
                                                        CommonLib::eShapeType shapeType, Geometry::IEnvelopePtr  ptrExtent, Geometry::ISpatialReferencePtr ptrSpatialReference)
         {
-            CSQLiteUtils::CreateCreateTable(ptrFields, name, m_ptrDatabase);
-            if(!spatialIndexName.empty())
-                CSQLiteUtils::CreateSpatialIndex(spatialIndexName, "feature_id", m_ptrDatabase);
+            try
+            {
+                std::string sSpatialIndex = spatialIndexName.empty() ? name + "_sidx" : spatialIndexName;
 
-            return std::make_shared<CSQLiteSpatialTable>(CommonLib::CGuid::CreateNew(),name, viewName, spatialIndexName, shapeType, ptrExtent, ptrSpatialReference, m_ptrDatabase);
+                CSQLiteUtils::CreateCreateTable(ptrFields, name, m_ptrDatabase);
+                CSQLiteUtils::CreateSpatialIndex(sSpatialIndex, "feature_id", m_ptrDatabase);
+
+                CSQLiteUtils::SSpatialTableInfo info;
+                info.sTableName = name;
+                info.sViewName = viewName;
+                info.sShapeField = shapeFieldName;
+                info.sOIDField = sOIDFieldName;
+                info.sSpatialIndex = sSpatialIndex;
+                info.shapeType = shapeType;
+                if(ptrExtent.get())
+                    info.extent = ptrExtent->GetBoundingBox();
+                if(ptrSpatialReference.get())
+                    info.sSpatialReference = ptrSpatialReference->GetProjectionString();
+                CSQLiteUtils::WriteSpatialTableInfo(info, m_ptrDatabase);
+
+                ITablePtr ptrTable = std::make_shared<CSQLiteSpatialTable>(GetWorkspaceId(), name, viewName, sSpatialIndex, shapeFieldName, sOIDFieldName,
+                                                                           shapeType, ptrExtent.get() ? ptrExtent->Clone() : Geometry::IEnvelopePtr(),
+                                                                           ptrSpatialReference, m_ptrDatabase);
+                AddDataset(ptrTable);
+                return ptrTable;
+            }
+            catch (std::exception& exc)
+            {
+                CommonLib::CExcBase::RegenExc("Failed to create spatial table {0}", name, exc);
+                throw;
+            }
 
         }
 
         IDatasetPtr CSQLiteWorkspace::LoadDataset(const std::string& sName)
         {
+            CSQLiteUtils::SSpatialTableInfo info;
+            if(CSQLiteUtils::ReadSpatialTableInfo(sName, info, m_ptrDatabase))
+                return LoadSpatialTable(sName);
+
             return LoadTable(sName);
+        }
+
+        std::vector<std::string> CSQLiteWorkspace::GetSpatialTableNames() const
+        {
+            return CSQLiteUtils::ReadSpatialTableNames(m_ptrDatabase);
+        }
+
+        void CSQLiteWorkspace::LoadSpatialTables()
+        {
+            std::vector<std::string> vecNames = CSQLiteUtils::ReadSpatialTableNames(m_ptrDatabase);
+            for(size_t i = 0; i < vecNames.size(); ++i)
+                GetDataset(vecNames[i]); // loads and caches
         }
 
         IDatasetPtr CSQLiteWorkspace::LoadTable(const std::string& sName)
         {
-            return std::make_shared<CSQLiteTable>(CommonLib::CGuid::CreateNew(),sName, sName, m_ptrDatabase);
+            return std::make_shared<CSQLiteTable>(GetWorkspaceId(), sName, sName, m_ptrDatabase);
         }
 
         IDatasetPtr CSQLiteWorkspace::LoadSpatialTable(const std::string& sName)
         {
-            return  IDatasetPtr();
+            try
+            {
+                CSQLiteUtils::SSpatialTableInfo info;
+                if(!CSQLiteUtils::ReadSpatialTableInfo(sName, info, m_ptrDatabase))
+                    throw CommonLib::CExcBase("Table {0} isn't spatial", sName);
+
+                Geometry::ISpatialReferencePtr ptrSpatRef;
+                if(!info.sSpatialReference.empty())
+                {
+                    try
+                    {
+                        ptrSpatRef = std::make_shared<Geometry::CSpatialReferenceProj4>(info.sSpatialReference);
+                        if(!ptrSpatRef->IsValid())
+                            ptrSpatRef.reset();
+                    }
+                    catch (std::exception&)
+                    {
+                        ptrSpatRef.reset();
+                    }
+                }
+                if(!ptrSpatRef.get())
+                    ptrSpatRef = std::make_shared<Geometry::CSpatialReferenceProj4>(info.extent);
+
+                Geometry::IEnvelopePtr ptrExtent = std::make_shared<Geometry::CEnvelope>(info.extent, ptrSpatRef);
+                return std::make_shared<CSQLiteSpatialTable>(GetWorkspaceId(), info.sTableName, info.sViewName.empty() ? info.sTableName : info.sViewName,
+                                                             info.sSpatialIndex, info.sShapeField, info.sOIDField, info.shapeType, ptrExtent, ptrSpatRef, m_ptrDatabase);
+            }
+            catch (std::exception& exc)
+            {
+                CommonLib::CExcBase::RegenExc("Failed to load spatial table {0}", sName, exc);
+                throw;
+            }
         }
 
         ITransactionPtr CSQLiteWorkspace::StartTransaction(eTransactionType type)
@@ -150,6 +226,8 @@ namespace GraphEngine {
             {
                 TBase::Load(pObj);
                 m_sDatabasePath = pObj->GetPropertyString(m_DatabasePathProps);
+                m_ptrDatabase = CommonLib::database::IDatabaseSQLiteCreator::Create(m_sDatabasePath.c_str(), uint32_t(CommonLib::database::WAL));
+                LoadSpatialTables();
             }
             catch (std::exception& exc)
             {

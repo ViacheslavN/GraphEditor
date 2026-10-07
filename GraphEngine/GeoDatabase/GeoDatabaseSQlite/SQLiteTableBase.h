@@ -24,7 +24,7 @@ namespace GraphEngine {
             {
                 try
                 {
-                   m_pFields =  CSQLiteUtils::ReadFields(tableName, m_ptrDatabase);
+                   this->m_pFields =  CSQLiteUtils::ReadFields(tableName, m_ptrDatabase);
                 }
                 catch (std::exception& exc)
                 {
@@ -52,7 +52,7 @@ namespace GraphEngine {
             {
                 try
                 {
-                    return std::make_shared<CSQLiteSelectCursor>(GetDatasetName(), GetOIDFieldName(), GetSpatialIndexName(),  GetShapeFieldName() ,GetFields(), ptrFilter, GetSpatialReference() , m_ptrDatabase);
+                    return std::make_shared<CSQLiteSelectCursor>(this->GetDatasetName(), this->GetOIDFieldName(), this->GetSpatialIndexName(),  this->GetShapeFieldName(), this->GetFields(), ptrFilter, this->GetSpatialReference(), m_ptrDatabase);
                 }
                 catch (std::exception& exc)
                 {

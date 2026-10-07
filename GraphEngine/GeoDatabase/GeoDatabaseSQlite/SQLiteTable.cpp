@@ -19,7 +19,8 @@ namespace GraphEngine {
 
         void CSQLiteTable::Save(CommonLib::ISerializeObjPtr pObj) const
         {
-
+            // workspace id + dataset name: CDatasetLoader::LoadTable reopens the table through its workspace
+            TBase::Save(pObj);
         }
 
         void CSQLiteTable::Load(CommonLib::ISerializeObjPtr pObj)

@@ -5,6 +5,7 @@
 #include "../DisplayLib/Symbols/SymbolsLoader.h"
 #include "../GisGeometry/SpatialReferenceProj4/SpatialReferenceProj4.h"
 #include "layers/LoaderLayers.h"
+#include "selection/Selection.h"
 
 namespace GraphEngine {
     namespace Cartography {
@@ -19,15 +20,43 @@ namespace GraphEngine {
                 m_bHasReferenceScale(false),
                 m_bDelayDrawing(false),
                 m_dReferenceScale(0.),
-                m_bCalcBB(false)
+                m_bCalcBB(false),
+                m_bUserFullExtent(false)
         {
             m_ptrLayers  = std::make_shared<CLayers>();
-            m_ptrSelection =  ISelectionPtr();
+            m_ptrLayers->SetOnLayerAdded(CommonLib::Delegate(this, &CMap::OnLayerAdded), true);
+            m_ptrLayers->SetOnLayerRemove(CommonLib::Delegate(this, &CMap::OnLayerRemoved), true);
+            m_ptrLayers->SetOnRemoveAllLayers(CommonLib::Delegate(this, &CMap::OnLayersCleared), true);
+            m_ptrSelection = std::make_shared<CSelection>(m_ptrLayers);
         }
 
         CMap::~CMap()
         {
+            // the layers can outlive the map (shared_ptr), the delegates point to this map
+            m_ptrLayers->SetOnLayerAdded(CommonLib::Delegate(this, &CMap::OnLayerAdded), false);
+            m_ptrLayers->SetOnLayerRemove(CommonLib::Delegate(this, &CMap::OnLayerRemoved), false);
+            m_ptrLayers->SetOnRemoveAllLayers(CommonLib::Delegate(this, &CMap::OnLayersCleared), false);
+        }
 
+        void CMap::OnLayerAdded(ILayers* pLayers, ILayer* pLayer)
+        {
+            ResetFullExtent();
+        }
+
+        void CMap::OnLayerRemoved(ILayers* pLayers, ILayer* pLayer)
+        {
+            ResetFullExtent();
+        }
+
+        void CMap::OnLayersCleared(ILayers* pLayers)
+        {
+            ResetFullExtent();
+        }
+
+        void CMap::ResetFullExtent()
+        {
+            if(!m_bUserFullExtent)
+                m_ptrFullExtent.reset();
         }
 
         const std::string& CMap::GetName() const
@@ -99,10 +128,25 @@ namespace GraphEngine {
 
             Geometry::IEnvelopePtr pEnvelope = Geometry::IEnvelopePtr(new Geometry::CEnvelope(CommonLib::bbox(), ptrSpatRef.get() ? ptrSpatRef : m_ptrSpatialRef));
             for(int i = 0; i < layerCount; ++i)
-                pEnvelope->Expand(m_ptrLayers->GetLayer(i)->GetExtent());
+            {
+                Geometry::IEnvelopePtr ptrLayerExtent = m_ptrLayers->GetLayer(i)->GetExtent();
+                if(ptrLayerExtent.get())
+                    pEnvelope->Expand(ptrLayerExtent);
+            }
+
+            if(!(pEnvelope->GetBoundingBox().type & CommonLib::bbox_type_normal))
+            {
+                // no valid layer extent yet, don't cache
+                CommonLib::bbox bbox;
+                bbox.type = CommonLib::bbox_type_normal;
+                bbox.xMin = bbox.yMin = -1;
+                bbox.xMax = bbox.yMax = 1;
+                pEnvelope->SetBoundingBox(bbox);
+                return pEnvelope;
+            }
 
             m_ptrFullExtent = pEnvelope;
-            return m_ptrFullExtent;
+            return m_ptrFullExtent->Clone();
             }
             catch (std::exception& exc)
             {
@@ -116,6 +160,7 @@ namespace GraphEngine {
                 return;
 
             m_ptrFullExtent = ptrEnv->Clone();
+            m_bUserFullExtent = true;
         }
 
         Geometry::ISpatialReferencePtr CMap::GetSpatialReference() const
@@ -126,6 +171,22 @@ namespace GraphEngine {
         void   CMap::SetSpatialReference(Geometry::ISpatialReferencePtr spatRef)
         {
             m_ptrSpatialRef = spatRef;
+        }
+
+        void CMap::SetOnBeforeDraw(OnBeforeDraw* pFunck, bool bAdd)
+        {
+            if(bAdd)
+                m_OnBeforeDrawEvent += pFunck;
+            else
+                m_OnBeforeDrawEvent -= pFunck;
+        }
+
+        void CMap::SetOnAfterDraw(OnAfterDraw* pFunck, bool bAdd)
+        {
+            if(bAdd)
+                m_OnAfterDrawEvent += pFunck;
+            else
+                m_OnAfterDrawEvent -= pFunck;
         }
 
         void  CMap::Draw(Display::IDisplayPtr ptrDisplay, Display::ITrackCancelPtr ptrTrackCancel) {
@@ -146,6 +207,8 @@ namespace GraphEngine {
                 double maximumScale = GetMaximumScale();
                 double minimumScale = GetMinimumScale();
 
+
+                m_OnBeforeDrawEvent.fire(ptrDisplay.get(), DrawPhaseNone);
 
                 double oldScale = ptrTrans->GetReferenceScale();
                 //if(GetHasReferenceScale() && GetReferenceScale() != 0.0)
@@ -181,7 +244,7 @@ namespace GraphEngine {
 
                 if(phaseMask)
                 {
-
+                    m_OnBeforeDrawEvent.fire(ptrDisplay.get(), phaseMask);
 
                     for(int i = 0; i < layerCount; i++)
                     {
@@ -201,14 +264,19 @@ namespace GraphEngine {
                 if ( phase & DrawPhaseSelection )
                 {
 
+                    m_OnBeforeDrawEvent.fire(ptrDisplay.get(), DrawPhaseSelection);
                     if(m_ptrSelection.get())
                         m_ptrSelection->Draw(ptrDisplay, ptrTrackCancel);
-
+                    m_OnAfterDrawEvent.fire(ptrDisplay.get(), DrawPhaseSelection);
                 }
+
+                if ( phase & DrawPhaseGeography )
+                    m_OnAfterDrawEvent.fire(ptrDisplay.get(), DrawPhaseGeography);
 
 
                 if ( phase & DrawPhaseGraphics )
                 {
+                    m_OnBeforeDrawEvent.fire(ptrDisplay.get(), DrawPhaseGraphics);
 
                     for(int i = 0; i < layerCount; i++)
                     {
@@ -230,6 +298,7 @@ namespace GraphEngine {
 
                         }
                     }
+                    m_OnAfterDrawEvent.fire(ptrDisplay.get(), DrawPhaseGraphics);
 
                 }
 
@@ -242,6 +311,7 @@ namespace GraphEngine {
                 }
 
                 ptrTrans->SetReferenceScale(oldScale);
+                m_OnAfterDrawEvent.fire(ptrDisplay.get(), DrawPhaseNone);
             }
             catch (std::exception& exc)
             {
@@ -501,11 +571,14 @@ namespace GraphEngine {
         }
 
 
-        void CMap::Load(CommonLib::ISerializeObjPtr pMapNode)
+        void CMap::Load(CommonLib::ISerializeObjPtr pObj)
         {
 
             try
             {
+                // Save() writes the map into a "Map" child node
+                CommonLib::ISerializeObjPtr pMapNode = pObj->IsChildExists("Map") ? pObj->GetChild("Map") : pObj;
+
                 m_sName = pMapNode->GetPropertyString("Name", m_sName);
                 m_MapUnits = (CommonLib::Units)pMapNode->GetPropertyInt16U("MapUnits", m_MapUnits);
                 m_dMinScale = pMapNode->GetPropertyDouble("MinScale", m_dMinScale);
@@ -515,28 +588,28 @@ namespace GraphEngine {
                 m_bFlipVertical = pMapNode->GetPropertyBool("FlipVertical", m_bFlipVertical);
                 m_bflipHorizontal = pMapNode->GetPropertyBool("FlipHorizonta", m_bflipHorizontal);
 
-                CommonLib::ISerializeObjPtr pSpRefNode = pMapNode->GetChild("SPRef");
-                if(pSpRefNode.get())
+                if(pMapNode->IsChildExists("SPRef"))
                 {
+                    CommonLib::ISerializeObjPtr pSpRefNode = pMapNode->GetChild("SPRef");
                     m_ptrSpatialRef =  std::make_shared<Geometry::CSpatialReferenceProj4>();
                     m_ptrSpatialRef->Load(pSpRefNode);
                 }
 
-                CommonLib::ISerializeObjPtr pBgSymbolNode = pMapNode->GetChild("BackgroundSymbol");
-                if(pBgSymbolNode.get())
+                if(pMapNode->IsChildExists("BackgroundSymbol"))
                 {
+                    CommonLib::ISerializeObjPtr pBgSymbolNode = pMapNode->GetChild("BackgroundSymbol");
                     m_ptrBackgroundSymbol = std::static_pointer_cast<Display::IFillSymbol>(Display::CSymbolsLoader::LoadSymbol(pBgSymbolNode));
                 }
 
-                CommonLib::ISerializeObjPtr pFgSymbolNode = pMapNode->GetChild("ForegroundSymbol");
-                if(pFgSymbolNode.get())
+                if(pMapNode->IsChildExists("ForegroundSymbol"))
                 {
+                    CommonLib::ISerializeObjPtr pFgSymbolNode = pMapNode->GetChild("ForegroundSymbol");
                     m_ptrForegroundSymbol = std::static_pointer_cast<Display::IFillSymbol>(Display::CSymbolsLoader::LoadSymbol(pFgSymbolNode));
                 }
 
-                CommonLib::ISerializeObjPtr pLayersNode = pMapNode->GetChild("Layers");
-                if(pLayersNode.get())
+                if(pMapNode->IsChildExists("Layers"))
                 {
+                    CommonLib::ISerializeObjPtr pLayersNode = pMapNode->GetChild("Layers");
                     for (int i = 0, nCount = pLayersNode->GetChildCnt();  i< nCount; ++i)
                     {
                         CommonLib::ISerializeObjPtr pLayerNode = pLayersNode->GetChild(i);

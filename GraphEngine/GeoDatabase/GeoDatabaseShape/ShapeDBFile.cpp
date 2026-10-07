@@ -56,6 +56,11 @@ namespace GraphEngine
             return DBFReadStringAttribute(m_dbFile, iShape, iField);
         }
 
+        bool CShapeDBFile::IsAttributeNull(int iShape, int iField )
+        {
+            return DBFIsAttributeNULL(m_dbFile, iShape, iField) != 0;
+        }
+
         void CShapeDBFile::AddField(const char *pszFieldName, DBFFieldType eType, int nWidth, int nDecimals)
         {
             if(DBFAddField(m_dbFile, pszFieldName, eType, nWidth, nDecimals) == -1)

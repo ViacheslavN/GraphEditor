@@ -538,11 +538,7 @@ namespace agg
           {
             do
             {
-#if !defined(__IPHONE_3_1) && !defined(ANDROID)//MD
-			  aplane_type::cover_type cover2 =
-#else
-			  unsigned char cover2 = 
-#endif
+			  typename aplane_type::cover_type cover2 =
 			  m_mask->combine_pixel(x, y, *covers);
               blend_pixel(x, y, *colors, cover2);
               y++;

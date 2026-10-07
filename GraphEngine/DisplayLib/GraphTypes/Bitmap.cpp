@@ -44,7 +44,7 @@ namespace GraphEngine
 			m_ptrAlloc = pAlloc;
 
 			if (!m_ptrAlloc)
-				m_ptrAlloc = std::make_shared<CommonLib::CSimpleAlloc>(new CommonLib::CSimpleAlloc());
+				m_ptrAlloc = std::make_shared<CommonLib::CSimpleAlloc>();
 		}
 
 		CBitmap::CBitmap(unsigned char* bits, size_t width, size_t height, eBitmapFormatType type,
@@ -91,17 +91,18 @@ namespace GraphEngine
 			m_nHeight = height;
 			m_type = type;
 			m_pPalette = 0;
-			m_pBuf = new unsigned char[Size()];
+			// owned buffers always come from m_ptrAlloc: they are released with m_ptrAlloc->Free (see ~CBitmap)
+			m_pBuf = (byte*)m_ptrAlloc->Alloc(Size());
 			switch (m_type)
 			{
 			case BitmapFormatType1bpp:
-				m_pPalette = new Color[2];
+				m_pPalette = (Color*)m_ptrAlloc->Alloc(sizeof(Color) * 2);
 				break;
 			case BitmapFormatType4bpp:
-				m_pPalette = new Color[16];
+				m_pPalette = (Color*)m_ptrAlloc->Alloc(sizeof(Color) * 16);
 				break;
 			case BitmapFormatType8bpp:
-				m_pPalette = new Color[256];
+				m_pPalette = (Color*)m_ptrAlloc->Alloc(sizeof(Color) * 256);
 				break;
 			}
 			m_bRelease = true;

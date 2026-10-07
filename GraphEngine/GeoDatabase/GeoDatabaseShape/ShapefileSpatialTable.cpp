@@ -4,6 +4,7 @@
 #include "../GeometryDefinition.h"
 #include "../Field.h"
 #include "../../CommonLib/str/str.h"
+#include "../../CommonLib/filesystem/filesystem.h"
 
 namespace GraphEngine
 {
@@ -47,7 +48,7 @@ namespace GraphEngine
         {
             try
             {
-                 return  std::make_shared<CShapefileRowCursor>(ptrFilter, m_ptrShp, m_ptrDBfile, m_pFields, m_ptrSpatialReference );;
+                 return  std::make_shared<CShapefileRowCursor>(ptrFilter, m_ptrShp, m_ptrDBfile, m_pFields, m_ptrSpatialReference, m_sOIDFieldName);
             }
             catch (std::exception& exc)
             {
@@ -96,8 +97,20 @@ namespace GraphEngine
                 }
 
 
-                m_ptrSpatialReference = std::make_shared< Geometry::CSpatialReferenceProj4>(prjFileName, Geometry::eSPRefTypePRJFilePath);
-                if(!m_ptrSpatialReference->IsValid())
+                // .prj is optional: without it (or with an unreadable one) the spatial reference is guessed from the bounds
+                m_ptrSpatialReference.reset();
+                if(CommonLib::CFileUtils::IsFileExist(prjFileName))
+                {
+                    try
+                    {
+                        m_ptrSpatialReference = std::make_shared< Geometry::CSpatialReferenceProj4>(prjFileName, Geometry::eSPRefTypePRJFilePath);
+                    }
+                    catch (std::exception&)
+                    {
+                        m_ptrSpatialReference.reset();
+                    }
+                }
+                if(!m_ptrSpatialReference.get() || !m_ptrSpatialReference->IsValid())
                 {
                     m_ptrSpatialReference = std::make_shared< Geometry::CSpatialReferenceProj4>(bounds);
                 }
@@ -138,7 +151,7 @@ namespace GraphEngine
 
                 m_pShapeField = std::make_shared<CField>();
                 m_pShapeField->SetGeometryDef(ptrGeometryDef);
-                m_pShapeField->SetType(dtBlob);
+                m_pShapeField->SetType(dtGeometry);
 
                 m_sShapeFieldName = "Shape";
                 int i = 0;
@@ -148,6 +161,23 @@ namespace GraphEngine
                 m_pShapeField->SetName(m_sShapeFieldName);
                 m_pFields->AddField(m_pShapeField);
                 m_sShapeFieldName = m_pShapeField->GetName();
+
+                // record number of the shape as OID column (after the dbf fields and the shape field)
+                if(m_sOIDFieldName.empty())
+                {
+                    m_sOIDFieldName = "FID";
+                    i = 0;
+                    while(m_pFields->FieldExists(m_sOIDFieldName))
+                        m_sOIDFieldName = CommonLib::str_format::AStrFormatSafeT("FID{0}", i++);
+                }
+
+                IFieldPtr ptrOidField = std::make_shared<CField>();
+                ptrOidField->SetName(m_sOIDFieldName);
+                ptrOidField->SetType(dtInteger64);
+                ptrOidField->SetIsEditable(false);
+                ptrOidField->SetIsNullable(false);
+                ptrOidField->SetIsPrimaryKey(true);
+                m_pFields->AddField(ptrOidField);
             }
             catch (std::exception& exc)
             {
@@ -282,7 +312,8 @@ namespace GraphEngine
         {
             try
             {
-
+                // workspace id + dataset name: CDatasetLoader::LoadTable reopens the table through its workspace
+                TBase::Save(pObj);
             }
             catch (std::exception& exc)
             {

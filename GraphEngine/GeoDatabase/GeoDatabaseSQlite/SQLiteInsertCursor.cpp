@@ -67,8 +67,8 @@ namespace GraphEngine {
         {
             try
             {
-                if(m_bbox.type == CommonLib::bbox_type::bbox_type_invalid)
-                    throw CommonLib::CExcBase("Bound box not set");
+                if(m_bbox.type != CommonLib::bbox_type::bbox_type_normal)
+                    return; // no shape (null geometry) - nothing to index
 
                 int64_t nRowId = -1;
 
@@ -249,7 +249,13 @@ namespace GraphEngine {
 
         void CSQLiteInsertCursor::BindShape(int32_t col, CommonLib::IGeoShapePtr ptrShape, bool copy)
         {
-            if(m_ptrStmtSpatial.get() != nullptr)
+            if(!ptrShape.get())
+            {
+                m_ptrStatment->BindBlob(col + 1, nullptr, 0, true); // NULL
+                return;
+            }
+
+            if(m_ptrStmtSpatial.get() != nullptr && col == m_nShapeFieldIndex)
                 m_bbox = ptrShape->GetBB();
 
             m_ptrStatment->BindBlob(col + 1, ptrShape->Data(), ptrShape->Size(), copy);

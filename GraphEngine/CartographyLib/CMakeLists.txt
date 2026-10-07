@@ -3,17 +3,35 @@ project(CartographyLib)
 
 
 set(SOURCE_FILES
-    layers/LayerBase.h
-        layers/FeatureLayer.cpp
-        layers/FeatureLayer.h
-        renders/RenderersLoader.h
-        renders/RenderersLoader.cpp
-        layers/Layers.h
-        layers/Layers.cpp
+        Cartography.h
         Map.h
         Map.cpp
+        layers/LayerBase.h
+        layers/FeatureLayer.h
+        layers/FeatureLayer.cpp
+        layers/Layers.h
+        layers/Layers.cpp
         layers/LoaderLayers.h
         layers/LoaderLayers.cpp
+        renders/FeatureRendererBase.h
+        renders/FeatureRenderer.h
+        renders/FeatureRenderer.cpp
+        renders/RenderersLoader.h
+        renders/RenderersLoader.cpp
+        selectors/SimpleSymbolSelector.h
+        selectors/SimpleSymbolSelector.cpp
+        selectors/SymbolSelectorsLoader.h
+        selectors/SymbolSelectorsLoader.cpp
+        selection/Selection.h
+        selection/Selection.cpp
+        drawer/TrackCancel.h
+        drawer/DrawTask.h
+        drawer/DrawThread.h
+        drawer/DrawThread.cpp
+        drawer/MapTask.h
+        drawer/MapTask.cpp
+        drawer/MapDrawer.h
+        drawer/MapDrawer.cpp
 )
 
 

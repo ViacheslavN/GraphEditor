@@ -42,6 +42,8 @@ namespace GraphEngine {
             virtual IRowPtr CreateRow() const;
             virtual void FillRow(IRowPtr ptrRow) const;
         protected:
+            // columns of the prepared statement described by the table fields (known before the first Next)
+            void InitFields(IFieldsPtr ptrSourceFields);
             std::string CreateSQLQuery(IFieldsPtr  ptrSourceFields, IQueryFilterPtr ptrFilter, const std::string& sTableName, const std::string& sSpatialIndex, const std::string& sOIDFieldName);
         private:
             CommonLib::database::IStatmentPtr m_ptrStatment;

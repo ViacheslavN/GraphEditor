@@ -12,7 +12,7 @@ namespace GraphEngine
         public:
 
             typedef ICursorBase<ISelectCursor> TBase;
-            CShapefileRowCursor(IQueryFilterPtr filter, CShapeFilePtr ptrShapeFile, CShapeDBFilePtr ptrDBFile,  IFieldsPtr pSourceFields,  Geometry::ISpatialReferencePtr spatRefSource);
+            CShapefileRowCursor(IQueryFilterPtr filter, CShapeFilePtr ptrShapeFile, CShapeDBFilePtr ptrDBFile,  IFieldsPtr pSourceFields,  Geometry::ISpatialReferencePtr spatRefSource, const std::string& sOIDFieldName);
             virtual ~CShapefileRowCursor();
 
         public:
@@ -46,10 +46,17 @@ namespace GraphEngine
 
             bool EOC();
             bool AlterShape(CommonLib::IGeoShapePtr ptrShape) const;
+            bool IsOidColumn(int32_t col) const {return col == m_nOidCol;}
+            bool IsDbfColumn(int32_t col) const {return col >= 0 && col < m_nDbfFieldCount;}
+            void CheckDbfColumn(int32_t col) const;
         protected:
 
 
-            int32_t m_nCurrentRowID;
+            int32_t m_nCurrentRowID;   // position in m_vecOids
+            int32_t m_nCurrentRecord;  // shape / dbf record of the current row
+            int32_t m_nOidCol;
+            int32_t m_nShapeCol;
+            int32_t m_nDbfFieldCount;
             CShapeFilePtr m_ptrShapeFile;
             CShapeDBFilePtr m_ptrDBFile;
             CShapeTreePtr  m_ptrShapeTree;

@@ -26,13 +26,24 @@ namespace GraphEngine {
             virtual void      RemoveAllLayers();
             virtual void      MoveLayer(ILayerPtr ptrLayer, int index);
 
+            virtual void      SetOnRemoveAllLayers(OnRemoveAllLayers* pFunck, bool bAdd);
+            virtual void      SetOnLayerAdded(OnLayerAdded* pFunck, bool bAdd);
+            virtual void      SetOnLayerRemove(OnLayerRemove* pFunck, bool bAdd);
+            virtual void      SetOnLayerMoved(OnLayerMoved* pFunck, bool bAdd);
+
+        private:
+            void InsertLayerImpl(ILayerPtr ptrLayer, int index);
 
         private:
             std::vector<ILayerPtr> m_vecLayers;
             std::map<CommonLib::CGuid, ILayerPtr> m_layersById;
             mutable std::mutex m_mutex;
 
+            CommonLib::Event1<ILayers*>                 m_OnRemoveAllLayersEvent;
+            CommonLib::Event2<ILayers*, ILayer*>        m_OnLayerAddedEvent;
+            CommonLib::Event2<ILayers*, ILayer*>        m_OnLayerRemoveEvent;
+            CommonLib::Event3<ILayers*, ILayer*, int>   m_OnLayerMovedEvent;
         };
 
     }
-    }
+}

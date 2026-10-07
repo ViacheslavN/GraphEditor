@@ -1,0 +1,283 @@
+// Microsoft Visual C++ generated resource script.
+//
+#include "resource.h"
+
+#define APSTUDIO_READONLY_SYMBOLS
+/////////////////////////////////////////////////////////////////////////////
+//
+// Generated from the TEXTINCLUDE 2 resource.
+//
+#include "atlres.h"
+
+/////////////////////////////////////////////////////////////////////////////
+#undef APSTUDIO_READONLY_SYMBOLS
+
+/////////////////////////////////////////////////////////////////////////////
+// English (United States) resources
+
+#if !defined(AFX_RESOURCE_DLL) || defined(AFX_TARG_ENU)
+LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US
+#pragma code_page(1252)
+
+#ifdef APSTUDIO_INVOKED
+/////////////////////////////////////////////////////////////////////////////
+//
+// TEXTINCLUDE
+//
+
+1 TEXTINCLUDE 
+BEGIN
+    "resource.h\0"
+END
+
+2 TEXTINCLUDE 
+BEGIN
+    "#include ""atlres.h""\r\n"
+    "\0"
+END
+
+3 TEXTINCLUDE 
+BEGIN
+    "\0"
+END
+
+#endif    // APSTUDIO_INVOKED
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Toolbar (one button per image of res\toolbar.bmp)
+//
+
+IDR_MAINFRAME TOOLBAR 16, 15
+BEGIN
+    BUTTON      ID_FILE_NEW
+    BUTTON      ID_FILE_OPEN
+    BUTTON      ID_FILE_SAVE
+    SEPARATOR
+    BUTTON      ID_EDIT_CUT
+    BUTTON      ID_EDIT_COPY
+    BUTTON      ID_EDIT_PASTE
+    SEPARATOR
+    BUTTON      ID_FILE_PRINT
+    BUTTON      ID_APP_ABOUT
+    BUTTON      ID_REDRAW_MAP
+    BUTTON      ID_FULL_ZOOM
+END
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Bitmap
+//
+
+IDR_MAINFRAME           BITMAP                  "res\\toolbar.bmp"
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Menu
+//
+
+IDR_MAINFRAME MENU
+BEGIN
+    POPUP "&File"
+    BEGIN
+        MENUITEM "&New project\tCtrl+N",        ID_FILE_NEW
+        MENUITEM "&Open project...\tCtrl+O",    ID_FILE_OPEN
+        MENUITEM "&Save project\tCtrl+S",       ID_FILE_SAVE
+        MENUITEM "Save project &As...",         ID_FILE_SAVE_AS
+        MENUITEM SEPARATOR
+        MENUITEM "E&xit",                       ID_APP_EXIT
+    END
+    POPUP "&Layers"
+    BEGIN
+        MENUITEM "Add &Shape File...\tCtrl+A",  ID_ADD_SHAPE_FILE
+        MENUITEM "Add S&QLite database...\tCtrl+D", ID_ADD_SQLITE_DB
+        MENUITEM SEPARATOR
+        MENUITEM "&Convert Shape File to SQLite...", ID_CONVERT_SHAPE_TO_SQLITE
+        MENUITEM SEPARATOR
+        MENUITEM "&Remove all layers",          ID_REMOVE_ALL_LAYERS
+    END
+    POPUP "&Map"
+    BEGIN
+        MENUITEM "&Redraw\tF5",                 ID_REDRAW_MAP
+        MENUITEM "&Full extent\tHome",          ID_FULL_ZOOM
+        MENUITEM "Zoom &in\t+",                 ID_ZOOM_IN
+        MENUITEM "Zoom &out\t-",                ID_ZOOM_OUT
+        MENUITEM SEPARATOR
+        MENUITEM "&Clear selection\tEsc",       ID_CLEAR_SELECTION
+    END
+    POPUP "&View"
+    BEGIN
+        MENUITEM "&Toolbar",                    ID_VIEW_TOOLBAR
+        MENUITEM "&Status Bar",                 ID_VIEW_STATUS_BAR
+        MENUITEM SEPARATOR
+        MENUITEM "&3D view (navigator)\tF3",    ID_VIEW_3D
+        MENUITEM "Tilt &up\tPgUp / Ctrl+Wheel", ID_TILT_UP
+        MENUITEM "Tilt &down\tPgDn",            ID_TILT_DOWN
+        MENUITEM SEPARATOR
+        MENUITEM "Rotate &left\tCtrl+Left / Shift+Wheel", ID_ROTATE_LEFT
+        MENUITEM "Rotate &right\tCtrl+Right",   ID_ROTATE_RIGHT
+        MENUITEM "&North up\tCtrl+R",           ID_RESET_ROTATION
+    END
+    POPUP "&Help"
+    BEGIN
+        MENUITEM "&About TestMapDraw",          ID_APP_ABOUT
+    END
+END
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Icon
+//
+
+// Icon with lowest ID value placed first to ensure application icon
+// remains consistent on all systems.
+IDR_MAINFRAME           ICON                    "res\\TestMapDraw.ico"
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Dialog
+//
+
+IDD_ABOUTBOX DIALOG 0, 0, 187, 102
+STYLE DS_SETFONT | DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "About"
+FONT 8, "MS Shell Dlg"
+BEGIN
+    DEFPUSHBUTTON   "OK",IDOK,130,81,50,14
+    CTEXT           "TestMapDraw Application\n\nGraphEngine CartographyLib",IDC_STATIC,25,57,78,32
+    ICON            IDR_MAINFRAME,IDC_STATIC,55,26,18,20
+    GROUPBOX        "",IDC_STATIC,7,7,115,88
+END
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Accelerator
+//
+
+IDR_MAINFRAME ACCELERATORS
+BEGIN
+    "N",            ID_FILE_NEW,            VIRTKEY, CONTROL
+    "O",            ID_FILE_OPEN,           VIRTKEY, CONTROL
+    "S",            ID_FILE_SAVE,           VIRTKEY, CONTROL
+    "A",            ID_ADD_SHAPE_FILE,      VIRTKEY, CONTROL
+    "D",            ID_ADD_SQLITE_DB,       VIRTKEY, CONTROL
+    VK_F5,          ID_REDRAW_MAP,          VIRTKEY
+    VK_HOME,        ID_FULL_ZOOM,           VIRTKEY
+    VK_ADD,         ID_ZOOM_IN,             VIRTKEY
+    VK_SUBTRACT,    ID_ZOOM_OUT,            VIRTKEY
+    VK_ESCAPE,      ID_CLEAR_SELECTION,     VIRTKEY
+    VK_F3,          ID_VIEW_3D,             VIRTKEY
+    VK_PRIOR,       ID_TILT_UP,             VIRTKEY
+    VK_NEXT,        ID_TILT_DOWN,           VIRTKEY
+    VK_LEFT,        ID_ROTATE_LEFT,         VIRTKEY, CONTROL
+    VK_RIGHT,       ID_ROTATE_RIGHT,        VIRTKEY, CONTROL
+    "R",            ID_RESET_ROTATION,      VIRTKEY, CONTROL
+END
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Version
+//
+
+VS_VERSION_INFO VERSIONINFO
+ FILEVERSION 1,0,0,1
+ PRODUCTVERSION 1,0,0,1
+ FILEFLAGSMASK 0x3fL
+#ifdef _DEBUG
+ FILEFLAGS 0x1L
+#else
+ FILEFLAGS 0x0L
+#endif
+ FILEOS 0x4L
+ FILETYPE 0x1L
+ FILESUBTYPE 0x0L
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904B0"
+        BEGIN
+            VALUE "FileDescription", "TestMapDraw - CartographyLib test application"
+            VALUE "FileVersion", "1, 0, 0, 1"
+            VALUE "InternalName", "TestMapWTLDraw"
+            VALUE "OriginalFilename", "TestMapWTLDraw.exe"
+            VALUE "ProductName", "GraphEngine"
+            VALUE "ProductVersion", "1, 0, 0, 1"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x409, 1200
+    END
+END
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// String Table
+//
+
+STRINGTABLE
+BEGIN
+    IDR_MAINFRAME           "TestMapDraw"
+END
+
+STRINGTABLE
+BEGIN
+    ID_FILE_NEW             "Create a new map project\nNew"
+    ID_FILE_OPEN            "Open a map project\nOpen"
+    ID_FILE_SAVE            "Save the map project\nSave"
+    ID_FILE_SAVE_AS         "Save the map project with a new name\nSave As"
+    ID_FILE_PRINT           "Print\nPrint"
+END
+
+STRINGTABLE
+BEGIN
+    ID_APP_ABOUT            "Display program information, version number and copyright\nAbout"
+    ID_APP_EXIT             "Quit the application\nExit"
+END
+
+STRINGTABLE
+BEGIN
+    ID_EDIT_COPY            "Copy\nCopy"
+    ID_EDIT_CUT             "Cut\nCut"
+    ID_EDIT_PASTE           "Paste\nPaste"
+END
+
+STRINGTABLE
+BEGIN
+    ID_VIEW_TOOLBAR         "Show or hide the toolbar\nToggle ToolBar"
+    ID_VIEW_STATUS_BAR      "Show or hide the status bar\nToggle StatusBar"
+END
+
+STRINGTABLE
+BEGIN
+    ATL_IDS_IDLEMESSAGE     "Ready"
+END
+
+STRINGTABLE
+BEGIN
+    ID_REDRAW_MAP           "Redraw the map\nRedraw"
+    ID_FULL_ZOOM            "Zoom to the full extent of the map\nFull Extent"
+    ID_ADD_SHAPE_FILE       "Add an ESRI shape file as a new layer\nAdd Shape File"
+    ID_REMOVE_ALL_LAYERS    "Remove all layers from the map\nRemove All Layers"
+    ID_ZOOM_IN              "Zoom in\nZoom In"
+    ID_ZOOM_OUT             "Zoom out\nZoom Out"
+    ID_CLEAR_SELECTION      "Clear the selection (cancels a running conversion)\nClear Selection"
+    ID_ADD_SQLITE_DB        "Add the spatial tables of an SQLite database as layers\nAdd SQLite Database"
+    ID_CONVERT_SHAPE_TO_SQLITE "Copy a shape file into an SQLite database as a spatial table\nConvert to SQLite"
+    ID_VIEW_3D              "Switch between the plan view and the pseudo 3D (perspective) view\n3D View"
+    ID_TILT_UP              "Tilt the 3D view more (look farther ahead)\nTilt Up"
+    ID_TILT_DOWN            "Tilt the 3D view less (closer to the plan view)\nTilt Down"
+    ID_ROTATE_LEFT          "Rotate the map counterclockwise\nRotate Left"
+    ID_ROTATE_RIGHT         "Rotate the map clockwise\nRotate Right"
+    ID_RESET_ROTATION       "Rotate the map so that north is up\nNorth Up"
+END
+
+#endif    // English (United States) resources
+/////////////////////////////////////////////////////////////////////////////
+

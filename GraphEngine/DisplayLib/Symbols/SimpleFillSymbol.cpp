@@ -153,8 +153,8 @@ namespace GraphEngine {
             try
             {
 
-                TSymbolBase::Save(pObj);
-                m_FillStyle = (eSimpleFillStyle)pObj->GetPropertyInt16("Style", SimpleFillStyleNull);
+                TSymbolBase::Load(pObj);
+                m_FillStyle = (eSimpleFillStyle)pObj->GetPropertyInt16("Style", m_FillStyle);
                 m_ptrPen->Load(pObj, "Pen");
             }
             catch (std::exception& exc)

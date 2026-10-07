@@ -38,6 +38,8 @@ set(COMMON_SOURCE_FILES
         Clip/RectClipper.cpp
         Clip/ClipPolygon.cpp
         Clip/ClipLine.cpp
+        Clip/ConvexClipper.h
+        Clip/ConvexClipper.cpp
         Clip/PointsBuffer.cpp
         DisplayLib.h
 
@@ -69,6 +71,8 @@ set(COMMON_SOURCE_FILES
         Symbols.h
         Transformation/DisplayTransformation2D.h
         Transformation/DisplayTransformation2D.cpp
+        Transformation/DisplayTransformation3D.h
+        Transformation/DisplayTransformation3D.cpp
         Transformation/Matrix4.h
         Transformation/Vector3d.h
         Display/Display.cpp

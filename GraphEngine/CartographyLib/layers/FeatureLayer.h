@@ -1,6 +1,7 @@
 #pragma once
 #include "../Cartography.h"
 #include "LayerBase.h"
+#include <unordered_set>
 
 
 namespace GraphEngine {
@@ -52,6 +53,10 @@ namespace GraphEngine {
             virtual void  SelectFeatures(const CommonLib::bbox& extent, ISelectionPtr ptrSelection,  Geometry::ISpatialReferencePtr ptrSpRef);
         private:
             void CalcBB(Display::IDisplayPtr ptrDisplay, CommonLib::bbox& bb);
+            std::string GetOIDFieldName() const;
+            GeoDatabase::ISpatialFilterPtr CreateDisplayFilter(Display::IDisplayPtr ptrDisplay, bool& bIntersects);
+            void DrawRows(GeoDatabase::ISelectCursorPtr ptrCursor, const std::vector<IFeatureRendererPtr>& vecRenderers, Display::IDisplayPtr ptrDisplay,
+                          Display::ITrackCancelPtr ptrTrackCancel, const std::unordered_set<int64_t>* pOids, Display::ISymbolPtr ptrCustomSymbol) const;
         private:
             typedef std::vector<IFeatureRendererPtr> TFeatureRenderer;
 
@@ -74,4 +79,4 @@ namespace GraphEngine {
 
     }
 
-    }
+}
