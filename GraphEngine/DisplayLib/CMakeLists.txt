@@ -92,6 +92,29 @@ set(COMMON_SOURCE_FILES
         DisplayUtils.cpp
         Symbols/TextSymbol.h
         Symbols/TextSymbol.cpp
+        Symbols/SymbolBitmapUtils.h
+        Symbols/SymbolBitmapUtils.cpp
+        Symbols/LineTemplate.h
+        Symbols/LineTemplate.cpp
+        Symbols/TemplateLineSymbolBase.h
+        Symbols/HashLineSymbol.h
+        Symbols/HashLineSymbol.cpp
+        Symbols/MarkerLineSymbol.h
+        Symbols/MarkerLineSymbol.cpp
+        Symbols/LineFillSymbol.h
+        Symbols/LineFillSymbol.cpp
+        Symbols/MarkerFillSymbol.h
+        Symbols/MarkerFillSymbol.cpp
+        Symbols/PictureFillSymbol.h
+        Symbols/PictureFillSymbol.cpp
+        Symbols/PictureMarkerSymbol.h
+        Symbols/PictureMarkerSymbol.cpp
+        Symbols/CharacterMarkerSymbol.h
+        Symbols/CharacterMarkerSymbol.cpp
+        Symbols/MultiLayerSymbol.h
+        Symbols/MultiLayerSymbol.cpp
+        Symbols/ArrowMarkerSymbol.h
+        Symbols/ArrowMarkerSymbol.cpp
 )
 
 set(LINUX_SOURCE_FILES

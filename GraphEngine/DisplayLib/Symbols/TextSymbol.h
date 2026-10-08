@@ -30,8 +30,8 @@ namespace GraphEngine {
             virtual void  SetTextDrawFlags(int flags);
 
             virtual bool CanDraw(const CommonLib::IGeoShapePtr ptrGeom) const;
-            virtual void  DrawGeometryEx(IDisplayPtr ptrDisplay, const GPoint* points, const int* polyCounts, size_t polyCount);
-            virtual void  QueryBoundaryRectEx(IDisplayPtr ptrDisplay, const GPoint* points, const int* polyCounts, size_t polyCount,   GRect &rect) const;
+            virtual void  DrawGeometryEx(IDisplayPtr ptrDisplay, const GPoint* points, const int* polyCounts, int polyCount);
+            virtual void  QueryBoundaryRectEx(IDisplayPtr ptrDisplay, const GPoint* points, const int* polyCounts, int polyCount,   GRect &rect) const;
             virtual void  Prepare(IDisplayPtr ptrDisplay);
             virtual void DrawDirectly(IDisplayPtr ptrDisplay, const GPoint* lpPoints, const int *lpPolyCounts, int nCount );
 
@@ -45,7 +45,8 @@ namespace GraphEngine {
             void QueryBoundaryRectEx1(IDisplayPtr ptrDisplay, const GPoint& point, GRect& rect) const;
             void draw_background(IDisplayPtr ptrDisplay, const GPoint& pt);
         private:
-            FontPtr m_ptrFont;
+            FontPtr m_ptrFont;      // symbol font, sizes in symbol units (mm)
+            FontPtr m_ptrDrawFont;  // copy of m_ptrFont with device sizes, made by Prepare(), used to draw/measure
             std::wstring m_sText;
             ITextBackgroundPtr m_pTextBg;
             int   m_nTextDrawFlags;

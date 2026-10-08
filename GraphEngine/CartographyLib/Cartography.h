@@ -16,13 +16,15 @@ namespace GraphEngine {
         {
             UndefineSymbolSelectorID,
             SimpleSymbolSelectorID,
-            UniqueValueSymbolSelectorID
+            UniqueValueSymbolSelectorID,
+            RangeSymbolSelectorID
         };
 
         enum eFeatureRendererID
         {
             UndefineFeatureRendererID,
-            SimpleFeatureRendererID
+            SimpleFeatureRendererID,
+            AnnotationRendererID
         };
 
         enum eRasterRendererID
@@ -74,9 +76,12 @@ namespace GraphEngine {
         typedef std::shared_ptr< class IFeatureRenderer> IFeatureRendererPtr;
         typedef std::shared_ptr< class ISimpleSymbolSelector> ISimpleSymbolSelectorPtr;
         typedef std::shared_ptr< class ILegendInfo> ILegendInfoPtr;
+        typedef std::shared_ptr< class IUniqueValueSymbolSelector> IUniqueValueSymbolSelectorPtr;
+        typedef std::shared_ptr< class IRangeSymbolSelector> IRangeSymbolSelectorPtr;
         typedef std::shared_ptr<class IFeatureLayer> IFeatureLayerPtr;
         typedef std::shared_ptr<class IRasterLayer> IRasterLayerPtr;
         typedef std::shared_ptr<class IRasterRenderer> IRasterRendererPtr;
+        typedef std::shared_ptr<class IAnnotationRender> IAnnotationRenderPtr;
 
         typedef CommonLib::delegate2_t<Display::IDisplay*, eDrawPhase>  OnBeforeDraw;
         typedef CommonLib::delegate2_t<Display::IDisplay*, eDrawPhase>  OnAfterDraw;
@@ -187,6 +192,12 @@ namespace GraphEngine {
             virtual void							 ClearRenders() = 0;
             virtual void							 SelectFeatures(const CommonLib::bbox& extent, ISelectionPtr ptrSelection,  Geometry::ISpatialReferencePtr ptrSpRef) = 0;
             virtual void                             DrawFeatures(eDrawPhase phase, const std::vector<int64_t>& vecOids, Display::IDisplayPtr ptrDisplay, Display::ITrackCancelPtr ptrTrackCancel, Display::ISymbolPtr ptrCustomSymbol) const = 0;
+            virtual bool                             HasAnnoField() const = 0;
+            virtual const std::string&               GetAnnoFieldName() const = 0;
+            virtual void                             SetAnnoFieldName(const std::string& filedName)  = 0;
+            virtual IAnnotationRenderPtr			 GetAnnotationRenderer() const = 0;
+            virtual void							 SetAnnotationRenderer(IAnnotationRenderPtr ptrRenderer) = 0;
+
         };
 
         class IRasterLayer : public ILayer {
@@ -334,6 +345,18 @@ namespace GraphEngine {
         };
 
 
+        class IAnnotationRender : public IFeatureRenderer {
+            public:
+            IAnnotationRender(){}
+            virtual ~IAnnotationRender(){}
+
+            using IFeatureRenderer::PrepareFilter;
+            // symbol selector of the renderer gives a text symbol per row (it can depend on the row attributes)
+            virtual void  PrepareFilter(GeoDatabase::ITablePtr ptrTable, GeoDatabase::IQueryFilterPtr ptrFilter, const std::string& annotationName) const = 0;
+
+        };
+
+
         class  IRasterRenderer :  public CommonLib::ISerialize {
         public:
             IRasterRenderer(){}
@@ -357,6 +380,81 @@ namespace GraphEngine {
             virtual void                   SetLabel(const std::string& sLabel) = 0;
             virtual Display::ISymbolPtr    GetSymbol() const = 0;
             virtual void                   SetSymbol(Display::ISymbolPtr ptrSymbol) = 0;
+        };
+
+        // symbol by the values of one or several fields (ported from UniGIS UniqueValueSymbolAssigner).
+        // Numbers are compared by value whatever their type is (int32 field, int64 value ...), texts as UTF-8;
+        // an empty (null) value matches null field values. Rows without a matching value get the default symbol
+        // when it is used, otherwise no symbol (they are not drawn)
+        class IUniqueValueSymbolSelector : public ISymbolSelector
+        {
+        public:
+            IUniqueValueSymbolSelector(){}
+            virtual ~IUniqueValueSymbolSelector(){}
+
+            virtual const std::string&     GetHeadingLabel() const = 0;
+            virtual void                   SetHeadingLabel(const std::string& sLabel) = 0;
+
+            virtual int                    GetFieldCount() const = 0;
+            virtual void                   SetFieldCount(int nCount) = 0;
+            virtual const std::string&     GetField(int nFieldIndex) const = 0;
+            virtual void                   SetField(int nFieldIndex, const std::string& sFieldName) = 0;
+
+            virtual int                    GetValueCount() const = 0;
+            virtual void                   SetValueCount(int nCount) = 0;
+            // adds a value (one item per field), returns its index
+            virtual int                    AddValue(const std::vector<CommonLib::CVariant>& values, Display::ISymbolPtr ptrSymbol, const std::string& sLabel = std::string()) = 0;
+            virtual void                   RemoveValue(int nIndex) = 0;
+            virtual CommonLib::CVariant    GetValue(int nIndex, int nFieldIndex) const = 0;
+            virtual void                   SetValue(int nIndex, int nFieldIndex, const CommonLib::CVariant& value) = 0;
+            virtual const std::string&     GetLabel(int nIndex) const = 0;
+            virtual void                   SetLabel(int nIndex, const std::string& sLabel) = 0;
+            virtual const std::string&     GetDescription(int nIndex) const = 0;
+            virtual void                   SetDescription(int nIndex, const std::string& sDescription) = 0;
+            virtual Display::ISymbolPtr    GetSymbol(int nIndex) const = 0;
+            virtual void                   SetSymbol(int nIndex, Display::ISymbolPtr ptrSymbol) = 0;
+            virtual int                    GetGroup(int nIndex) const = 0;
+            virtual void                   SetGroup(int nIndex, int nGroup) = 0;
+
+            virtual Display::ISymbolPtr    GetDefaultSymbol() const = 0;
+            virtual void                   SetDefaultSymbol(Display::ISymbolPtr ptrSymbol) = 0;
+            virtual const std::string&     GetDefaultLabel() const = 0;
+            virtual void                   SetDefaultLabel(const std::string& sLabel) = 0;
+            virtual bool                   GetUseDefaultSymbol() const = 0;
+            virtual void                   SetUseDefaultSymbol(bool bUse) = 0;
+        };
+
+        // symbol by the numeric value of a field (ported from UniGIS RangeSymbolAssigner):
+        // the first range with from <= value <= to gives the symbol, otherwise the default symbol (when it is used)
+        class IRangeSymbolSelector : public ISymbolSelector
+        {
+        public:
+            IRangeSymbolSelector(){}
+            virtual ~IRangeSymbolSelector(){}
+
+            virtual const std::string&     GetField() const = 0;
+            virtual void                   SetField(const std::string& sFieldName) = 0;
+
+            virtual int                    GetRangeCount() const = 0;
+            virtual void                   SetRangeCount(int nCount) = 0;
+            virtual int                    AddRange(double dFrom, double dTo, Display::ISymbolPtr ptrSymbol, const std::string& sLabel = std::string()) = 0;
+            virtual void                   RemoveRange(int nIndex) = 0;
+            virtual void                   GetRange(int nIndex, double* pFrom, double* pTo) const = 0;
+            virtual void                   SetRange(int nIndex, double dFrom, double dTo) = 0;
+            virtual const std::string&     GetLabel(int nIndex) const = 0;
+            virtual void                   SetLabel(int nIndex, const std::string& sLabel) = 0;
+            virtual const std::string&     GetDescription(int nIndex) const = 0;
+            virtual void                   SetDescription(int nIndex, const std::string& sDescription) = 0;
+            virtual Display::ISymbolPtr    GetSymbol(int nIndex) const = 0;
+            virtual void                   SetSymbol(int nIndex, Display::ISymbolPtr ptrSymbol) = 0;
+            virtual void                   SortRanges() = 0;   // by the start of the range
+
+            virtual Display::ISymbolPtr    GetDefaultSymbol() const = 0;
+            virtual void                   SetDefaultSymbol(Display::ISymbolPtr ptrSymbol) = 0;
+            virtual const std::string&     GetDefaultLabel() const = 0;
+            virtual void                   SetDefaultLabel(const std::string& sLabel) = 0;
+            virtual bool                   GetUseDefaultSymbol() const = 0;
+            virtual void                   SetUseDefaultSymbol(bool bUse) = 0;
         };
 
         class ILegendInfo

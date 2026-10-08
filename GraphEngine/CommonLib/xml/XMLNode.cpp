@@ -158,7 +158,10 @@ namespace CommonLib
 
 			void CXMLNode::AddPropertyDouble(const std::string& name, double value)
 			{
-				AddProperyT(name, value);
+				// full precision: AStrFrom(double) keeps only 3 decimals, sizes in mm and scales were rounded
+				char buf[64];
+				snprintf(buf, sizeof(buf), "%.17g", value);
+				AddPropertyString(name, buf);
 			}
 
 			void CXMLNode::AddPropertyBool(const std::string& name, bool value)

@@ -3,6 +3,63 @@
 // Used by TestMapDraw.rc
 //
 #define IDD_ABOUTBOX                    100
+#define IDD_ADD_SHAPEFILE               101
+#define IDD_ADD_SQLITE                  102
+#define IDC_SHAPE_PATH                  1000
+#define IDC_BROWSE                      1001
+#define IDC_ENABLE_ANNO                 1002
+#define IDC_ANNO_FIELD                  1003
+#define IDC_DB_PATH                     1004
+#define IDC_TABLE                       1005
+#define IDC_ANNO_SCALE                  1006
+#define IDD_PAGE_SYMBOLOGY              103
+#define IDD_PAGE_ANNOTATION             104
+#define IDD_SYMBOL_EDITOR               105
+#define IDC_TABS                        1010
+#define IDC_SELECTOR_TYPE               1011
+#define IDC_SYMB_FIELD                  1012
+#define IDC_ADD_VALUES                  1013
+#define IDC_CLASSES                     1014
+#define IDC_CLASSIFY                    1015
+#define IDC_REMOVE_ITEM                 1016
+#define IDC_DRAW_OTHER                  1017
+#define IDC_ITEMS                       1018
+#define IDC_SYM_GROUP                   1019
+#define IDC_SYM_TYPE                    1020
+#define IDC_CLASSES_LABEL               1021
+#define IDC_SYMB_FIELD_LABEL            1022
+#define IDC_PROP_LABEL0                 1100
+#define IDC_PROP_LABEL1                 1101
+#define IDC_PROP_LABEL2                 1102
+#define IDC_PROP_LABEL3                 1103
+#define IDC_PROP_LABEL4                 1104
+#define IDC_PROP_LABEL5                 1105
+#define IDC_PROP_LABEL6                 1106
+#define IDC_PROP_LABEL7                 1107
+#define IDC_PROP_EDIT0                  1110
+#define IDC_PROP_EDIT1                  1111
+#define IDC_PROP_EDIT2                  1112
+#define IDC_PROP_EDIT3                  1113
+#define IDC_PROP_EDIT4                  1114
+#define IDC_PROP_EDIT5                  1115
+#define IDC_PROP_EDIT6                  1116
+#define IDC_PROP_EDIT7                  1117
+#define IDC_PROP_COMBO0                 1120
+#define IDC_PROP_COMBO1                 1121
+#define IDC_PROP_COMBO2                 1122
+#define IDC_PROP_COMBO3                 1123
+#define IDC_PROP_COMBO4                 1124
+#define IDC_PROP_COMBO5                 1125
+#define IDC_PROP_COMBO6                 1126
+#define IDC_PROP_COMBO7                 1127
+#define IDC_PROP_BTN0                   1130
+#define IDC_PROP_BTN1                   1131
+#define IDC_PROP_BTN2                   1132
+#define IDC_PROP_BTN3                   1133
+#define IDC_PROP_BTN4                   1134
+#define IDC_PROP_BTN5                   1135
+#define IDC_PROP_BTN6                   1136
+#define IDC_PROP_BTN7                   1137
 #define IDR_MAINFRAME                   128
 #define ID_REDRAW_MAP                   32775
 #define ID_FULL_ZOOM                    32776
@@ -28,7 +85,7 @@
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        201
 #define _APS_NEXT_COMMAND_VALUE         32792
-#define _APS_NEXT_CONTROL_VALUE         1000
-#define _APS_NEXT_SYMED_VALUE           101
+#define _APS_NEXT_CONTROL_VALUE         1140
+#define _APS_NEXT_SYMED_VALUE           106
 #endif
 #endif

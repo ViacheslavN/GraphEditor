@@ -3,6 +3,7 @@
 #include "../../layers/FeatureLayer.h"
 #include "../../layers/RasterLayer.h"
 #include "../../renders/FeatureRenderer.h"
+#include "../../renders/AnnotationRenderer.h"
 #include "../../selectors/SimpleSymbolSelector.h"
 #include "../../../GeoDatabase/GeoDatabaseShape/ShapefileWorkspace.h"
 #include "../../../GeoDatabase/GeoDatabaseSQlite/SQLiteWorkspace.h"
@@ -10,15 +11,19 @@
 #include "../../../CommonLib/filesystem/filesystem.h"
 #include "../../../GeoDatabase/WorkspaceHolder.h"
 #include "../../../GeoDatabase/DatasetLoader.h"
+#include "../../../GeoDatabase/QueryFilter.h"
+#include "../../selectors/SymbolSelectorUtils.h"
 #include "../../../DisplayLib/Symbols/SimpleFillSymbol.h"
 #include "../../../DisplayLib/Symbols/SimpleLineSymbol.h"
 #include "../../../DisplayLib/Symbols/SimpleMarketSymbol.h"
+#include "../../../DisplayLib/Symbols/TextSymbol.h"
 #include "../../../CommonLib/xml/XMLDoc.h"
 #include "../../../CommonLib/SpatialData/GeoShape.h"
 #include "../../../CommonLib/Serialize/SerializeXML.h"
 
 #include <cmath>
 #include <filesystem>
+#include <map>
 
 using namespace GraphEngine;
 
@@ -55,6 +60,26 @@ namespace TestMapDraw
             };
             const int nCount = (int)(sizeof(colors) / sizeof(colors[0]));
             return colors[(nIndex < 0 ? 0 : nIndex) % nCount];
+        }
+
+        std::vector<SFieldInfo> GetTableFields(GeoDatabase::ITablePtr ptrTable)
+        {
+            std::vector<SFieldInfo> vecFields;
+            GeoDatabase::IFieldsPtr ptrFields = ptrTable->GetFields();
+            for(int i = 0, sz = ptrFields->GetFieldCount(); i < sz; ++i)
+            {
+                GeoDatabase::IFieldPtr ptrField = ptrFields->GetField(i);
+                if(ptrField->GetType() == GeoDatabase::dtGeometry)
+                    continue;
+
+                GeoDatabase::eDataTypes type = ptrField->GetType();
+                SFieldInfo info;
+                info.sName = ptrField->GetName();
+                info.bText = type == GeoDatabase::dtString;
+                info.bNumeric = (type >= GeoDatabase::dtInteger8 && type <= GeoDatabase::dtDouble);
+                vecFields.push_back(info);
+            }
+            return vecFields;
         }
     }
 
@@ -127,7 +152,154 @@ namespace TestMapDraw
         }
     }
 
-    Cartography::ILayerPtr CMapProject::AddShapefile(const std::string& sFilePathUtf8)
+    Display::Color CMapProject::GetLayerColor(int nIndex)
+    {
+        return LayerColor(nIndex);
+    }
+
+    STableInfo CMapProject::GetShapefileInfo(const std::string& sFilePath)
+    {
+        try
+        {
+            std::string sPath;
+            std::string sName;
+            SplitShapefilePath(sFilePath, sPath, sName);
+
+            // temporary workspace, not registered in CWorkspaceHolder
+            GeoDatabase::IWorkspacePtr ptrWorkspace = GeoDatabase::CShapfileWorkspace::Open(sName.c_str(), sPath.c_str(), CommonLib::CGuid::CreateNew());
+            GeoDatabase::IDatabaseWorkspace* pDbWorkspace = dynamic_cast<GeoDatabase::IDatabaseWorkspace*>(ptrWorkspace.get());
+            if(!pDbWorkspace)
+                throw CommonLib::CExcBase("not a database workspace");
+
+            GeoDatabase::ITablePtr ptrTable = pDbWorkspace->GetTable(sName);
+            STableInfo info;
+            info.sName = sName;
+            info.vecFields = GetTableFields(ptrTable);
+            info.shapeType = ptrTable->GetGeometryType();
+            return info;
+        }
+        catch (std::exception& exc)
+        {
+            CommonLib::CExcBase::RegenExc("Failed to read fields of shapefile {0}", sFilePath, exc);
+            throw;
+        }
+    }
+
+    namespace
+    {
+        // the table of the source, the workspace must live while the table is used
+        GeoDatabase::ITablePtr OpenSourceTable(const SDataSource& source, GeoDatabase::IWorkspacePtr& ptrWorkspace)
+        {
+            std::string sDir;
+            std::string sName;
+            SplitShapefilePath(source.sPath, sDir, sName);
+
+            if(source.bSQLite)
+            {
+                GeoDatabase::IDatabaseWorkspacePtr ptrDb = GeoDatabase::CSQLiteWorkspace::Open(sName.c_str(), source.sPath.c_str(), CommonLib::CGuid::CreateNew());
+                ptrWorkspace = ptrDb;
+                return ptrDb->GetTable(source.sTable);
+            }
+
+            ptrWorkspace = GeoDatabase::CShapfileWorkspace::Open(sName.c_str(), sDir.c_str(), CommonLib::CGuid::CreateNew());
+            GeoDatabase::IDatabaseWorkspace* pDb = dynamic_cast<GeoDatabase::IDatabaseWorkspace*>(ptrWorkspace.get());
+            if(!pDb)
+                throw CommonLib::CExcBase("not a database workspace");
+            return pDb->GetTable(sName);
+        }
+
+        // reads the one field of all the rows
+        template<class F>
+        void ForEachValue(const SDataSource& source, const std::string& sField, F func)
+        {
+            GeoDatabase::IWorkspacePtr ptrWorkspace;
+            GeoDatabase::ITablePtr ptrTable = OpenSourceTable(source, ptrWorkspace);
+            if(!ptrTable->GetFields()->FieldExists(sField))
+                throw CommonLib::CExcBase("Field {0} not found", sField);
+
+            GeoDatabase::IQueryFilterPtr ptrFilter = std::make_shared<GeoDatabase::CQueryFilter>();
+            ptrFilter->GetFieldSet()->Add(sField);
+            GeoDatabase::ISelectCursorPtr ptrCursor = ptrTable->Search(ptrFilter);
+            if(!ptrCursor.get())
+                return;
+
+            GeoDatabase::IRowPtr ptrRow = ptrCursor->CreateRow();
+            int32_t nColumn = -1;
+            while(ptrCursor->Next())
+            {
+                ptrCursor->FillRow(ptrRow);
+                nColumn = Cartography::CSymbolSelectorUtils::FindColumn(ptrRow, sField, nColumn);
+                if(!func(ptrRow, nColumn))
+                    break;
+            }
+        }
+    }
+
+    std::vector<CommonLib::CVariant> CMapProject::GetUniqueValues(const SDataSource& source, const std::string& sField, size_t nMaxCount, bool* pbTruncated)
+    {
+        try
+        {
+            if(pbTruncated)
+                *pbTruncated = false;
+
+            // the key compares the values as the unique value selector does (numbers by value, texts as UTF-8)
+            std::map<Cartography::SValueKey, CommonLib::CVariant> mapValues;
+            ForEachValue(source, sField, [&](GeoDatabase::IRowPtr ptrRow, int32_t nColumn) -> bool
+            {
+                Cartography::SValueKey key = Cartography::CSymbolSelectorUtils::MakeKey(ptrRow, nColumn);
+                if(key.kind == Cartography::SValueKey::KindOther || mapValues.count(key))
+                    return true;
+
+                if(mapValues.size() >= nMaxCount)
+                {
+                    if(pbTruncated)
+                        *pbTruncated = true;
+                    return false;
+                }
+
+                CommonLib::CVariantPtr ptrValue = ptrRow->ColumnIsNull(nColumn) ? CommonLib::CVariantPtr() : ptrRow->GetValue(nColumn);
+                mapValues[key] = ptrValue.get() ? *ptrValue : CommonLib::CVariant();
+                return true;
+            });
+
+            std::vector<CommonLib::CVariant> vecValues;
+            for(std::map<Cartography::SValueKey, CommonLib::CVariant>::const_iterator it = mapValues.begin(); it != mapValues.end(); ++it)
+                vecValues.push_back(it->second);
+            return vecValues;
+        }
+        catch (std::exception& exc)
+        {
+            CommonLib::CExcBase::RegenExc("Failed to read values of field {0}", sField, exc);
+            throw;
+        }
+    }
+
+    bool CMapProject::GetValueRange(const SDataSource& source, const std::string& sField, double& dMin, double& dMax)
+    {
+        try
+        {
+            bool bFound = false;
+            ForEachValue(source, sField, [&](GeoDatabase::IRowPtr ptrRow, int32_t nColumn) -> bool
+            {
+                double dValue = 0.;
+                if(!Cartography::CSymbolSelectorUtils::ToDouble(ptrRow, nColumn, dValue))
+                    return true;
+
+                if(!bFound || dValue < dMin) dMin = dValue;
+                if(!bFound || dValue > dMax) dMax = dValue;
+                bFound = true;
+                return true;
+            });
+            return bFound;
+        }
+        catch (std::exception& exc)
+        {
+            CommonLib::CExcBase::RegenExc("Failed to read values of field {0}", sField, exc);
+            throw;
+        }
+    }
+
+    Cartography::ILayerPtr CMapProject::AddShapefile(const std::string& sFilePathUtf8, const SLayerParams& params)
     {
         try
         {
@@ -142,7 +314,7 @@ namespace TestMapDraw
             GeoDatabase::CWorkspaceHolder::AddWorkspace(ptrWorkspace);
             m_vecWorkspaces.push_back(ptrWorkspace);
 
-            AddTable(ptrTable, sName);
+            AddTable(ptrTable, sName, params);
             return m_ptrMap->GetLayers()->GetLayer(m_ptrMap->GetLayers()->GetLayerCount() - 1);
         }
         catch (std::exception& exc)
@@ -152,12 +324,20 @@ namespace TestMapDraw
         }
     }
 
-    void CMapProject::AddTable(GeoDatabase::ITablePtr ptrTable, const std::string& sLayerName)
+    void CMapProject::AddTable(GeoDatabase::ITablePtr ptrTable, const std::string& sLayerName, const SLayerParams& params)
     {
         int nLayerCount = m_ptrMap->GetLayers()->GetLayerCount();
+        const SAnnotationParams& anno = params.annotation;
+
+        // symbology from the dialog (made first: a wrong image file fails before the layer is added)
+        Cartography::ISymbolSelectorPtr ptrSelector;
+        if(params.ptrSymbology.get())
+            ptrSelector = CSymbologyBuilder::CreateSelector(*params.ptrSymbology);
+        else
+            ptrSelector = std::make_shared<Cartography::CSimpleSymbolSelector>(CreateDefaultSymbol(ptrTable->GetGeometryType(), nLayerCount));
 
         std::shared_ptr<Cartography::CFeatureRenderer> ptrRenderer = std::make_shared<Cartography::CFeatureRenderer>();
-        ptrRenderer->SetSymbolSelector(std::make_shared<Cartography::CSimpleSymbolSelector>(CreateDefaultSymbol(ptrTable->GetGeometryType(), nLayerCount)));
+        ptrRenderer->SetSymbolSelector(ptrSelector);
 
         std::shared_ptr<Cartography::CFeatureLayer> ptrLayer = std::make_shared<Cartography::CFeatureLayer>();
         ptrLayer->SetName(sLayerName);
@@ -165,6 +345,18 @@ namespace TestMapDraw
         ptrLayer->AddRenderer(ptrRenderer);
         ptrLayer->SetVisible(true);
         ptrLayer->SetSelectable(true);
+
+        if(!anno.sField.empty())
+        {
+            // annotation: the field value is drawn with a simple text symbol
+            std::shared_ptr<Display::CTextSymbol> ptrTextSymbol = std::make_shared<Display::CTextSymbol>();
+            ptrTextSymbol->SetSize(3.);   // mm
+            ptrTextSymbol->SetColor(Display::Color(0, 0, 0, 255));
+            std::shared_ptr<Cartography::CAnnotationRenderer> ptrAnnoRenderer = std::make_shared<Cartography::CAnnotationRenderer>(std::make_shared<Cartography::CSimpleSymbolSelector>(ptrTextSymbol));
+            ptrAnnoRenderer->SetMinimumScale(anno.dMinimumScale > 0. ? anno.dMinimumScale : 0.); // layer skips it when scale > minimum scale
+            ptrLayer->SetAnnotationRenderer(ptrAnnoRenderer);
+            ptrLayer->SetAnnoFieldName(anno.sField);
+        }
 
         AddLayer(ptrLayer, ptrTable->GetSpatialReference());
     }
@@ -269,7 +461,39 @@ namespace TestMapDraw
         }
     }
 
-    int CMapProject::AddSQLiteDatabase(const std::string& sDatabasePath, const std::string& sTableName)
+    std::vector<STableInfo> CMapProject::GetSQLiteTables(const std::string& sDatabasePath)
+    {
+        try
+        {
+            std::string sDir;
+            std::string sName;
+            SplitShapefilePath(sDatabasePath, sDir, sName);
+
+            // temporary workspace, not registered in CWorkspaceHolder
+            GeoDatabase::IDatabaseWorkspacePtr ptrWorkspace = GeoDatabase::CSQLiteWorkspace::Open(sName.c_str(), sDatabasePath.c_str(), CommonLib::CGuid::CreateNew());
+            GeoDatabase::CSQLiteWorkspace* pSQLiteWorkspace = dynamic_cast<GeoDatabase::CSQLiteWorkspace*>(ptrWorkspace.get());
+
+            std::vector<std::string> vecNames = pSQLiteWorkspace->GetSpatialTableNames();
+            std::vector<STableInfo> vecTables;
+            for(size_t i = 0; i < vecNames.size(); ++i)
+            {
+                STableInfo info;
+                info.sName = vecNames[i];
+                GeoDatabase::ITablePtr ptrTable = ptrWorkspace->GetTable(vecNames[i]);
+                info.vecFields = GetTableFields(ptrTable);
+                info.shapeType = ptrTable->GetGeometryType();
+                vecTables.push_back(info);
+            }
+            return vecTables;
+        }
+        catch (std::exception& exc)
+        {
+            CommonLib::CExcBase::RegenExc("Failed to read tables of SQLite database {0}", sDatabasePath, exc);
+            throw;
+        }
+    }
+
+    int CMapProject::AddSQLiteDatabase(const std::string& sDatabasePath, const std::string& sTableName, const SLayerParams& params)
     {
         try
         {
@@ -296,7 +520,21 @@ namespace TestMapDraw
             m_vecWorkspaces.push_back(ptrWorkspace);
 
             for(size_t i = 0; i < vecTables.size(); ++i)
-                AddTable(ptrWorkspace->GetTable(vecTables[i]), vecTables[i]);
+            {
+                GeoDatabase::ITablePtr ptrTable = ptrWorkspace->GetTable(vecTables[i]);
+                GeoDatabase::IFieldsPtr ptrFields = ptrTable->GetFields();
+                SLayerParams tableParams;
+                if(!params.annotation.sField.empty() && ptrFields->FieldExists(params.annotation.sField))
+                    tableParams.annotation = params.annotation;
+
+                // symbology is made for one table: its field and its geometry type
+                const SSymbology* pSymbology = params.ptrSymbology.get();
+                if(pSymbology && (pSymbology->selector == SelectorSimple || ptrFields->FieldExists(pSymbology->sField)) &&
+                   CSymbolFactory::GetGeometryKind(pSymbology->simpleSymbol.kind) == GeometryKindOf(ptrTable->GetGeometryType()))
+                    tableParams.ptrSymbology = params.ptrSymbology;
+
+                AddTable(ptrTable, vecTables[i], tableParams);
+            }
 
             return (int)vecTables.size();
         }

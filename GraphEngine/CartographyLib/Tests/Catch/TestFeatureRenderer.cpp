@@ -169,3 +169,196 @@ TEST_CASE("Simple symbol selector", "[cartography][selector]")
     selector.FlushBuffers(Display::IDisplayPtr(), Display::ITrackCancelPtr());
     REQUIRE(ptrSymbol->nFlush == 1);
 }
+
+namespace
+{
+    // text symbol which only records calls, works without a real display
+    class CCountingTextSymbol : public Display::ITextSymbol
+    {
+    public:
+        int nPrepare = 0;
+        int nDraw = 0;
+        int nReset = 0;
+        std::wstring sLastDrawnText;
+        CommonLib::IGeoShapePtr ptrLastShape;
+
+        // ISymbol
+        virtual uint32_t GetSymbolID() const {return Display::UndefineSymbolID;}
+        virtual void Init(Display::IDisplayPtr) {}
+        virtual void Reset() {++nReset;}
+        virtual bool CanDraw(CommonLib::IGeoShapePtr ptrShape) const {return ptrShape.get() != nullptr;}
+        virtual void Draw(Display::IDisplayPtr, CommonLib::IGeoShapePtr ptrShape) {++nDraw; ptrLastShape = ptrShape; sLastDrawnText = m_sText;}
+        virtual void FlushBuffers(Display::IDisplayPtr, Display::ITrackCancelPtr) {}
+        virtual void GetBoundaryRect(CommonLib::IGeoShapePtr, Display::IDisplayPtr, Display::GRect&) const {}
+        virtual bool GetScaleDependent() const {return false;}
+        virtual void SetScaleDependent(bool) {}
+        virtual bool GetDrawToBuffers() const {return false;}
+        virtual void SetDrawToBuffers(bool) {}
+        virtual void DrawDirectly(Display::IDisplayPtr, const Display::GPoint*, const int*, int) {}
+        virtual void DrawGeometryEx(Display::IDisplayPtr, const Display::GPoint*, const int*, int) {}
+        virtual void QueryBoundaryRectEx(Display::IDisplayPtr, const Display::GPoint*, const int*, int, Display::GRect&) const {}
+        virtual void Prepare(Display::IDisplayPtr) {++nPrepare;}
+        virtual void Save(CommonLib::ISerializeObjPtr) const {}
+        virtual void Load(CommonLib::ISerializeObjPtr) {}
+
+        // ITextSymbol
+        virtual Display::GUnits GetAngle() const {return 0;}
+        virtual void SetAngle(Display::GUnits) {}
+        virtual Display::Color GetColor() const {return Display::Color();}
+        virtual void SetColor(const Display::Color&) {}
+        virtual Display::FontPtr GetFont() const {return Display::FontPtr();}
+        virtual void SetFont(Display::FontPtr) {}
+        virtual void GetTextSize(Display::IDisplayPtr, const std::wstring&, Display::GUnits*, Display::GUnits*, Display::GUnits*) const {}
+        virtual Display::GUnits GetSize() const {return 0;}
+        virtual void SetSize(Display::GUnits) {}
+        virtual const std::wstring& GetText() const {return m_sText;}
+        virtual void SetText(const std::wstring& text) {m_sText = text;}
+        virtual Display::ITextBackgroundPtr GetTextBackground() const {return Display::ITextBackgroundPtr();}
+        virtual void SetTextBackground(Display::ITextBackgroundPtr) {}
+        virtual int GetTextDrawFlags() const {return 0;}
+        virtual void SetTextDrawFlags(int) {}
+
+    private:
+        std::wstring m_sText;
+    };
+    typedef std::shared_ptr<CCountingTextSymbol> CCountingTextSymbolPtr;
+}
+
+TEST_CASE("Annotation renderer id and CanRender", "[cartography][annotation]")
+{
+    GeoDatabase::ITablePtr ptrTable = std::make_shared<CTestTable>(CreateFields());
+    CAnnotationRenderer renderer;
+
+    REQUIRE(renderer.GetFeatureRendererID() == AnnotationRendererID);
+    REQUIRE(renderer.GetSymbolSelector() == nullptr);
+    REQUIRE_FALSE(renderer.CanRender(ptrTable, Display::IDisplayPtr()));
+
+    renderer.SetSymbolSelector(std::make_shared<CSimpleSymbolSelector>(std::make_shared<CCountingTextSymbol>()));
+    REQUIRE(renderer.CanRender(ptrTable, Display::IDisplayPtr()));
+    REQUIRE_FALSE(renderer.CanRender(GeoDatabase::ITablePtr(), Display::IDisplayPtr()));
+}
+
+TEST_CASE("Annotation PrepareFilter adds shape and annotation fields", "[cartography][annotation]")
+{
+    GeoDatabase::ITablePtr ptrTable = std::make_shared<CTestTable>(CreateFields());
+    CAnnotationRenderer renderer(std::make_shared<CSimpleSymbolSelector>(std::make_shared<CCountingTextSymbol>()));
+    GeoDatabase::IQueryFilterPtr ptrFilter = std::make_shared<GeoDatabase::CQueryFilter>();
+
+    renderer.PrepareFilter(ptrTable, ptrFilter, "Name");
+    renderer.PrepareFilter(ptrTable, ptrFilter, "Name"); // no duplicates
+
+    REQUIRE(ptrFilter->GetFieldSet()->GetCount() == 2);
+    REQUIRE(ptrFilter->GetFieldSet()->Find("Shape") >= 0);
+    REQUIRE(ptrFilter->GetFieldSet()->Find("Name") >= 0);
+}
+
+TEST_CASE("Annotation DrawFeature draws the field value at the feature shape", "[cartography][annotation]")
+{
+    GeoDatabase::ITablePtr ptrTable = std::make_shared<CTestTable>(CreateFields());
+    CCountingTextSymbolPtr ptrSymbol = std::make_shared<CCountingTextSymbol>();
+    CAnnotationRenderer renderer(std::make_shared<CSimpleSymbolSelector>(ptrSymbol));
+    renderer.PrepareFilter(ptrTable, std::make_shared<GeoDatabase::CQueryFilter>(), "Name");
+
+    GeoDatabase::IRowPtr ptrRow = std::make_shared<GeoDatabase::CRow>(CreateFields());
+    ptrRow->SetInt64(0, 1);
+    ptrRow->SetText(1, "Praha");
+    ptrRow->SetShape(2, CreatePoint(10., 20.));
+
+    renderer.DrawFeature(Display::IDisplayPtr(), ptrRow);
+
+    REQUIRE(ptrSymbol->nPrepare == 1);
+    REQUIRE(ptrSymbol->nDraw == 1);
+    REQUIRE(ptrSymbol->nReset == 1);
+    REQUIRE(ptrSymbol->sLastDrawnText == L"Praha");
+    REQUIRE(ptrSymbol->ptrLastShape->GetPoints()[0].x == 10.);
+}
+
+TEST_CASE("Annotation DrawFeature converts non text values", "[cartography][annotation]")
+{
+    GeoDatabase::ITablePtr ptrTable = std::make_shared<CTestTable>(CreateFields());
+    CCountingTextSymbolPtr ptrSymbol = std::make_shared<CCountingTextSymbol>();
+    CAnnotationRenderer renderer(std::make_shared<CSimpleSymbolSelector>(ptrSymbol));
+    renderer.PrepareFilter(ptrTable, std::make_shared<GeoDatabase::CQueryFilter>(), "OID");
+
+    GeoDatabase::IRowPtr ptrRow = std::make_shared<GeoDatabase::CRow>(CreateFields());
+    ptrRow->SetInt64(0, 42);
+    ptrRow->SetShape(2, CreatePoint(1., 1.));
+
+    renderer.DrawFeature(Display::IDisplayPtr(), ptrRow);
+
+    REQUIRE(ptrSymbol->nDraw == 1);
+    REQUIRE(ptrSymbol->sLastDrawnText == L"42");
+}
+
+TEST_CASE("Annotation DrawFeature skips empty values, rows without shape and selection drawing", "[cartography][annotation]")
+{
+    GeoDatabase::ITablePtr ptrTable = std::make_shared<CTestTable>(CreateFields());
+    CCountingTextSymbolPtr ptrSymbol = std::make_shared<CCountingTextSymbol>();
+    CAnnotationRenderer renderer(std::make_shared<CSimpleSymbolSelector>(ptrSymbol));
+    renderer.PrepareFilter(ptrTable, std::make_shared<GeoDatabase::CQueryFilter>(), "Name");
+
+    GeoDatabase::IRowPtr ptrNoText = std::make_shared<GeoDatabase::CRow>(CreateFields());
+    ptrNoText->SetShape(2, CreatePoint(1., 1.));
+    renderer.DrawFeature(Display::IDisplayPtr(), ptrNoText);
+
+    GeoDatabase::IRowPtr ptrNoShape = std::make_shared<GeoDatabase::CRow>(CreateFields());
+    ptrNoShape->SetText(1, "text");
+    renderer.DrawFeature(Display::IDisplayPtr(), ptrNoShape);
+
+    GeoDatabase::IRowPtr ptrRow = std::make_shared<GeoDatabase::CRow>(CreateFields());
+    ptrRow->SetText(1, "text");
+    ptrRow->SetShape(2, CreatePoint(1., 1.));
+    renderer.DrawFeature(Display::IDisplayPtr(), ptrRow, std::make_shared<CCountingSymbol>());
+
+    REQUIRE(ptrSymbol->nDraw == 0);
+}
+
+TEST_CASE("Annotation DrawFeature skips rows whose selector symbol isn't a text symbol", "[cartography][annotation]")
+{
+    GeoDatabase::ITablePtr ptrTable = std::make_shared<CTestTable>(CreateFields());
+    CCountingSymbolPtr ptrSymbol = std::make_shared<CCountingSymbol>();
+    CAnnotationRenderer renderer(std::make_shared<CSimpleSymbolSelector>(ptrSymbol));
+    renderer.PrepareFilter(ptrTable, std::make_shared<GeoDatabase::CQueryFilter>(), "Name");
+
+    GeoDatabase::IRowPtr ptrRow = std::make_shared<GeoDatabase::CRow>(CreateFields());
+    ptrRow->SetText(1, "text");
+    ptrRow->SetShape(2, CreatePoint(1., 1.));
+    renderer.DrawFeature(Display::IDisplayPtr(), ptrRow);
+
+    REQUIRE(ptrSymbol->nDraw == 0);
+}
+
+TEST_CASE("Annotation DrawFeature throws when the annotation field is missing", "[cartography][annotation]")
+{
+    GeoDatabase::ITablePtr ptrTable = std::make_shared<CTestTable>(CreateFields());
+    CAnnotationRenderer renderer(std::make_shared<CSimpleSymbolSelector>(std::make_shared<CCountingTextSymbol>()));
+    renderer.PrepareFilter(ptrTable, std::make_shared<GeoDatabase::CQueryFilter>(), "NoSuchField");
+
+    GeoDatabase::IRowPtr ptrRow = std::make_shared<GeoDatabase::CRow>(CreateFields());
+    ptrRow->SetShape(2, CreatePoint(1., 1.));
+
+    REQUIRE_THROWS(renderer.DrawFeature(Display::IDisplayPtr(), ptrRow));
+}
+
+TEST_CASE("Annotation renderer save/load with a text symbol selector", "[cartography][annotation][serialize]")
+{
+    std::shared_ptr<Display::CTextSymbol> ptrSymbol = std::make_shared<Display::CTextSymbol>();
+    ptrSymbol->SetSize(4);
+    ptrSymbol->SetColor(Display::Color(255, 0, 0));
+
+    CAnnotationRenderer renderer(std::make_shared<CSimpleSymbolSelector>(ptrSymbol));
+    renderer.SetMaximumScale(1000.);
+
+    CommonLib::ISerializeObjPtr ptrRoot = CreateSerializeRoot();
+    renderer.Save(ptrRoot);
+
+    IFeatureRendererPtr ptrLoaded = CLoaderRenderers::LoadRenderer(ptrRoot);
+    IAnnotationRenderPtr ptrAnno = std::dynamic_pointer_cast<IAnnotationRender>(ptrLoaded);
+    REQUIRE(ptrAnno != nullptr);
+    REQUIRE(ptrAnno->GetMaximumScale() == 1000.);
+    ISimpleSymbolSelectorPtr ptrSelector = std::dynamic_pointer_cast<ISimpleSymbolSelector>(ptrAnno->GetSymbolSelector());
+    REQUIRE(ptrSelector != nullptr);
+    Display::ITextSymbolPtr ptrLoadedSymbol = std::dynamic_pointer_cast<Display::ITextSymbol>(ptrSelector->GetSymbol());
+    REQUIRE(ptrLoadedSymbol != nullptr);
+    REQUIRE(ptrLoadedSymbol->GetSize() == 4);
+}

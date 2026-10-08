@@ -41,8 +41,11 @@ namespace GraphEngine {
             virtual void							 RemoveRenderer(IFeatureRendererPtr	 ptrRenderer);
             virtual void							 ClearRenders();
             virtual void                             DrawFeatures(eDrawPhase phase, const std::vector<int64_t>& vecOids, Display::IDisplayPtr ptrDisplay, Display::ITrackCancelPtr ptrTrackCancel, Display::ISymbolPtr ptrCustomSymbol) const;
-
-
+            virtual bool                             HasAnnoField() const ;
+            virtual const std::string&               GetAnnoFieldName() const;
+            virtual void                             SetAnnoFieldName(const std::string& filedName);
+            virtual IAnnotationRenderPtr			 GetAnnotationRenderer() const;
+            virtual void							 SetAnnotationRenderer(IAnnotationRenderPtr ptrRenderer);
 
             void DrawEx(eDrawPhase phase, Display::IDisplayPtr ptrDisplay, Display::ITrackCancelPtr trackCancel);
 
@@ -55,8 +58,9 @@ namespace GraphEngine {
             void CalcBB(Display::IDisplayPtr ptrDisplay, CommonLib::bbox& bb);
             std::string GetOIDFieldName() const;
             GeoDatabase::ISpatialFilterPtr CreateDisplayFilter(Display::IDisplayPtr ptrDisplay, bool& bIntersects);
-            void DrawRows(GeoDatabase::ISelectCursorPtr ptrCursor, const std::vector<IFeatureRendererPtr>& vecRenderers, Display::IDisplayPtr ptrDisplay,
-                          Display::ITrackCancelPtr ptrTrackCancel, const std::unordered_set<int64_t>* pOids, Display::ISymbolPtr ptrCustomSymbol) const;
+            IAnnotationRenderPtr PrepareAnnotationRenderer(GeoDatabase::IQueryFilterPtr ptrFilter, Display::IDisplayPtr ptrDisplay, bool checkScale) const;
+            void DrawRows(GeoDatabase::ISelectCursorPtr ptrCursor, const std::vector<IFeatureRendererPtr>& vecRenderers, IAnnotationRenderPtr ptrAnnoRenderer,
+                          Display::IDisplayPtr ptrDisplay, Display::ITrackCancelPtr ptrTrackCancel, const std::unordered_set<int64_t>* pOids, Display::ISymbolPtr ptrCustomSymbol) const;
         private:
             typedef std::vector<IFeatureRendererPtr> TFeatureRenderer;
 
@@ -68,11 +72,13 @@ namespace GraphEngine {
             bool m_bSelectable;
             bool m_hasReferenceScale;
             GeoDatabase::ITablePtr m_ptrTable;
+            std::string  m_sAnnotateField;
 
             double                        m_dDrawingWidth;
             bool                          m_bDrawingWidthScaleDependent;
 
             std::vector<GeoDatabase::IJoinPtr> m_vecJoins;
+            IAnnotationRenderPtr m_ptrAnnotationRenderer;
 
         };
 

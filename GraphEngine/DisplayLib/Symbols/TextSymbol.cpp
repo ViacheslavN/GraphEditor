@@ -6,10 +6,11 @@
 namespace GraphEngine {
     namespace Display {
 
-        CTextSymbol::CTextSymbol()
+        CTextSymbol::CTextSymbol() : m_nTextDrawFlags(0)
         {
             m_nSymbolID = TextSymbolID;
             m_ptrFont = std::make_shared<CFont>();
+            m_ptrDrawFont = std::make_shared<CFont>();
         }
 
         CTextSymbol::~CTextSymbol()
@@ -50,7 +51,7 @@ namespace GraphEngine {
         }
         void CTextSymbol::GetTextSize(IDisplayPtr ptrDisplay, const std::wstring& szText, GUnits *pxSize , GUnits *pySize, GUnits* baseLine) const
         {
-            ptrDisplay->GetGraphics()->QueryTextMetrics(m_ptrFont, szText.c_str(), (int)szText.length(), pxSize, pySize, baseLine);
+            ptrDisplay->GetGraphics()->QueryTextMetrics(m_ptrDrawFont, szText.c_str(), (int)szText.length(), pxSize, pySize, baseLine);
         }
 
         GUnits CTextSymbol::GetSize() const
@@ -110,14 +111,14 @@ namespace GraphEngine {
             DrawGeometryEx(ptrDisplay, lpPoints, lpPolyCounts, nCount);
         }
 
-        void  CTextSymbol::DrawGeometryEx(IDisplayPtr ptrDisplay, const GPoint* points, const int* polyCounts, size_t polyCount)
+        void  CTextSymbol::DrawGeometryEx(IDisplayPtr ptrDisplay, const GPoint* points, const int* polyCounts, int polyCount)
         {
             if(m_ptrGeom && m_ptrGeom->GeneralType() == CommonLib::shape_type_general_polyline)
             {
-                double tmp = m_ptrFont->GetOrientation();
-                m_ptrFont->SetOrientation(0);
-                ptrDisplay->GetGraphics()->DrawTextByLine(m_ptrFont, m_sText.c_str(), (int)m_sText.length(), points, polyCounts[0]);
-                m_ptrFont->SetOrientation(tmp);
+                double tmp = m_ptrDrawFont->GetOrientation();
+                m_ptrDrawFont->SetOrientation(0);
+                ptrDisplay->GetGraphics()->DrawTextByLine(m_ptrDrawFont, m_sText.c_str(), (int)m_sText.length(), points, polyCounts[0]);
+                m_ptrDrawFont->SetOrientation(tmp);
             }
             else
             {
@@ -129,26 +130,26 @@ namespace GraphEngine {
                     GPoint dpt;
                     ptrDisplay->GetTransformation()->MapToDevice(&pt, &dpt, 1);
 
-                    eTextHAlignment oldHAlignment = m_ptrFont->GetTextHAlignment();
-                    eTextVAlignment oldVAlignment = m_ptrFont->GetTextVAlignment();
-                    m_ptrFont->SetTextHAlignment(TextHAlignmentCenter);
-                    m_ptrFont->SetTextVAlignment(TextVAlignmentCenter);
+                    eTextHAlignment oldHAlignment = m_ptrDrawFont->GetTextHAlignment();
+                    eTextVAlignment oldVAlignment = m_ptrDrawFont->GetTextVAlignment();
+                    m_ptrDrawFont->SetTextHAlignment(TextHAlignmentCenter);
+                    m_ptrDrawFont->SetTextVAlignment(TextVAlignmentCenter);
 
                     if(m_pTextBg.get())
                         draw_background(ptrDisplay, dpt);
-                    ptrDisplay->GetGraphics()->DrawText(m_ptrFont, m_sText.c_str(), (int)m_sText.length(), dpt, m_nTextDrawFlags);
+                    ptrDisplay->GetGraphics()->DrawText(m_ptrDrawFont, m_sText.c_str(), (int)m_sText.length(), dpt, m_nTextDrawFlags);
 
-                    m_ptrFont->SetTextHAlignment(oldHAlignment);
-                    m_ptrFont->SetTextVAlignment(oldVAlignment);
+                    m_ptrDrawFont->SetTextHAlignment(oldHAlignment);
+                    m_ptrDrawFont->SetTextVAlignment(oldVAlignment);
                 }
                 else
                 {
                     draw_background(ptrDisplay, points[0]);
-                    ptrDisplay->GetGraphics()->DrawText(m_ptrFont, m_sText.c_str(), (int)m_sText.length(), points[0], m_nTextDrawFlags);
+                    ptrDisplay->GetGraphics()->DrawText(m_ptrDrawFont, m_sText.c_str(), (int)m_sText.length(), points[0], m_nTextDrawFlags);
                 }
             }
         }
-        void  CTextSymbol::QueryBoundaryRectEx(IDisplayPtr ptrDisplay, const GPoint* points, const int* polyCounts, size_t polyCount,   GRect &rect) const
+        void  CTextSymbol::QueryBoundaryRectEx(IDisplayPtr ptrDisplay, const GPoint* points, const int* polyCounts, int polyCount,   GRect &rect) const
         {
             if(polyCount > 1 || polyCounts[0] > 1)
                 return;
@@ -158,9 +159,12 @@ namespace GraphEngine {
 
         void  CTextSymbol::Prepare(IDisplayPtr ptrDisplay)
         {
-            m_ptrFont->SetSize(CDisplayUtils::SymbolSizeToDeviceSize(ptrDisplay->GetTransformation(), m_ptrFont->GetSize(), GetScaleDependent()));
+            // m_ptrFont keeps the symbol sizes (mm), the device sizes go to the draw font,
+            // so Prepare can be called any number of times (before it the font size was converted again on every call)
+            *m_ptrDrawFont = *m_ptrFont;
+            m_ptrDrawFont->SetSize(CDisplayUtils::SymbolSizeToDeviceSize(ptrDisplay->GetTransformation(), m_ptrFont->GetSize(), GetScaleDependent()));
             if(m_ptrFont->GetHaloSize() != 0)
-                m_ptrFont->SetHaloSize(CDisplayUtils::SymbolSizeToDeviceSize(ptrDisplay->GetTransformation(),m_ptrFont->GetHaloSize(), GetScaleDependent()));
+                m_ptrDrawFont->SetHaloSize(CDisplayUtils::SymbolSizeToDeviceSize(ptrDisplay->GetTransformation(), m_ptrFont->GetHaloSize(), GetScaleDependent()));
         }
         void CTextSymbol::PolygonCenterPoint(const CommonLib::IGeoShapePtr pGeom, CommonLib::GisXYPoint* pout)
         {
@@ -253,9 +257,9 @@ namespace GraphEngine {
         void CTextSymbol::QueryBoundaryRectEx1(IDisplayPtr ptrDisplay, const GPoint& point, GRect& rect) const
         {
             GUnits width, height, baseline;
-            ptrDisplay->GetGraphics()->QueryTextMetrics(m_ptrFont, m_sText.c_str(), (int)m_sText.length(), &width, &height, &baseline);
+            ptrDisplay->GetGraphics()->QueryTextMetrics(m_ptrDrawFont, m_sText.c_str(), (int)m_sText.length(), &width, &height, &baseline);
 
-            switch(m_ptrFont->GetTextVAlignment())
+            switch(m_ptrDrawFont->GetTextVAlignment())
             {
                 case TextVAlignmentTop:
                     rect.yMin = point.y;
@@ -275,7 +279,7 @@ namespace GraphEngine {
                     break;
             }
 
-            switch(m_ptrFont->GetTextHAlignment())
+            switch(m_ptrDrawFont->GetTextHAlignment())
             {
                 case TextHAlignmentLeft:
                     rect.xMin = point.x;
@@ -291,7 +295,7 @@ namespace GraphEngine {
                     break;
             }
 
-            if(m_ptrFont->GetOrientation() != 0.0)
+            if(m_ptrDrawFont->GetOrientation() != 0.0)
             {
                 CommonLib::GisXYPoint p[4];
                 p[0].x = rect.xMin;
@@ -305,17 +309,17 @@ namespace GraphEngine {
 
                 agg::trans_affine mtx;
                 mtx *= agg::trans_affine_translation(-point.x, -point.y);
-                mtx *= agg::trans_affine_rotation(DEG2RAD(m_ptrFont->GetOrientation()));
+                mtx *= agg::trans_affine_rotation(DEG2RAD(m_ptrDrawFont->GetOrientation()));
                 mtx *= agg::trans_affine_translation(point.x, point.y);
                 mtx.transform(&p[0].x, &p[0].y);
                 mtx.transform(&p[1].x, &p[1].y);
                 mtx.transform(&p[2].x, &p[2].y);
                 mtx.transform(&p[3].x, &p[3].y);
 
-                rect.xMin = (GUnits)min(p[0].x, min(p[1].x, min(p[2].x, p[3].x)));
-                rect.xMax = (GUnits)max(p[0].x, max(p[1].x, max(p[2].x, p[3].x)));
-                rect.yMin = (GUnits)min(p[0].y, min(p[1].y, min(p[2].y, p[3].y)));
-                rect.yMax = (GUnits)max(p[0].y, max(p[1].y, max(p[2].y, p[3].y)));
+                rect.xMin = (GUnits)(std::min)(p[0].x, (std::min)(p[1].x, (std::min)(p[2].x, p[3].x)));
+                rect.xMax = (GUnits)(std::max)(p[0].x, (std::max)(p[1].x, (std::max)(p[2].x, p[3].x)));
+                rect.yMin = (GUnits)(std::min)(p[0].y, (std::min)(p[1].y, (std::min)(p[2].y, p[3].y)));
+                rect.yMax = (GUnits)(std::max)(p[0].y, (std::max)(p[1].y, (std::max)(p[2].y, p[3].y)));
             }
         }
 

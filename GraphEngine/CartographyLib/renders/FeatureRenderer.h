@@ -30,9 +30,6 @@ namespace GraphEngine {
             virtual void Load(CommonLib::ISerializeObjPtr pObj);
 
         private:
-            CommonLib::IGeoShapePtr GetShape(GeoDatabase::IRowPtr ptrRow) const;
-
-        private:
             ISymbolSelectorPtr m_ptrSymbolSelector;
         };
 

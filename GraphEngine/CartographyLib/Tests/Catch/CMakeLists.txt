@@ -27,6 +27,11 @@ set(SOURCE_FILES
         TestSerialize.cpp
         TestMapDrawer.cpp
         TestRasterLayer.cpp
+        TestSelectors.cpp
+        TestSymbologyModel.cpp
+        # platform independent part of the TestMapWTLDraw application
+        ../TestMapWTLDraw/SymbologyModel.cpp
+        ../TestMapWTLDraw/MapProject.cpp
 )
 
 add_executable(${BIN_NAME} ${SOURCE_FILES})

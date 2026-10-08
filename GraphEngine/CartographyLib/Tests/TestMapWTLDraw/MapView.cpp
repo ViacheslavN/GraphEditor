@@ -6,6 +6,8 @@
 #include "resource.h"
 
 #include "MapView.h"
+#include "AddShapeFileDlg.h"
+#include "AddSQLiteDlg.h"
 #include "../../../CommonLib/str/StringEncoding.h"
 
 #include <cmath>
@@ -607,11 +609,13 @@ LRESULT CMapView::OnRemoveAllLayers(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*h
 
 LRESULT CMapView::OnAddShapeFile(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/)
 {
-	CFileDialog fileDlg(TRUE, _T("shp"), NULL, OFN_HIDEREADONLY | OFN_FILEMUSTEXIST, _T("ESRI shape files (*.shp)\0*.shp\0All Files (*.*)\0*.*\0"), m_hWnd);
-	if ( fileDlg.DoModal() != IDOK )
+	CAddShapeFileDlg dlg;
+	dlg.SetDefaultScale(GetCurrentScale());
+	dlg.SetLayerIndex(m_project.GetMap()->GetLayers()->GetLayerCount());
+	if ( dlg.DoModal(m_hWnd) != IDOK )
 		return 0;
 
-	AddShapeFile(fileDlg.m_szFileName);
+	AddShapeFile(dlg.GetPath().c_str(), dlg.GetLayerParams());
 	return 0;
 }
 
@@ -632,13 +636,22 @@ void CMapView::OnLayersAdded(bool bFirstLayers)
 	UpdateStatus(nullptr);
 }
 
-bool CMapView::AddShapeFile(const wchar_t *pszFile)
+double CMapView::GetCurrentScale() const
+{
+	if(m_project.GetMap()->GetLayers()->GetLayerCount() == 0)
+		return 0.;
+
+	Display::IDisplayTransformationPtr ptrTrans = m_ptrDrawer->GetCalcTransformation();
+	return ptrTrans.get() ? ptrTrans->GetScale() : 0.;
+}
+
+bool CMapView::AddShapeFile(const wchar_t *pszFile, const TestMapDraw::SLayerParams& params)
 {
 	try
 	{
 		m_ptrDrawer->StopDraw(true);
 		bool bFirstLayer = m_project.GetMap()->GetLayers()->GetLayerCount() == 0;
-		m_project.AddShapefile(ToFilePath(pszFile));
+		m_project.AddShapefile(ToFilePath(pszFile), params);
 		OnLayersAdded(bFirstLayer);
 		return true;
 	}
@@ -649,13 +662,13 @@ bool CMapView::AddShapeFile(const wchar_t *pszFile)
 	}
 }
 
-bool CMapView::AddSQLiteDatabase(const wchar_t *pszFile, const std::string& sTableName)
+bool CMapView::AddSQLiteDatabase(const wchar_t *pszFile, const std::string& sTableName, const TestMapDraw::SLayerParams& params)
 {
 	try
 	{
 		m_ptrDrawer->StopDraw(true);
 		bool bFirstLayer = m_project.GetMap()->GetLayers()->GetLayerCount() == 0;
-		m_project.AddSQLiteDatabase(ToUtf8(pszFile), sTableName);
+		m_project.AddSQLiteDatabase(ToUtf8(pszFile), sTableName, params);
 		OnLayersAdded(bFirstLayer);
 		return true;
 	}
@@ -695,11 +708,13 @@ bool CMapView::AddRaster(const wchar_t *pszFile)
 
 LRESULT CMapView::OnAddSQLiteDb(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/)
 {
-	CFileDialog fileDlg(TRUE, _T("sqlite"), NULL, OFN_HIDEREADONLY | OFN_FILEMUSTEXIST, _T("SQLite database (*.sqlite;*.db)\0*.sqlite;*.db\0All Files (*.*)\0*.*\0"), m_hWnd);
-	if ( fileDlg.DoModal() != IDOK )
+	CAddSQLiteDlg dlg;
+	dlg.SetDefaultScale(GetCurrentScale());
+	dlg.SetLayerIndex(m_project.GetMap()->GetLayers()->GetLayerCount());
+	if ( dlg.DoModal(m_hWnd) != IDOK )
 		return 0;
 
-	AddSQLiteDatabase(fileDlg.m_szFileName);
+	AddSQLiteDatabase(dlg.GetPath().c_str(), dlg.GetTableName(), dlg.GetLayerParams());
 	return 0;
 }
 

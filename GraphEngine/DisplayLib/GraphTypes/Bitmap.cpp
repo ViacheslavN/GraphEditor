@@ -257,10 +257,10 @@ namespace GraphEngine
 					break;
 				case BitmapFormatType4bpp:
 					idx = ((col % 2) == 0) ? (m_pBuf[ptr] >> 4) & 0xF : m_pBuf[ptr] & 0xF;
-					return 4;
+					break;
 				case BitmapFormatType8bpp:
 					idx = m_pBuf[ptr];
-					return 8;
+					break;
 				}
 				return m_pPalette[idx];
 			}
@@ -333,16 +333,15 @@ namespace GraphEngine
         {
             try
             {
-                CommonLib::CWriteMemoryStream stream;
-                stream.Write((uint32_t)m_nWidth);
-                stream.Write((uint32_t)m_nHeight);
-                stream.Write((byte)m_type);
-                stream.Write(m_pBuf, Size());
+                // written directly: Write(&memoryStream) was Write(bool) - a pointer converted to bool
+                pStream->Write((uint32_t)m_nWidth);
+                pStream->Write((uint32_t)m_nHeight);
+                pStream->Write((byte)m_type);
+                if (Size())
+                    pStream->Write(m_pBuf, Size());
                 if (m_pPalette)
                     for (int i = 0; i < 1 << Bpp(); i++)
-                        m_pPalette[i].Save(&stream);
-
-                pStream->Write(&stream);
+                        m_pPalette[i].Save(pStream);
             }
             catch (std::exception& exc)
             {
@@ -357,8 +356,11 @@ namespace GraphEngine
             {
 
 
-                pStream->Read(m_nWidth);
-                pStream->Read(m_nHeight);
+                uint32_t nWidth = 0, nHeight = 0;   // saved as uint32_t
+                pStream->Read(nWidth);
+                pStream->Read(nHeight);
+                m_nWidth = nWidth;
+                m_nHeight = nHeight;
                 byte type = 0;
                 pStream->Read(type);
                 m_type = (eBitmapFormatType)type;

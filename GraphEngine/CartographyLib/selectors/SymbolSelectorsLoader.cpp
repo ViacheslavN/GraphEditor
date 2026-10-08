@@ -1,5 +1,7 @@
 #include "SymbolSelectorsLoader.h"
 #include "SimpleSymbolSelector.h"
+#include "UniqueValueSymbolSelector.h"
+#include "RangeSymbolSelector.h"
 
 namespace GraphEngine {
     namespace Cartography {
@@ -20,6 +22,12 @@ namespace GraphEngine {
                         ptrSelector = std::make_shared<CSimpleSymbolSelector>();
                     }
                     break;
+                    case UniqueValueSymbolSelectorID:
+                        ptrSelector = std::make_shared<CUniqueValueSymbolSelector>();
+                        break;
+                    case RangeSymbolSelectorID:
+                        ptrSelector = std::make_shared<CRangeSymbolSelector>();
+                        break;
                 }
 
                 if(ptrSelector.get() == nullptr)

@@ -1,5 +1,6 @@
 #include "RenderersLoader.h"
 #include "FeatureRenderer.h"
+#include "AnnotationRenderer.h"
 #include "Raster/RasterRGBRenderer.h"
 #include "Raster/RasterStretchRenderer.h"
 
@@ -48,6 +49,11 @@ namespace GraphEngine {
                     case SimpleFeatureRendererID:
                     {
                         ptrRenderer = std::make_shared<CFeatureRenderer>();
+                    }
+                    break;
+                    case AnnotationRendererID:
+                    {
+                        ptrRenderer = std::make_shared<CAnnotationRenderer>();
                     }
                     break;
                 }

@@ -16,7 +16,16 @@ namespace GraphEngine {
             LineFillSymbolID,
             TextFillSymbolID,
             TextSymbolID,
-            MultiLayerSymbolID
+            MultiLayerSymbolID,          // reserved (old generic id), see MultiLayer*SymbolID
+            MarkerFillSymbolID,
+            PictureFillSymbolID,
+            PictureMarkerSymbolID,
+            CharacterMarkerSymbolID,
+            MultiLayerMarkerSymbolID,
+            MultiLayerLineSymbolID,
+            MultiLayerFillSymbolID,
+            ArrowMarkerSymbolID
+            // add new ids only at the end: the values are saved in projects
         };
 
         typedef std::shared_ptr<class ISymbol> ISymbolPtr;
@@ -25,6 +34,17 @@ namespace GraphEngine {
         typedef std::shared_ptr<class ITextBackground> ITextBackgroundPtr;
         typedef std::shared_ptr<class ITextSymbol>  ITextSymbolPtr;
         typedef std::shared_ptr<class IFillSymbol>  IFillSymbolPtr;
+        typedef std::shared_ptr<class CLineTemplate> LineTemplatePtr;
+        typedef std::shared_ptr<class ITemplateLineSymbol> ITemplateLineSymbolPtr;
+        typedef std::shared_ptr<class IHashLineSymbol> IHashLineSymbolPtr;
+        typedef std::shared_ptr<class IMarkerLineSymbol> IMarkerLineSymbolPtr;
+        typedef std::shared_ptr<class ILineFillSymbol> ILineFillSymbolPtr;
+        typedef std::shared_ptr<class IMarkerFillSymbol> IMarkerFillSymbolPtr;
+        typedef std::shared_ptr<class IPictureFillSymbol> IPictureFillSymbolPtr;
+        typedef std::shared_ptr<class IPictureMarkerSymbol> IPictureMarkerSymbolPtr;
+        typedef std::shared_ptr<class ICharacterMarkerSymbol> ICharacterMarkerSymbolPtr;
+        typedef std::shared_ptr<class IMultiLayerSymbol> IMultiLayerSymbolPtr;
+        typedef std::shared_ptr<class IArrowMarkerSymbol> IArrowMarkerSymbolPtr;
 
 
 
@@ -78,6 +98,41 @@ namespace GraphEngine {
             virtual double GetWidth() const = 0;
             virtual void   SetWidth(double width) = 0;
 
+        };
+
+        // line symbol which places elements along the line by a template (dash pattern):
+        // marks of the template are scaled by its interval, the elements are drawn at the middle of each mark
+        class ITemplateLineSymbol : public ILineSymbol
+        {
+        public:
+            ITemplateLineSymbol(){}
+            virtual ~ITemplateLineSymbol(){}
+            virtual LineTemplatePtr GetTemplate() const = 0;
+            virtual void            SetTemplate(LineTemplatePtr ptrTemplate) = 0;
+            virtual double          GetOffset() const = 0;          // symbol units, + left of the line direction
+            virtual void            SetOffset(double offset) = 0;
+        };
+
+        // short strokes (hashes) across the line, drawn by the hash line symbol
+        class IHashLineSymbol : public ITemplateLineSymbol
+        {
+        public:
+            IHashLineSymbol(){}
+            virtual ~IHashLineSymbol(){}
+            virtual double          GetAngle() const = 0;           // degrees from the line direction, 90 - perpendicular
+            virtual void            SetAngle(double angle) = 0;
+            virtual ILineSymbolPtr  GetHashSymbol() const = 0;
+            virtual void            SetHashSymbol(ILineSymbolPtr ptrSymbol) = 0;
+        };
+
+        // markers along the line, rotated by the line direction
+        class IMarkerLineSymbol : public ITemplateLineSymbol
+        {
+        public:
+            IMarkerLineSymbol(){}
+            virtual ~IMarkerLineSymbol(){}
+            virtual IMarkerSymbolPtr GetMarkerSymbol() const = 0;
+            virtual void             SetMarkerSymbol(IMarkerSymbolPtr ptrSymbol) = 0;
         };
 
         class  ISimpleLineSymbol  : public ILineSymbol
@@ -143,6 +198,20 @@ namespace GraphEngine {
             virtual void        SetCharacterIndex( int index ) = 0;
         };
 
+        // filled triangle arrow, points along the marker angle (0 - to the right)
+        class IArrowMarkerSymbol : public IMarkerSymbol
+        {
+        public:
+            IArrowMarkerSymbol(){}
+            virtual ~IArrowMarkerSymbol(){}
+            virtual eArrowMarkerStyle GetStyle() const = 0;
+            virtual void              SetStyle(eArrowMarkerStyle style) = 0;
+            virtual double            GetLength() const = 0;   // symbol units, along the direction
+            virtual void              SetLength(double dLength) = 0;
+            virtual double            GetWidth() const = 0;    // symbol units, of the base
+            virtual void              SetWidth(double dWidth) = 0;
+        };
+
         class IPictureMarkerSymbol : public IMarkerSymbol
         {
         public:
@@ -201,7 +270,7 @@ namespace GraphEngine {
             IMarkerFillSymbol(){}
             virtual ~IMarkerFillSymbol(){}
             virtual IMarkerSymbolPtr   GetMarkerSymbol() const = 0;
-            virtual void               SetMarkerSymbol(IMarkerSymbol *pMarker) = 0;
+            virtual void               SetMarkerSymbol(IMarkerSymbolPtr ptrMarker) = 0;
             virtual eMarkerFillStyle GetStyle() const = 0;
             virtual void               SetStyle(eMarkerFillStyle style) = 0;
             virtual double GetXSeparation() const = 0;
@@ -220,7 +289,7 @@ namespace GraphEngine {
             ILineFillSymbol(){}
             virtual ~ILineFillSymbol(){}
             virtual ILineSymbolPtr GetLineSymbol() const  = 0;
-            virtual void           SetLineSymbol(ILineSymbol *pLine) = 0;
+            virtual void           SetLineSymbol(ILineSymbolPtr ptrLine) = 0;
             virtual double         GetAngle() const = 0;
             virtual void           SetAngle( double angle ) = 0;
             virtual double         GetOffset() const = 0;

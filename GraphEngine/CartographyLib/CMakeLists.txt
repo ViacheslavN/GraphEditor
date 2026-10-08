@@ -18,6 +18,8 @@ set(SOURCE_FILES
         renders/FeatureRendererBase.h
         renders/FeatureRenderer.h
         renders/FeatureRenderer.cpp
+        renders/AnnotationRenderer.h
+        renders/AnnotationRenderer.cpp
         renders/RenderersLoader.h
         renders/RenderersLoader.cpp
         renders/Raster/RasterPixelUtils.h
@@ -33,6 +35,12 @@ set(SOURCE_FILES
         selectors/SimpleSymbolSelector.cpp
         selectors/SymbolSelectorsLoader.h
         selectors/SymbolSelectorsLoader.cpp
+        selectors/SymbolSelectorUtils.h
+        selectors/SymbolSelectorUtils.cpp
+        selectors/UniqueValueSymbolSelector.h
+        selectors/UniqueValueSymbolSelector.cpp
+        selectors/RangeSymbolSelector.h
+        selectors/RangeSymbolSelector.cpp
         selection/Selection.h
         selection/Selection.cpp
         drawer/TrackCancel.h

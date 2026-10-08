@@ -89,7 +89,7 @@ namespace GraphEngine {
                 m_dDeviceSize = (GUnits)floor(CDisplayUtils::SymbolSizeToDeviceSize(ptrDisplay->GetTransformation(), m_dSize, this->GetScaleDependent()) / 2.0);
                 m_dDeviceOffsetX = CDisplayUtils::SymbolSizeToDeviceSize(ptrDisplay->GetTransformation(), m_dOffsetX, this->GetScaleDependent());
                 m_dDeviceOffsetY = -CDisplayUtils::SymbolSizeToDeviceSize(ptrDisplay->GetTransformation(), m_dOffsetY, this->GetScaleDependent());
-                m_dDisplayAngle = m_dAngle + (m_bIgnoreRotation) ? 0 : ptrDisplay->GetTransformation()->GetRotation();
+                m_dDisplayAngle = m_dAngle + (m_bIgnoreRotation ? 0. : ptrDisplay->GetTransformation()->GetRotation());
             }
 
             void Save(CommonLib::ISerializeObjPtr pObj) const

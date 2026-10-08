@@ -19,6 +19,21 @@ set(SOURCE_FILES
         MapProject.cpp
         AboutDlg.h
         AboutDlg.cpp
+        AddShapeFileDlg.h
+        AddShapeFileDlg.cpp
+        AddSQLiteDlg.h
+        AddSQLiteDlg.cpp
+        DialogUtils.h
+        SymbologyModel.h
+        SymbologyModel.cpp
+        SymbolEditorPanel.h
+        SymbolEditorPanel.cpp
+        SymbologyPage.h
+        SymbologyPage.cpp
+        AnnotationPage.h
+        AnnotationPage.cpp
+        LayerPages.h
+        LayerPages.cpp
         TestMapDraw.rc
 )
 

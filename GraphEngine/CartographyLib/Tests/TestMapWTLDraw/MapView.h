@@ -90,8 +90,9 @@ public:
 	bool ZoomToLayer(int nLayerIndex);
 	bool OpenProject(const wchar_t *pszFile);
 	bool SaveProject(const wchar_t *pszFile);
-	bool AddShapeFile(const wchar_t *pszFile);
-	bool AddSQLiteDatabase(const wchar_t *pszFile, const std::string& sTableName = std::string());
+	bool AddShapeFile(const wchar_t *pszFile, const TestMapDraw::SLayerParams& params = TestMapDraw::SLayerParams());
+	bool AddSQLiteDatabase(const wchar_t *pszFile, const std::string& sTableName = std::string(), const TestMapDraw::SLayerParams& params = TestMapDraw::SLayerParams());
+	double GetCurrentScale() const; // scale denominator of the map view, 0 - no map yet
 	bool AddRaster(const wchar_t *pszFile);
 	// copies the shape file into the SQLite database in a background thread
 	bool StartConvertToSQLite(const wchar_t *pszShapeFile, const wchar_t *pszDatabase);

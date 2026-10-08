@@ -50,6 +50,7 @@ namespace GraphEngine {
             ptrFilter->SetSpatialRel(GeoDatabase::srlIntersects);
             ptrFilter->SetBB(ptrTrans->GetFittedBounds());
             ptrFilter->SetJoins(m_vecJoins);
+
             if(!m_sQuery.empty())
                 ptrFilter->SetWhereClause(m_sQuery);
 
@@ -71,8 +72,30 @@ namespace GraphEngine {
             return ptrFilter;
         }
 
-        void CFeatureLayer::DrawRows(GeoDatabase::ISelectCursorPtr ptrCursor, const std::vector<IFeatureRendererPtr>& vecRenderers, Display::IDisplayPtr ptrDisplay,
-                                     Display::ITrackCancelPtr ptrTrackCancel, const std::unordered_set<int64_t>* pOids, Display::ISymbolPtr ptrCustomSymbol) const
+        IAnnotationRenderPtr CFeatureLayer::PrepareAnnotationRenderer(GeoDatabase::IQueryFilterPtr ptrFilter, Display::IDisplayPtr ptrDisplay, bool checkScale) const
+        {
+            // annotation is enabled when the layer has the annotation field and the annotation renderer
+            if(!HasAnnoField() || !m_ptrAnnotationRenderer.get())
+                return IAnnotationRenderPtr();
+
+            if(checkScale)
+            {
+                double scale = ptrDisplay->GetTransformation()->GetScale();
+                double maxScale = m_ptrAnnotationRenderer->GetMaximumScale();
+                double minScale = m_ptrAnnotationRenderer->GetMinimumScale();
+                if((maxScale != 0.0 && scale < maxScale) || (minScale != 0.0 && scale > minScale))
+                    return IAnnotationRenderPtr();
+            }
+
+            if(!m_ptrAnnotationRenderer->CanRender(m_ptrTable, ptrDisplay))
+                return IAnnotationRenderPtr();
+
+            m_ptrAnnotationRenderer->PrepareFilter(m_ptrTable, ptrFilter, GetAnnoFieldName());
+            return m_ptrAnnotationRenderer;
+        }
+
+        void CFeatureLayer::DrawRows(GeoDatabase::ISelectCursorPtr ptrCursor, const std::vector<IFeatureRendererPtr>& vecRenderers, IAnnotationRenderPtr ptrAnnoRenderer,
+                                     Display::IDisplayPtr ptrDisplay, Display::ITrackCancelPtr ptrTrackCancel, const std::unordered_set<int64_t>* pOids, Display::ISymbolPtr ptrCustomSymbol) const
         {
             int32_t nOidIndex = -1;
             if(pOids != nullptr)
@@ -115,6 +138,22 @@ namespace GraphEngine {
 
                     for (size_t i = 0, sz = vecRenderers.size(); i < sz; ++i)
                         vecRenderers[i]->DrawFeature(ptrDisplay, ptrRow);
+
+                    // annotation is drawn right after its feature
+                    if (ptrAnnoRenderer.get())
+                        ptrAnnoRenderer->DrawFeature(ptrDisplay, ptrRow);
+
+                }
+
+                // symbols which collect the features (multi layer symbol with UseCache) draw them now
+                if(!ptrCustomSymbol.get())
+                {
+                    for (size_t i = 0, sz = vecRenderers.size(); i < sz; ++i)
+                    {
+                        ISymbolSelectorPtr ptrSelector = vecRenderers[i]->GetSymbolSelector();
+                        if(ptrSelector.get())
+                            ptrSelector->FlushBuffers(ptrDisplay, ptrTrackCancel);
+                    }
                 }
             }
             catch (...)
@@ -151,6 +190,10 @@ namespace GraphEngine {
                 if (vecRenderers.empty())
                     return;
 
+                IAnnotationRenderPtr ptrAnnoRenderer;
+                if (!ptrCustomSymbol.get()) // custom symbol - selection, drawn without annotations
+                    ptrAnnoRenderer = PrepareAnnotationRenderer(ptrFilter, ptrDisplay, false);
+
                 std::string sOIDField = GetOIDFieldName();
                 if(ptrFilter->GetFieldSet()->Find(sOIDField) < 0)
                     ptrFilter->GetFieldSet()->Add(sOIDField);
@@ -160,7 +203,7 @@ namespace GraphEngine {
                     return;
 
                 std::unordered_set<int64_t> oids(vecOids.begin(), vecOids.end());
-                DrawRows(ptrCursor, vecRenderers, ptrDisplay, ptrTrackCancel, &oids, ptrCustomSymbol);
+                DrawRows(ptrCursor, vecRenderers, ptrAnnoRenderer, ptrDisplay, ptrTrackCancel, &oids, ptrCustomSymbol);
             }
             catch (std::exception& exc)
             {
@@ -200,11 +243,13 @@ namespace GraphEngine {
                 if (vecRenderers.empty())
                     return;
 
+                IAnnotationRenderPtr ptrAnnoRenderer = PrepareAnnotationRenderer(ptrFilter, ptrDisplay, true);
+
                 GeoDatabase::ISelectCursorPtr ptrCursor = m_ptrTable->Search(ptrFilter);
                 if (!ptrCursor.get())
                     return;
 
-                DrawRows(ptrCursor, vecRenderers, ptrDisplay, ptrTrackCancel, nullptr, Display::ISymbolPtr());
+                DrawRows(ptrCursor, vecRenderers, ptrAnnoRenderer, ptrDisplay, ptrTrackCancel, nullptr, Display::ISymbolPtr());
             }
             catch (std::exception& exc)
             {
@@ -347,6 +392,16 @@ namespace GraphEngine {
                 m_vecRenderers.erase(it);
         }
 
+        IAnnotationRenderPtr CFeatureLayer::GetAnnotationRenderer() const
+        {
+            return m_ptrAnnotationRenderer;
+        }
+
+        void  CFeatureLayer::SetAnnotationRenderer(IAnnotationRenderPtr ptrRenderer)
+        {
+            m_ptrAnnotationRenderer = ptrRenderer;
+        }
+
         void CFeatureLayer::ClearRenders()
         {
             m_vecRenderers.clear();
@@ -360,6 +415,18 @@ namespace GraphEngine {
         void	CFeatureLayer::SetDefinitionQuery(const std::string& sQuery)
         {
             m_sQuery = sQuery;
+        }
+
+        bool  CFeatureLayer::HasAnnoField() const {
+            return  !m_sAnnotateField.empty();
+        }
+
+        const std::string&  CFeatureLayer::GetAnnoFieldName() const {
+            return m_sAnnotateField;
+        }
+
+        void  CFeatureLayer::SetAnnoFieldName(const std::string& filedName) {
+            m_sAnnotateField = filedName;
         }
 
         void  CFeatureLayer::SelectFeatures(const CommonLib::bbox& extent, ISelectionPtr ptrSelection,  Geometry::ISpatialReferencePtr ptrOutSpatRef)
@@ -421,13 +488,19 @@ namespace GraphEngine {
                 pObj->AddPropertyBool("HasReferenceScale", m_hasReferenceScale);
                 pObj->AddPropertyDouble("DrawingWidth", m_dDrawingWidth);
                 pObj->AddPropertyBool("DrawingWidthScaleDependent", m_bDrawingWidthScaleDependent);
-
+                pObj->AddPropertyString("AnnotateField", m_sAnnotateField);
                 CommonLib::ISerializeObjPtr ptrRenders = pObj->CreateChildNode("Renderers");
 
                 for (size_t i = 0, sz = m_vecRenderers.size(); i < sz; ++i)
                 {
                     CommonLib::ISerializeObjPtr  ptrRenderer = ptrRenders->CreateChildNode("Renderer");
                     m_vecRenderers[i]->Save(ptrRenderer);
+                }
+
+                if(m_ptrAnnotationRenderer.get())
+                {
+                    CommonLib::ISerializeObjPtr ptrAnnoNode = pObj->CreateChildNode("AnnotationRenderer");
+                    m_ptrAnnotationRenderer->Save(ptrAnnoNode);
                 }
 
                 if(m_ptrTable.get())
@@ -457,7 +530,7 @@ namespace GraphEngine {
                 m_hasReferenceScale = pObj->GetPropertyBool("HasReferenceScale", m_hasReferenceScale);
                 m_dDrawingWidth = pObj->GetPropertyDouble("DrawingWidth", m_dDrawingWidth);
                 m_bDrawingWidthScaleDependent = pObj->GetPropertyBool("DrawingWidthScaleDependent", m_bDrawingWidthScaleDependent);
-
+                m_sAnnotateField = pObj->GetPropertyString("AnnotateField", m_sAnnotateField);
                 m_vecRenderers.clear();
                 if(pObj->IsChildExists("Renderers"))
                 {
@@ -469,6 +542,14 @@ namespace GraphEngine {
                         if(pRenderer.get())
                             m_vecRenderers.push_back(pRenderer);
                     }
+                }
+
+                m_ptrAnnotationRenderer.reset();
+                if(pObj->IsChildExists("AnnotationRenderer"))
+                {
+                    m_ptrAnnotationRenderer = std::dynamic_pointer_cast<IAnnotationRender>(CLoaderRenderers::LoadRenderer(pObj->GetChild("AnnotationRenderer")));
+                    if(!m_ptrAnnotationRenderer.get())
+                        throw CommonLib::CExcBase("AnnotationRenderer node doesn't contain an annotation renderer");
                 }
 
                 if(pObj->IsChildExists("Table"))
