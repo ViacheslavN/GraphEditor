@@ -2,9 +2,6 @@
 #include "RasterPixelUtils.h"
 #include "../../../GisGeometry/Envelope.h"
 #include "../../../DisplayLib/GraphTypes/Bitmap.h"
-#include "../../../GeoDatabase/GeoDatabaseRaster/RasterBlock.h"
-#include "../../../GeoDatabase/GeoDatabaseRaster/RasterCursor.h"
-#include "../../../GeoDatabase/GeoDatabaseRaster/RasterDataset.h"
 #include "../../../GeoDatabase/GeoDatabaseRaster/RasterSpatialFilter.h"
 
 #include <algorithm>
@@ -256,12 +253,9 @@ namespace GraphEngine {
                 const bool bNeedTransform = ptrOutSpatRef.get() && ptrRasterSpatRef.get() && !ptrRasterSpatRef->IsEqual(ptrOutSpatRef);
 
                 m_drawPixelType = ptrRaster->GetPixelType();
-                if(GeoDatabase::CRasterDataset* pDataset = dynamic_cast<GeoDatabase::CRasterDataset*>(ptrRaster.get()))
-                {
-                    // 1/2/4 bit rasters are delivered as bytes, the source type gives the value range
-                    if(IsRasterByteType(pDataset->GetSourcePixelType()))
-                        m_drawPixelType = pDataset->GetSourcePixelType();
-                }
+                // 1/2/4 bit rasters are delivered as bytes, the source type gives the value range
+                if(m_drawPixelType == GeoDatabase::RasterPixelTypeUChar && IsRasterByteType(ptrRaster->GetSourcePixelType()))
+                    m_drawPixelType = ptrRaster->GetSourcePixelType();
 
                 // 1. device grid -> raster pixel coordinates
                 const Display::GRect& devRect = ptrTrans->GetDeviceRect();
@@ -385,21 +379,22 @@ namespace GraphEngine {
                 winBB.yMax = ext.yMax - (row0 + 0.01) * psy;
                 winBB.yMin = ext.yMax - (row1 - 0.01) * psy;
 
-                std::shared_ptr<GeoDatabase::CRasterSpatialFilter> ptrFilter = std::make_shared<GeoDatabase::CRasterSpatialFilter>(winBB);
+                GeoDatabase::IRasterSpatialFilterPtr ptrFilter = std::make_shared<GeoDatabase::CRasterSpatialFilter>(winBB);
                 ptrFilter->SetPixelStep(step);
                 ptrFilter->SetBlockSize(512, 512);
 
                 GeoDatabase::IRasterCursorPtr ptrCursor = ptrRaster->Search(ptrFilter);
-                GeoDatabase::CRasterCursor* pCursor = dynamic_cast<GeoDatabase::CRasterCursor*>(ptrCursor.get());
-                const int c0 = pCursor ? pCursor->GetWindowCol() : col0;
-                const int r0 = pCursor ? pCursor->GetWindowRow() : row0;
-                const int winW = pCursor ? (pCursor->GetWindowWidth() + step - 1) / step : (col1 - col0 + step - 1) / step;
-                const int winH = pCursor ? (pCursor->GetWindowHeight() + step - 1) / step : (row1 - row0 + step - 1) / step;
+                // the window selected by the cursor (the same rounding as the blocks positions)
+                int c0 = 0, r0 = 0, winSrcW = 0, winSrcH = 0;
+                ptrCursor->GetPixelWindow(c0, r0, winSrcW, winSrcH);
+                step = ptrCursor->GetPixelStep();
+                const int winW = (winSrcW + step - 1) / step;
+                const int winH = (winSrcH + step - 1) / step;
                 if(winW <= 0 || winH <= 0)
                     return;
 
                 std::vector<uint8_t> window(size_t(winW) * winH * 4, 0);
-                GeoDatabase::CRasterBlockPtr ptrBlock = std::make_shared<GeoDatabase::CRasterBlock>();
+                GeoDatabase::IRasterBlockPtr ptrBlock = ptrCursor->CreateBlock();
                 while(ptrCursor->Next(ptrBlock))
                 {
                     if(IsCanceled(ptrTrackCancel))
@@ -412,9 +407,10 @@ namespace GraphEngine {
                         continue;
 
                     const uint8_t* pData = static_cast<const uint8_t*>(ptrBlock->GetData());
+                    const size_t rowSize = size_t(ptrBlock->GetWidth()) * ptrBlock->GetPixelSize();
                     for(int y = 0; y < ptrBlock->GetHeight() && oy + y < winH; ++y)
                     {
-                        ConvertPixels(pData + size_t(y) * ptrBlock->GetRowSize(), bw, ptrBlock->GetBandCount(), ptrBlock->GetPixelType(),
+                        ConvertPixels(pData + size_t(y) * rowSize, bw, ptrBlock->GetBandCount(), ptrBlock->GetPixelType(),
                                       window.data() + (size_t(oy + y) * winW + ox) * 4);
                     }
                 }

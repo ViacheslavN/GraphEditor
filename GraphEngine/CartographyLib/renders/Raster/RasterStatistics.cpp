@@ -1,6 +1,5 @@
 #include "RasterStatistics.h"
 #include "RasterPixelUtils.h"
-#include "../../../GeoDatabase/GeoDatabaseRaster/RasterBlock.h"
 #include "../../../GeoDatabase/GeoDatabaseRaster/RasterSpatialFilter.h"
 
 #include <cmath>
@@ -38,7 +37,7 @@ namespace GraphEngine {
                 if(maxSamples > 0 && pixels > double(maxSamples))
                     step = (int)std::ceil(std::sqrt(pixels / double(maxSamples)));
 
-                std::shared_ptr<GeoDatabase::CRasterSpatialFilter> ptrFilter = std::make_shared<GeoDatabase::CRasterSpatialFilter>();
+                GeoDatabase::IRasterSpatialFilterPtr ptrFilter = std::make_shared<GeoDatabase::CRasterSpatialFilter>();
                 ptrFilter->SetPixelStep(step);
                 ptrFilter->SetBlockSize(512, 512);
 
@@ -47,7 +46,7 @@ namespace GraphEngine {
                 std::vector<double> m2(bands, 0.);
 
                 GeoDatabase::IRasterCursorPtr ptrCursor = ptrDataset->Search(ptrFilter);
-                GeoDatabase::CRasterBlockPtr ptrBlock = std::make_shared<GeoDatabase::CRasterBlock>();
+                GeoDatabase::IRasterBlockPtr ptrBlock = ptrCursor->CreateBlock();
                 while(ptrCursor->Next(ptrBlock))
                 {
                     if(ptrTrackCancel.get() && !ptrTrackCancel->Continue())

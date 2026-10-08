@@ -1,6 +1,5 @@
 #include "RasterCursor.h"
 #include "RasterBlock.h"
-#include "RasterSpatialFilter.h"
 #include "../../GisGeometry/Envelope.h"
 
 #include <algorithm>
@@ -32,16 +31,11 @@ namespace GraphEngine
 
             m_geoInfo = m_ptrReader->GetGeoInfo();
 
-            CRasterSpatialFilter* pFilter = dynamic_cast<CRasterSpatialFilter*>(ptrFilter.get());
-            if(pFilter)
-            {
-                m_blockWidth = pFilter->GetBlockWidth();
-                m_blockHeight = pFilter->GetBlockHeight();
-                m_step = pFilter->GetPixelStep();
-            }
-
             if(ptrFilter.get())
             {
+                m_blockWidth = (std::max)(1, ptrFilter->GetBlockWidth());
+                m_blockHeight = (std::max)(1, ptrFilter->GetBlockHeight());
+                m_step = (std::max)(1, ptrFilter->GetPixelStep());
                 m_ptrOutputSpatRef = ptrFilter->GetOutputSpatialReference();
                 m_bNeedTransform = m_ptrOutputSpatRef.get() && m_ptrDatasetSpatRef.get() && !m_ptrDatasetSpatRef->IsEqual(m_ptrOutputSpatRef);
             }
@@ -121,6 +115,24 @@ namespace GraphEngine
             return m_blocksX * m_blocksY;
         }
 
+        IRasterBlockPtr CRasterCursor::CreateBlock() const
+        {
+            return std::make_shared<CRasterBlock>();
+        }
+
+        void CRasterCursor::GetPixelWindow(int& col, int& row, int& width, int& height) const
+        {
+            col = m_colBegin;
+            row = m_rowBegin;
+            width = m_colEnd - m_colBegin;
+            height = m_rowEnd - m_rowBegin;
+        }
+
+        int CRasterCursor::GetPixelStep() const
+        {
+            return m_step;
+        }
+
         void CRasterCursor::Reset()
         {
             m_nCurrentBlock = 0;
@@ -133,7 +145,7 @@ namespace GraphEngine
 
             CRasterBlock* pBlock = dynamic_cast<CRasterBlock*>(ptrBlock.get());
             if(!pBlock)
-                throw CommonLib::CExcBase("RasterCursor: Next expects a CRasterBlock");
+                throw CommonLib::CExcBase("RasterCursor: Next expects a block created by CreateBlock()");
 
             try
             {

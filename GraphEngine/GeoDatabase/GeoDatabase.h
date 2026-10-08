@@ -344,6 +344,11 @@ namespace GraphEngine
             virtual eRasterPixelType	GetPixelType() const = 0;
             virtual void*	        GetData() = 0;
             virtual   Geometry::IEnvelopePtr	 GetExtent() const = 0;
+            // position of the block in the source raster: upper-left source pixel and the source pixel step
+            // (output pixel (x, y) is source pixel (col + x * step, row + y * step))
+            virtual int                     GetSourceCol() const = 0;
+            virtual int                     GetSourceRow() const = 0;
+            virtual int                     GetSourceStep() const = 0;
 
         };
 
@@ -357,8 +362,10 @@ namespace GraphEngine
             virtual Geometry::IEnvelopePtr           GetExtent() const = 0;     // outer edges of the raster, in GetSpatialReference()
             virtual int                              GetWidth() const = 0;      // pixels
             virtual int                              GetHeight() const = 0;
-            virtual eRasterPixelType                 GetPixelType() const = 0;
+            virtual eRasterPixelType                 GetPixelType() const = 0;     // pixels of the blocks returned by Search
             virtual int                              GetBandCount() const = 0;
+            virtual eRasterPixelType                 GetSourcePixelType() const = 0; // as stored (e.g. 1 bit stored, UChar delivered)
+            virtual int                              GetSourceBandCount() const = 0;
             virtual IRasterCursorPtr				 Search(IRasterSpatialFilterPtr ptrFilter ) = 0;
 
         };
@@ -368,8 +375,13 @@ namespace GraphEngine
        public:
            IRasterCursor(){}
            virtual ~IRasterCursor(){}
+            virtual IRasterBlockPtr CreateBlock() const = 0;   // block object to pass to Next
             virtual bool	Next(IRasterBlockPtr ptrBlock) = 0;
             virtual void	Reset() = 0;
+            // selected source pixel window (col, row - upper-left pixel, width x height source pixels) and pixel step
+            virtual void    GetPixelWindow(int& col, int& row, int& width, int& height) const = 0;
+            virtual int     GetPixelStep() const = 0;
+            virtual int     GetBlockCount() const = 0;
         };
 
         class  IOIDSet
@@ -466,7 +478,13 @@ namespace GraphEngine
             virtual void								SetOutputSpatialReference(Geometry::ISpatialReferencePtr spatRef) = 0;
             virtual CommonLib::bbox				 GetBB() const = 0;
             virtual void						 SetBB(const  CommonLib::bbox& bbox ) = 0;
-
+            // size of the blocks returned by the cursor (output pixels)
+            virtual void                         SetBlockSize(int width, int height) = 0;
+            virtual int                          GetBlockWidth() const = 0;
+            virtual int                          GetBlockHeight() const = 0;
+            // take every step-th source pixel (nearest neighbour decimation), 1 - full resolution
+            virtual void                         SetPixelStep(int step) = 0;
+            virtual int                          GetPixelStep() const = 0;
         };
 
 
