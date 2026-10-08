@@ -8,6 +8,7 @@ namespace GraphEngine {
         {
         public:
             static IFeatureRendererPtr LoadRenderer(CommonLib::ISerializeObjPtr pObj);
+            static IRasterRendererPtr LoadRasterRenderer(CommonLib::ISerializeObjPtr pObj);
 
         };
     }

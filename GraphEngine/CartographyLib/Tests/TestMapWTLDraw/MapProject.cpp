@@ -1,10 +1,12 @@
 #include "MapProject.h"
 #include "../../Map.h"
 #include "../../layers/FeatureLayer.h"
+#include "../../layers/RasterLayer.h"
 #include "../../renders/FeatureRenderer.h"
 #include "../../selectors/SimpleSymbolSelector.h"
 #include "../../../GeoDatabase/GeoDatabaseShape/ShapefileWorkspace.h"
 #include "../../../GeoDatabase/GeoDatabaseSQlite/SQLiteWorkspace.h"
+#include "../../../GeoDatabase/GeoDatabaseRaster/RasterWorkspace.h"
 #include "../../../CommonLib/filesystem/filesystem.h"
 #include "../../../GeoDatabase/WorkspaceHolder.h"
 #include "../../../GeoDatabase/DatasetLoader.h"
@@ -14,6 +16,9 @@
 #include "../../../CommonLib/xml/XMLDoc.h"
 #include "../../../CommonLib/SpatialData/GeoShape.h"
 #include "../../../CommonLib/Serialize/SerializeXML.h"
+
+#include <cmath>
+#include <filesystem>
 
 using namespace GraphEngine;
 
@@ -161,15 +166,107 @@ namespace TestMapDraw
         ptrLayer->SetVisible(true);
         ptrLayer->SetSelectable(true);
 
-        if(nLayerCount == 0)
+        AddLayer(ptrLayer, ptrTable->GetSpatialReference());
+    }
+
+    void CMapProject::AddLayer(Cartography::ILayerPtr ptrLayer, Geometry::ISpatialReferencePtr ptrSpatRef)
+    {
+        if(m_ptrMap->GetLayers()->GetLayerCount() == 0)
         {
             // the first layer defines the map coordinate system
-            Geometry::ISpatialReferencePtr ptrSpatRef = ptrTable->GetSpatialReference();
             m_ptrMap->SetSpatialReference(ptrSpatRef);
             m_ptrMap->SetMapUnits(ptrSpatRef.get() ? ptrSpatRef->GetUnits() : CommonLib::UnitsUnknown);
         }
 
         m_ptrMap->GetLayers()->AddLayer(ptrLayer);
+    }
+
+    bool CMapProject::GetLayerExtent(int nLayerIndex, CommonLib::bbox& bb) const
+    {
+        Cartography::ILayersPtr ptrLayers = m_ptrMap->GetLayers();
+        if(nLayerIndex < 0 || nLayerIndex >= ptrLayers->GetLayerCount())
+            throw CommonLib::CExcBase("Layer index out of range: {0}", nLayerIndex);
+
+        Geometry::IEnvelopePtr ptrExtent = ptrLayers->GetLayer(nLayerIndex)->GetExtent();
+        if(!ptrExtent.get() || !(ptrExtent->GetBoundingBox().type & CommonLib::bbox_type_normal))
+            return false;
+
+        CommonLib::bbox box = ptrExtent->GetBoundingBox();
+        Geometry::ISpatialReferencePtr ptrLayerSpatRef = ptrExtent->GetSpatialReference();
+        Geometry::ISpatialReferencePtr ptrMapSpatRef = m_ptrMap->GetSpatialReference();
+        if(ptrLayerSpatRef.get() && ptrMapSpatRef.get() && !ptrLayerSpatRef->IsEqual(ptrMapSpatRef))
+        {
+            if(!ptrLayerSpatRef->Project(ptrMapSpatRef, box))
+                return false;
+        }
+
+        if(!std::isfinite(box.xMin) || !std::isfinite(box.xMax) || !std::isfinite(box.yMin) || !std::isfinite(box.yMax))
+            return false;
+
+        // a single point (or a line along an axis): show some area around it
+        double dx = box.xMax - box.xMin;
+        double dy = box.yMax - box.yMin;
+        double size = (std::max)(dx, dy);
+        if(size <= 0.)
+            size = (std::max)((std::max)(std::fabs(box.xMin), std::fabs(box.yMin)) * 1e-4, 1e-6);
+        if(dx < size * 0.01)
+        {
+            box.xMin -= size * 0.05;
+            box.xMax += size * 0.05;
+        }
+        if(dy < size * 0.01)
+        {
+            box.yMin -= size * 0.05;
+            box.yMax += size * 0.05;
+        }
+
+        box.type = CommonLib::bbox_type_normal;
+        bb = box;
+        return true;
+    }
+
+    Cartography::ILayerPtr CMapProject::AddRaster(const std::string& sFilePathUtf8)
+    {
+        try
+        {
+            // one raster workspace per folder, the dataset name is the file name
+            std::filesystem::path path = std::filesystem::u8path(sFilePathUtf8);
+            std::string sDir = path.parent_path().u8string();
+            std::string sName = path.filename().u8string();
+
+            GeoDatabase::IRasterWorkspacePtr ptrWorkspace;
+            for(size_t i = 0; i < m_vecWorkspaces.size() && !ptrWorkspace.get(); ++i)
+            {
+                GeoDatabase::CRasterWorkspace* pRasterWks = dynamic_cast<GeoDatabase::CRasterWorkspace*>(m_vecWorkspaces[i].get());
+                if(pRasterWks && pRasterWks->GetPath() == sDir)
+                    ptrWorkspace = std::dynamic_pointer_cast<GeoDatabase::IRasterWorkspace>(m_vecWorkspaces[i]);
+            }
+
+            bool bNewWorkspace = !ptrWorkspace.get();
+            if(bNewWorkspace)
+                ptrWorkspace = std::dynamic_pointer_cast<GeoDatabase::IRasterWorkspace>(
+                        GeoDatabase::CRasterWorkspace::Open(path.parent_path().filename().u8string().c_str(), sDir.c_str(), CommonLib::CGuid::CreateNew()));
+
+            GeoDatabase::IRasterDatasetPtr ptrDataset = ptrWorkspace->OpenRasterDataset(sName);
+
+            if(bNewWorkspace)
+            {
+                GeoDatabase::CWorkspaceHolder::AddWorkspace(ptrWorkspace);
+                m_vecWorkspaces.push_back(ptrWorkspace);
+            }
+
+            std::shared_ptr<Cartography::CRasterLayer> ptrLayer = std::make_shared<Cartography::CRasterLayer>(ptrDataset);
+            ptrLayer->SetName(path.stem().u8string());
+            ptrLayer->SetVisible(true);
+
+            AddLayer(ptrLayer, ptrDataset->GetSpatialReference());
+            return ptrLayer;
+        }
+        catch (std::exception& exc)
+        {
+            CommonLib::CExcBase::RegenExc("Failed to add raster {0}", sFilePathUtf8, exc);
+            throw;
+        }
     }
 
     int CMapProject::AddSQLiteDatabase(const std::string& sDatabasePath, const std::string& sTableName)

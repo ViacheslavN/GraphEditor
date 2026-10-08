@@ -322,7 +322,8 @@ namespace GraphEngine {
                 }
                 else
                 {
-                    std::vector<long> newPartsStarts;
+                    // some points can't be projected (outside of the projection area): drop them
+                    std::vector<uint32_t> newPartsStarts;
                     std::vector<CommonLib::GisXYPoint> newPoints;
                     std::vector<double> newZs;
 
@@ -333,8 +334,6 @@ namespace GraphEngine {
 
                     newPoints.reserve(pointCount);
                     newZs.reserve(pointCount);
-
-
 
                     int npointall = 0;
                     if(nparts == 0)
@@ -354,14 +353,17 @@ namespace GraphEngine {
                     }
                     else
                     {
+                        // GetParts() is nullptr for a single part shape (the only part starts at 0)
                         const uint32_t* npartsstarts = pShape->GetParts();
+                        auto partStart = [&](int npart) -> int { return npartsstarts ? (int)npartsstarts[npart] : 0; };
+
                         for(int npart = 0; npart < nparts; ++npart)
                         {
                             int npartpointcount;
                             if(npart == nparts - 1)
-                                npartpointcount = (int)pointCount - npartsstarts[npart];
+                                npartpointcount = (int)pointCount - partStart(npart);
                             else
-                                npartpointcount = npartsstarts[npart + 1] - npartsstarts[npart];
+                                npartpointcount = partStart(npart + 1) - partStart(npart);
 
                             bool pointIsFirstInPart = true;
                             for(int npoint = 0; npoint < npartpointcount; ++npoint, ++npointall)
@@ -371,13 +373,13 @@ namespace GraphEngine {
 
                                 if(pointIsFirstInPart)
                                 {
-                                    newPartsStarts.push_back((long)newPoints.size());
+                                    newPartsStarts.push_back((uint32_t)newPoints.size());
                                     pointIsFirstInPart = false;
                                 }
 
                                 CommonLib::GisXYPoint p;
                                 p.x = m_pBufferX[npointall] * koef;
-                                p.y = m_pBufferX[npointall] * koef;
+                                p.y = m_pBufferY[npointall] * koef;
                                 newPoints.push_back(p);
                                 if(pZs && m_pBufferZ)
                                     newZs.push_back(m_pBufferZ[npointall]);
@@ -389,11 +391,14 @@ namespace GraphEngine {
 
                     pShape->Create(pShape->Type(), (uint32_t )newPoints.size(), (uint32_t )newPartsStarts.size());
 
-                    memcpy(pShape->GetPoints(), &newPoints[0], newPoints.size() * 2* sizeof(double));
-                    if(!newPartsStarts.empty())
-                        memcpy(pShape->GetParts(), &newPartsStarts[0], newPartsStarts.size() * sizeof(long));
-                    if(pZs)
-                        memcpy(pShape->GetZs(), &newZs[0], newZs.size() *  sizeof(double));
+                    if(!newPoints.empty())
+                        memcpy(pShape->GetPoints(), newPoints.data(), newPoints.size() * sizeof(CommonLib::GisXYPoint));
+                    uint32_t* pNewParts = pShape->GetParts(); // nullptr for less than 2 parts
+                    if(pNewParts && !newPartsStarts.empty())
+                        memcpy(pNewParts, newPartsStarts.data(), newPartsStarts.size() * sizeof(uint32_t));
+                    double* pNewZs = pShape->GetZs();
+                    if(pNewZs && newZs.size() == newPoints.size() && !newZs.empty())
+                        memcpy(pNewZs, newZs.data(), newZs.size() * sizeof(double));
                 }
                 pShape->CalcBB();
 

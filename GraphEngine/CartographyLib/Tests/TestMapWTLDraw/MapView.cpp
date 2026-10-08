@@ -431,6 +431,69 @@ LRESULT CMapView::OnFullZoom(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*
 	return 0;
 }
 
+LRESULT CMapView::OnZoomToLayer(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/)
+{
+	Cartography::ILayersPtr ptrLayers = m_project.GetMap()->GetLayers();
+	const int nLayerCount = ptrLayers->GetLayerCount();
+	if(nLayerCount == 0)
+		return 0;
+
+	if(nLayerCount == 1)
+	{
+		ZoomToLayer(0);
+		return 0;
+	}
+
+	// popup with the layers at the cursor, the last added (top) layer first
+	const UINT nFirstCmd = 1;
+	CMenu menu;
+	menu.CreatePopupMenu();
+	for(int i = nLayerCount - 1; i >= 0; --i)
+	{
+		std::wstring sName = ToWide(ptrLayers->GetLayer(i)->GetName());
+		if(sName.empty())
+			sName = L"<layer " + std::to_wstring(i + 1) + L">";
+		menu.AppendMenu(MF_STRING, nFirstCmd + i, sName.c_str());
+	}
+
+	POINT pt;
+	::GetCursorPos(&pt);
+	RECT rc;
+	GetWindowRect(&rc);
+	if(!::PtInRect(&rc, pt)) // keyboard shortcut with the cursor outside - top-left corner of the view
+	{
+		pt.x = rc.left + 20;
+		pt.y = rc.top + 20;
+	}
+
+	UINT nCmd = menu.TrackPopupMenu(TPM_RETURNCMD | TPM_NONOTIFY | TPM_LEFTALIGN | TPM_TOPALIGN, pt.x, pt.y, m_hWnd);
+	if(nCmd >= nFirstCmd && nCmd < nFirstCmd + (UINT)nLayerCount)
+		ZoomToLayer((int)(nCmd - nFirstCmd));
+	return 0;
+}
+
+bool CMapView::ZoomToLayer(int nLayerIndex)
+{
+	try
+	{
+		CommonLib::bbox bb;
+		if(!m_project.GetLayerExtent(nLayerIndex, bb))
+		{
+			::MessageBox(m_hWnd, L"The layer has no extent in the map coordinate system.", L"Zoom to layer", MB_OK | MB_ICONINFORMATION);
+			return false;
+		}
+
+		m_ptrDrawer->ZoomIn(bb);
+		UpdateStatus(nullptr);
+		return true;
+	}
+	catch (std::exception& exc)
+	{
+		ShowError(exc, L"Zoom to layer");
+		return false;
+	}
+}
+
 LRESULT CMapView::OnZoomIn(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/)
 {
 	RECT rc;
@@ -599,6 +662,33 @@ bool CMapView::AddSQLiteDatabase(const wchar_t *pszFile, const std::string& sTab
 	catch (std::exception& exc)
 	{
 		ShowError(exc, L"Add SQLite database");
+		return false;
+	}
+}
+
+LRESULT CMapView::OnAddRaster(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/)
+{
+	CFileDialog fileDlg(TRUE, _T("tif"), NULL, OFN_HIDEREADONLY | OFN_FILEMUSTEXIST, _T("TIFF / GeoTIFF (*.tif;*.tiff)\0*.tif;*.tiff\0All Files (*.*)\0*.*\0"), m_hWnd);
+	if ( fileDlg.DoModal() != IDOK )
+		return 0;
+
+	AddRaster(fileDlg.m_szFileName);
+	return 0;
+}
+
+bool CMapView::AddRaster(const wchar_t *pszFile)
+{
+	try
+	{
+		m_ptrDrawer->StopDraw(true);
+		bool bFirstLayer = m_project.GetMap()->GetLayers()->GetLayerCount() == 0;
+		m_project.AddRaster(ToUtf8(pszFile)); // the TIFF reader opens UTF-8 paths (TIFFOpenW)
+		OnLayersAdded(bFirstLayer);
+		return true;
+	}
+	catch (std::exception& exc)
+	{
+		ShowError(exc, L"Add raster");
 		return false;
 	}
 }

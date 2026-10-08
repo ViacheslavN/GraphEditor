@@ -19,13 +19,15 @@
 #define ID_ROTATE_LEFT                  32787
 #define ID_ROTATE_RIGHT                 32788
 #define ID_RESET_ROTATION               32789
+#define ID_ADD_RASTER                   32790
+#define ID_ZOOM_TO_LAYER                32791
 
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        201
-#define _APS_NEXT_COMMAND_VALUE         32790
+#define _APS_NEXT_COMMAND_VALUE         32792
 #define _APS_NEXT_CONTROL_VALUE         1000
 #define _APS_NEXT_SYMED_VALUE           101
 #endif

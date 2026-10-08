@@ -40,10 +40,12 @@ public:
 	ALT_MSG_MAP( 1 )	//	Forwarded by frame
 		COMMAND_ID_HANDLER(ID_REDRAW_MAP, OnRedrawMap)
 		COMMAND_ID_HANDLER(ID_FULL_ZOOM, OnFullZoom)
+		COMMAND_ID_HANDLER(ID_ZOOM_TO_LAYER, OnZoomToLayer)
 		COMMAND_ID_HANDLER(ID_ZOOM_IN, OnZoomIn)
 		COMMAND_ID_HANDLER(ID_ZOOM_OUT, OnZoomOut)
 		COMMAND_ID_HANDLER(ID_ADD_SHAPE_FILE, OnAddShapeFile)
 		COMMAND_ID_HANDLER(ID_ADD_SQLITE_DB, OnAddSQLiteDb)
+		COMMAND_ID_HANDLER(ID_ADD_RASTER, OnAddRaster)
 		COMMAND_ID_HANDLER(ID_CONVERT_SHAPE_TO_SQLITE, OnConvertShapeToSQLite)
 		COMMAND_ID_HANDLER(ID_REMOVE_ALL_LAYERS, OnRemoveAllLayers)
 		COMMAND_ID_HANDLER(ID_CLEAR_SELECTION, OnClearSelection)
@@ -71,10 +73,12 @@ public:
 
 	LRESULT OnRedrawMap(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnFullZoom(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
+	LRESULT OnZoomToLayer(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnZoomIn(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnZoomOut(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnAddShapeFile(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnAddSQLiteDb(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
+	LRESULT OnAddRaster(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnConvertShapeToSQLite(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnRemoveAllLayers(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnClearSelection(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
@@ -83,10 +87,12 @@ public:
 	LRESULT OnRotate(WORD /*wNotifyCode*/, WORD wID, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 
 	void NewProject();
+	bool ZoomToLayer(int nLayerIndex);
 	bool OpenProject(const wchar_t *pszFile);
 	bool SaveProject(const wchar_t *pszFile);
 	bool AddShapeFile(const wchar_t *pszFile);
 	bool AddSQLiteDatabase(const wchar_t *pszFile, const std::string& sTableName = std::string());
+	bool AddRaster(const wchar_t *pszFile);
 	// copies the shape file into the SQLite database in a background thread
 	bool StartConvertToSQLite(const wchar_t *pszShapeFile, const wchar_t *pszDatabase);
 	bool IsConverting() const;

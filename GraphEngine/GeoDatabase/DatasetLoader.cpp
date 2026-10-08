@@ -2,6 +2,7 @@
 #include "WorkspaceHolder.h"
 #include "GeoDatabaseShape/ShapefileWorkspace.h"
 #include "GeoDatabaseSQlite/SQLiteWorkspace.h"
+#include "GeoDatabaseRaster/RasterWorkspace.h"
 
 namespace GraphEngine {
     namespace GeoDatabase {
@@ -34,6 +35,34 @@ namespace GraphEngine {
         }
     }
 
+    IRasterDatasetPtr CDatasetLoader::LoadRasterDataset(CommonLib::ISerializeObjPtr ptrObj)
+    {
+        try
+        {
+            CommonLib::CGuid wksId = ptrObj->GetPropertyGuid("WorkspaceId");
+            std::string sDatasetName =  ptrObj->GetPropertyString("DatasetName");
+
+            IWorkspacePtr ptrWorkspace = CWorkspaceHolder::GetWorkspace(wksId);
+            if(!ptrWorkspace.get())
+                throw CommonLib::CExcBase("Workspace {0} isn't opened", wksId.ToAstr(true));
+
+            IRasterWorkspace* pRasterWorkspace = dynamic_cast<IRasterWorkspace*>(ptrWorkspace.get());
+            if(!pRasterWorkspace)
+                throw CommonLib::CExcBase("Workspace {0} doesn't contain rasters", wksId.ToAstr(true));
+
+            IRasterDatasetPtr ptrDataset = pRasterWorkspace->OpenRasterDataset(sDatasetName);
+            if(!ptrDataset.get())
+                throw CommonLib::CExcBase("Raster {0} not found", sDatasetName);
+
+            return ptrDataset;
+        }
+        catch (std::exception& exc)
+        {
+            CommonLib::CExcBase::RegenExc("Failed to LoadRasterDataset", exc);
+            throw;
+        }
+    }
+
     IWorkspacePtr CDatasetLoader::LoadWorkspace(CommonLib::ISerializeObjPtr ptrObj)
     {
         try
@@ -45,6 +74,8 @@ namespace GraphEngine {
                     return CShapfileWorkspace::Open(ptrObj);
                 case wtSqlLite:
                     return CSQLiteWorkspace::Open(ptrObj);
+                case wtRaster:
+                    return CRasterWorkspace::Open(ptrObj);
                 default:
                     throw CommonLib::CExcBase("Unsupported workspace type: {0}", (int)type);
             }

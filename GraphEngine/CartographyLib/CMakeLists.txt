@@ -9,6 +9,8 @@ set(SOURCE_FILES
         layers/LayerBase.h
         layers/FeatureLayer.h
         layers/FeatureLayer.cpp
+        layers/RasterLayer.h
+        layers/RasterLayer.cpp
         layers/Layers.h
         layers/Layers.cpp
         layers/LoaderLayers.h
@@ -18,6 +20,15 @@ set(SOURCE_FILES
         renders/FeatureRenderer.cpp
         renders/RenderersLoader.h
         renders/RenderersLoader.cpp
+        renders/Raster/RasterPixelUtils.h
+        renders/Raster/RasterStatistics.h
+        renders/Raster/RasterStatistics.cpp
+        renders/Raster/RasterRendererBase.h
+        renders/Raster/RasterRendererBase.cpp
+        renders/Raster/RasterRGBRenderer.h
+        renders/Raster/RasterRGBRenderer.cpp
+        renders/Raster/RasterStretchRenderer.h
+        renders/Raster/RasterStretchRenderer.cpp
         selectors/SimpleSymbolSelector.h
         selectors/SimpleSymbolSelector.cpp
         selectors/SymbolSelectorsLoader.h

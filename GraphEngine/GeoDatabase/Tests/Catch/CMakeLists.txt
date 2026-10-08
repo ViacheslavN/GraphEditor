@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.17)
 
-# Catch2 unit tests for GeoDatabase (fields, rows, shapefile, SQLite, table copy).
+# Catch2 unit tests for GeoDatabase (fields, rows, shapefile, SQLite, table copy, raster/TIFF).
 # Catch2 itself is provided by CommonLib/Tests/Catch (FetchContent on MSVC, installed package elsewhere).
 if(NOT TARGET Catch2::Catch2WithMain)
     find_package(Catch2 3 CONFIG QUIET)
@@ -25,6 +25,7 @@ set(SOURCE_FILES
         TestShapefile.cpp
         TestSQLite.cpp
         TestTableCopier.cpp
+        TestRaster.cpp
 )
 
 add_executable(${BIN_NAME} ${SOURCE_FILES})

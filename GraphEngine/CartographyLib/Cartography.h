@@ -1,4 +1,5 @@
 #pragma once
+#include "Cartography.h"
 #include "../CommonLib/CommonLib.h"
 #include "../DisplayLib/DisplayLib.h"
 #include "../GisGeometry/Geometry.h"
@@ -24,6 +25,20 @@ namespace GraphEngine {
             SimpleFeatureRendererID
         };
 
+        enum eRasterRendererID
+        {
+            UndefineRasterRendererID,
+            RasterRGBRendererID,
+            RasterStretchRendererID
+        };
+
+        enum eRasterStretchType
+        {
+            RasterStretchTypeNone = 0,               // 8-bit values as is, other types - min/max
+            RasterStretchTypeStandardDeviation = 1,  // mean -/+ N standard deviations
+            RasterStretchTypeMinMax = 2
+        };
+
         enum eDrawPhase
         {
             DrawPhaseNone       = 0,
@@ -39,7 +54,8 @@ namespace GraphEngine {
         enum eLayerTypeID
         {
             UndefineLayerID,
-            FeatureLayerID
+            FeatureLayerID,
+            RasterLayerID
 
         };
 
@@ -58,6 +74,9 @@ namespace GraphEngine {
         typedef std::shared_ptr< class IFeatureRenderer> IFeatureRendererPtr;
         typedef std::shared_ptr< class ISimpleSymbolSelector> ISimpleSymbolSelectorPtr;
         typedef std::shared_ptr< class ILegendInfo> ILegendInfoPtr;
+        typedef std::shared_ptr<class IFeatureLayer> IFeatureLayerPtr;
+        typedef std::shared_ptr<class IRasterLayer> IRasterLayerPtr;
+        typedef std::shared_ptr<class IRasterRenderer> IRasterRendererPtr;
 
         typedef CommonLib::delegate2_t<Display::IDisplay*, eDrawPhase>  OnBeforeDraw;
         typedef CommonLib::delegate2_t<Display::IDisplay*, eDrawPhase>  OnAfterDraw;
@@ -170,8 +189,17 @@ namespace GraphEngine {
             virtual void                             DrawFeatures(eDrawPhase phase, const std::vector<int64_t>& vecOids, Display::IDisplayPtr ptrDisplay, Display::ITrackCancelPtr ptrTrackCancel, Display::ISymbolPtr ptrCustomSymbol) const = 0;
         };
 
-        typedef std::shared_ptr<IFeatureLayer> IFeatureLayerPtr;
+        class IRasterLayer : public ILayer {
+            public:
+            IRasterLayer(){}
+            virtual ~IRasterLayer(){}
 
+            virtual GeoDatabase::IRasterDatasetPtr           GetRasterDataset() const = 0;
+            virtual void                                     SetRasterDataset(GeoDatabase::IRasterDatasetPtr ptrDataset) = 0;
+            virtual IRasterRendererPtr                       GetRenderer() const = 0;
+            virtual void                                     SetRenderer(IRasterRendererPtr ptrRenderer) = 0;
+
+        };
 
 
         class  ILayers
@@ -303,6 +331,18 @@ namespace GraphEngine {
             virtual ISymbolSelectorPtr	   GetSymbolSelector() const = 0;
             virtual void				   SetSymbolSelector(ISymbolSelectorPtr ptrAssigner) = 0;
             virtual void                   DrawFeature(Display::IDisplayPtr ptrDisplay, GeoDatabase::IRowPtr ptrRow, Display::ISymbolPtr ptrCustomSymbol = Display::ISymbolPtr()) = 0;
+        };
+
+
+        class  IRasterRenderer :  public CommonLib::ISerialize {
+        public:
+            IRasterRenderer(){}
+            virtual ~IRasterRenderer(){}
+
+            virtual uint32_t GetRasterRendererID() const = 0;
+            virtual bool    CanRender(GeoDatabase::IRasterDatasetPtr ptrRaster, Display::IDisplayPtr ptrDisplay) const = 0;
+            virtual void    Draw(GeoDatabase::IRasterDatasetPtr ptrRaster, eDrawPhase phase, Display::IDisplayPtr ptrDisplay, Display::ITrackCancelPtr trackCancel) = 0;
+
         };
 
 

@@ -18,6 +18,8 @@ namespace TestMapDraw
         // opens the shapefile (full path to .shp) and adds it as a feature layer, returns the layer
         GraphEngine::Cartography::ILayerPtr AddShapefile(const std::string& sFilePathUtf8);
         void AddTable(GraphEngine::GeoDatabase::ITablePtr ptrTable, const std::string& sLayerName);
+        // opens the raster file (TIFF / GeoTIFF, UTF-8 path) and adds it as a raster layer with the default renderer, returns the layer
+        GraphEngine::Cartography::ILayerPtr AddRaster(const std::string& sFilePathUtf8);
 
         // adds the spatial tables of an SQLite database as layers (sTableName empty - all of them), returns the number of added layers
         int AddSQLiteDatabase(const std::string& sDatabasePath, const std::string& sTableName = std::string());
@@ -28,6 +30,10 @@ namespace TestMapDraw
                                                     GraphEngine::GeoDatabase::CTableCopier::TProgress progress = GraphEngine::GeoDatabase::CTableCopier::TProgress(),
                                                     int64_t* pnCopied = nullptr);
 
+        // extent of the layer in the map coordinate system (a point / zero-size extent is expanded a bit),
+        // false - the layer has no extent or it can't be projected
+        bool GetLayerExtent(int nLayerIndex, CommonLib::bbox& bb) const;
+
         void Save(const std::string& sFilePathUtf8) const;
         void Load(const std::string& sFilePathUtf8);
 
@@ -37,6 +43,7 @@ namespace TestMapDraw
     private:
         void Clear();
         void InitMap(GraphEngine::Cartography::IMapPtr ptrMap);
+        void AddLayer(GraphEngine::Cartography::ILayerPtr ptrLayer, GraphEngine::Geometry::ISpatialReferencePtr ptrSpatRef);
 
     private:
         GraphEngine::Cartography::IMapPtr m_ptrMap;

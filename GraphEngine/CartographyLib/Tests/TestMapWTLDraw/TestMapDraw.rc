@@ -93,6 +93,7 @@ BEGIN
     BEGIN
         MENUITEM "Add &Shape File...\tCtrl+A",  ID_ADD_SHAPE_FILE
         MENUITEM "Add S&QLite database...\tCtrl+D", ID_ADD_SQLITE_DB
+        MENUITEM "Add &Raster (TIFF / GeoTIFF)...\tCtrl+T", ID_ADD_RASTER
         MENUITEM SEPARATOR
         MENUITEM "&Convert Shape File to SQLite...", ID_CONVERT_SHAPE_TO_SQLITE
         MENUITEM SEPARATOR
@@ -102,6 +103,7 @@ BEGIN
     BEGIN
         MENUITEM "&Redraw\tF5",                 ID_REDRAW_MAP
         MENUITEM "&Full extent\tHome",          ID_FULL_ZOOM
+        MENUITEM "Zoom to &layer...\tCtrl+L",   ID_ZOOM_TO_LAYER
         MENUITEM "Zoom &in\t+",                 ID_ZOOM_IN
         MENUITEM "Zoom &out\t-",                ID_ZOOM_OUT
         MENUITEM SEPARATOR
@@ -165,6 +167,8 @@ BEGIN
     "S",            ID_FILE_SAVE,           VIRTKEY, CONTROL
     "A",            ID_ADD_SHAPE_FILE,      VIRTKEY, CONTROL
     "D",            ID_ADD_SQLITE_DB,       VIRTKEY, CONTROL
+    "T",            ID_ADD_RASTER,          VIRTKEY, CONTROL
+    "L",            ID_ZOOM_TO_LAYER,       VIRTKEY, CONTROL
     VK_F5,          ID_REDRAW_MAP,          VIRTKEY
     VK_HOME,        ID_FULL_ZOOM,           VIRTKEY
     VK_ADD,         ID_ZOOM_IN,             VIRTKEY
@@ -276,6 +280,8 @@ BEGIN
     ID_ROTATE_LEFT          "Rotate the map counterclockwise\nRotate Left"
     ID_ROTATE_RIGHT         "Rotate the map clockwise\nRotate Right"
     ID_RESET_ROTATION       "Rotate the map so that north is up\nNorth Up"
+    ID_ADD_RASTER           "Add a raster (TIFF / GeoTIFF) as a new layer\nAdd Raster"
+    ID_ZOOM_TO_LAYER        "Zoom to the extent of a layer (the last added one is first in the list)\nZoom to Layer"
 END
 
 #endif    // English (United States) resources

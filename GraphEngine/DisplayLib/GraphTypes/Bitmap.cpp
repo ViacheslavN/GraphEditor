@@ -422,7 +422,7 @@ namespace GraphEngine
 			m_nWidth = width;
 			m_nHeight = height;
 			m_type = type;
-			m_pPalette = m_pPalette;
+			m_pPalette = palette;
 			m_bRelease = release;
 		}
 

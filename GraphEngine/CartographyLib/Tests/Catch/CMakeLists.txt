@@ -26,6 +26,7 @@ set(SOURCE_FILES
         TestFeatureRenderer.cpp
         TestSerialize.cpp
         TestMapDrawer.cpp
+        TestRasterLayer.cpp
 )
 
 add_executable(${BIN_NAME} ${SOURCE_FILES})

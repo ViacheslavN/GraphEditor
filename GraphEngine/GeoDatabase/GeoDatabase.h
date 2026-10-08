@@ -1,4 +1,5 @@
 #pragma once
+#include "GeoDatabase.h"
 #include "../CommonLib/CommonLib.h"
 #include "../CommonLib/SpatialData/IGeoShape.h"
 #include "../GisGeometry/Geometry.h"
@@ -90,6 +91,23 @@ namespace GraphEngine
             jotGreaterOrEqual
         };
 
+        enum eRasterPixelType
+        {
+            RasterPixelTypeUnknown = 0,
+            RasterPixelType1Bit   = 1, // 0 Pixel values are 1 bit.
+            RasterPixelType2Bits  = 2, // 1 Pixel values are 2 bits.
+            RasterPixelType4Bits  = 3, // 2 Pixel values are 4 bits.
+            RasterPixelTypeUChar  = 4, // 3 Pixel values are unsigned 8 bit integers.
+            RasterPixelTypeChar   = 5, // 4 Pixel values are 8 bit integers.
+            RasterPixelTypeUShort = 6, // 5 Pixel values are unsigned 16 bit integers.
+            RasterPixelTypeShort  = 7, // 6 Pixel values are 16 bit integers.
+            RasterPixelTypeULong  = 8, // 7 Pixel values are unsigned 32 bit integers.
+            RasterPixelTypeLong   = 9, // 8 Pixel values are 32 bit integers.
+            RasterPixelTypeFloat  = 10,// 9 Pixel values are single precision floating point.
+            RasterPixelTypeDouble = 11,// 10 Pixel values are double precision floating point.
+            RasterPixelTypeLongLong = 12, // 11 Pixel values are 64 bit integers.
+            RasterPixelTypeULongLong = 13 // 12 Pixel values are unsigned 64 bit integers.
+        };
 
 
         typedef std::shared_ptr<class IWorkspace> IWorkspacePtr;
@@ -112,9 +130,11 @@ namespace GraphEngine
         typedef std::shared_ptr<class ISpatialFilter> ISpatialFilterPtr;
         typedef std::shared_ptr<class IGeometryDefinition> IGeometryDefinitionPtr;
         typedef std::shared_ptr<class IJoin> IJoinPtr;
-
-
-
+        typedef std::shared_ptr<class IRasterBlock> IRasterBlockPtr;
+        typedef std::shared_ptr<class IRasterDataset> IRasterDatasetPtr;
+        typedef std::shared_ptr<class IRasterCursor> IRasterCursorPtr;
+        typedef std::shared_ptr<class IRasterSpatialFilter> IRasterSpatialFilterPtr;
+        typedef std::shared_ptr<class IRasterWorkspace> IRasterWorkspacePtr;
 
         class ITransaction {
         public:
@@ -160,6 +180,16 @@ namespace GraphEngine
             virtual ITablePtr CreateTableWithSpatialIndex(const std::string& name,
                                                         const std::string& viewName,  const std::string& spatialIndexName, const std::string& shapeFieldName, const std::string& sOIDFieldName, IFieldsPtr ptrFields,
                                                         CommonLib::eShapeType shapeType, Geometry::IEnvelopePtr  ptrExtent, Geometry::ISpatialReferencePtr ptrSpatialReference) = 0;
+
+
+        };
+
+        class IRasterWorkspace : public IWorkspace {
+            public:
+            IRasterWorkspace(){}
+            virtual ~IRasterWorkspace(){}
+            virtual IRasterDatasetPtr OpenRasterDataset(const std::string& name) = 0;
+
 
 
         };
@@ -302,6 +332,45 @@ namespace GraphEngine
         };
 
 
+        class IRasterBlock {
+            public:
+            IRasterBlock(){}
+            virtual ~IRasterBlock(){}
+
+            virtual int						GetWidth() const = 0;
+            virtual int						GetHeight() const = 0;
+            virtual int						GetBandCount() const = 0;
+            virtual int 					GetPixelSize() = 0;
+            virtual eRasterPixelType	GetPixelType() const = 0;
+            virtual void*	        GetData() = 0;
+            virtual   Geometry::IEnvelopePtr	 GetExtent() const = 0;
+
+        };
+
+
+        class IRasterDataset : public IDataset {
+            public:
+            IRasterDataset(){}
+            virtual ~IRasterDataset(){}
+            virtual Geometry::ISpatialReferencePtr	 GetSpatialReference() const = 0;
+            virtual double                           GetResolution() const = 0;
+            virtual Geometry::IEnvelopePtr           GetExtent() const = 0;     // outer edges of the raster, in GetSpatialReference()
+            virtual int                              GetWidth() const = 0;      // pixels
+            virtual int                              GetHeight() const = 0;
+            virtual eRasterPixelType                 GetPixelType() const = 0;
+            virtual int                              GetBandCount() const = 0;
+            virtual IRasterCursorPtr				 Search(IRasterSpatialFilterPtr ptrFilter ) = 0;
+
+        };
+
+       class IRasterCursor
+        {
+       public:
+           IRasterCursor(){}
+           virtual ~IRasterCursor(){}
+            virtual bool	Next(IRasterBlockPtr ptrBlock) = 0;
+            virtual void	Reset() = 0;
+        };
 
         class  IOIDSet
         {
@@ -387,6 +456,17 @@ namespace GraphEngine
             virtual void						 SetPrecision(double precision) = 0;
             virtual eSpatialRel					 GetSpatialRel() const = 0;
             virtual void						 SetSpatialRel(eSpatialRel rel) = 0;
+        };
+
+        class IRasterSpatialFilter {
+            public:
+            IRasterSpatialFilter(){}
+            virtual ~IRasterSpatialFilter(){}
+            virtual Geometry::ISpatialReferencePtr      GetOutputSpatialReference() const = 0;
+            virtual void								SetOutputSpatialReference(Geometry::ISpatialReferencePtr spatRef) = 0;
+            virtual CommonLib::bbox				 GetBB() const = 0;
+            virtual void						 SetBB(const  CommonLib::bbox& bbox ) = 0;
+
         };
 
 

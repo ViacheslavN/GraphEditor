@@ -1,5 +1,6 @@
 #include "LoaderLayers.h"
 #include "FeatureLayer.h"
+#include "RasterLayer.h"
 
 namespace GraphEngine {
     namespace Cartography {
@@ -18,6 +19,9 @@ namespace GraphEngine {
                        ptrLayer = std::make_shared<CFeatureLayer>();
 
                    }
+                       break;
+                   case RasterLayerID:
+                       ptrLayer = std::make_shared<CRasterLayer>();
                        break;
                }
 

@@ -69,6 +69,19 @@ set(COMMON_SOURCE_FILES
         GeoDatabaseSQlite/SQLiteSpatialTable.cpp
         Utils.h
         utils.cpp
+        GeoDatabaseRaster/RasterReader.h
+        GeoDatabaseRaster/TIFFReader.h
+        GeoDatabaseRaster/TIFFReader.cpp
+        GeoDatabaseRaster/RasterBlock.h
+        GeoDatabaseRaster/RasterBlock.cpp
+        GeoDatabaseRaster/RasterSpatialFilter.h
+        GeoDatabaseRaster/RasterSpatialFilter.cpp
+        GeoDatabaseRaster/RasterCursor.h
+        GeoDatabaseRaster/RasterCursor.cpp
+        GeoDatabaseRaster/RasterDataset.h
+        GeoDatabaseRaster/RasterDataset.cpp
+        GeoDatabaseRaster/RasterWorkspace.h
+        GeoDatabaseRaster/RasterWorkspace.cpp
 
 )
 
@@ -91,6 +104,7 @@ add_library(GeoDatabase ${SOURCE_FILES})
 
 target_link_libraries(${PROJECT_NAME} PUBLIC CommonLib)
 target_link_libraries(${PROJECT_NAME} PUBLIC ShapeLib)
+target_link_libraries(${PROJECT_NAME} PUBLIC Tiff)
 
 if(GRAPHENGINE_BUILD_TESTS)
     add_subdirectory(Tests)
