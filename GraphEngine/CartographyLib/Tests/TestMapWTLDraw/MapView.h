@@ -7,8 +7,6 @@
 #include "MapProject.h"
 #include "../../drawer/MapDrawer.h"
 
-// posted from the draw thread when the map drawing is finished (wParam - 1 if canceled)
-#define WM_MAP_DRAWING_FINISHED (WM_APP + 1)
 // posted from the conversion thread: progress (wParam - copied features), finish
 #define WM_CONVERT_PROGRESS     (WM_APP + 2)
 #define WM_CONVERT_FINISHED     (WM_APP + 3)
@@ -34,7 +32,7 @@ public:
 		MESSAGE_HANDLER(WM_LBUTTONUP, OnLButtonUp)
 		MESSAGE_HANDLER(WM_MOUSEMOVE, OnMouseMove)
 		MESSAGE_HANDLER(WM_CAPTURECHANGED, OnCaptureChanged)
-		MESSAGE_HANDLER(WM_MAP_DRAWING_FINISHED, OnMapDrawingFinished)
+		MESSAGE_HANDLER(WM_TIMER, OnTimer)
 		MESSAGE_HANDLER(WM_CONVERT_PROGRESS, OnConvertProgress)
 		MESSAGE_HANDLER(WM_CONVERT_FINISHED, OnConvertFinished)
 	ALT_MSG_MAP( 1 )	//	Forwarded by frame
@@ -67,7 +65,7 @@ public:
 	LRESULT OnLButtonUp(UINT /*uMsg*/, WPARAM wParam, LPARAM lParam, BOOL& /*bHandled*/);
 	LRESULT OnMouseMove(UINT /*uMsg*/, WPARAM wParam, LPARAM lParam, BOOL& /*bHandled*/);
 	LRESULT OnCaptureChanged(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/);
-	LRESULT OnMapDrawingFinished(UINT /*uMsg*/, WPARAM wParam, LPARAM /*lParam*/, BOOL& /*bHandled*/);
+	LRESULT OnTimer(UINT /*uMsg*/, WPARAM wParam, LPARAM /*lParam*/, BOOL& bHandled);
 	LRESULT OnConvertProgress(UINT /*uMsg*/, WPARAM wParam, LPARAM /*lParam*/, BOOL& /*bHandled*/);
 	LRESULT OnConvertFinished(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/);
 
@@ -109,9 +107,9 @@ public:
 	void SetStatusBar(HWND hWndStatusBar);
 
 private:
-	// called by the drawer, possibly from its threads
-	void OnInvalidate(const GraphEngine::Display::GPoint* pPoint, const GraphEngine::Display::GRect* pRect, bool bForce);
-	void OnFinishMapDrawing(bool bCanceled);
+	// the drawer has no callbacks: its state is polled by the draw timer (UI thread)
+	void CheckDrawer();
+	void OnMapDrawingFinished();
 
 	void ZoomAt(const GraphEngine::Display::GPoint& pt, double dMult);
 	void SelectAt(const GraphEngine::Display::GPoint& pt, bool bAddToSelection);
@@ -126,6 +124,11 @@ private:
 	GraphEngine::Cartography::CMapDrawerPtr m_ptrDrawer;
 	GraphEngine::Display::IGraphicsPtr m_ptrScreen; // window sized buffer, BitBlt to the window
 	HWND m_hWndStatusBar;
+
+	// drawer polling
+	UINT_PTR m_nDrawTimer;
+	uint64_t m_nDrawCounter;   // GetDrawCounter() at the last check
+	int m_nProgressTicks;      // timer ticks since the last repaint while drawing
 
 	// shape file -> SQLite conversion
 	std::thread m_convertThread;

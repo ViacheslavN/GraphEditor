@@ -24,6 +24,12 @@ namespace
 	const double RotationStep = 15.;  // degrees per key press
 	const double WheelRotationStep = 10.;
 
+	// the drawer state is polled by a timer: a finished drawing is shown within DrawTimerPeriod,
+	// while the map is drawn the window shows the progress every ProgressTicks timer ticks
+	const UINT_PTR DrawTimerId = 1;
+	const UINT DrawTimerPeriod = 100; // ms
+	const int ProgressTicks = 5;
+
 	// shapelib and the CommonLib file API open files with the ANSI (*A) functions on Windows
 	std::string ToFilePath(const wchar_t* psz)
 	{
@@ -50,6 +56,9 @@ namespace
 
 CMapView::CMapView() :
 	m_hWndStatusBar(NULL),
+	m_nDrawTimer(0),
+	m_nDrawCounter(0),
+	m_nProgressTicks(0),
 	m_bConverting(false),
 	m_bConvertCancel(false),
 	m_nConverted(0),
@@ -59,8 +68,6 @@ CMapView::CMapView() :
 	m_LbDownPt.x = m_LbDownPt.y = 0;
 
 	m_ptrDrawer = std::make_shared<Cartography::CMapDrawer>();
-	m_ptrDrawer->SetOnInvalidate(CommonLib::Delegate(this, &CMapView::OnInvalidate), true);
-	m_ptrDrawer->SetOnFinishMapDrawing(CommonLib::Delegate(this, &CMapView::OnFinishMapDrawing), true);
 	m_ptrDrawer->SetMap(m_project.GetMap());
 }
 
@@ -68,8 +75,6 @@ CMapView::~CMapView()
 {
 	StopConversion();
 	m_ptrDrawer->StopDraw(true);
-	m_ptrDrawer->SetOnInvalidate(CommonLib::Delegate(this, &CMapView::OnInvalidate), false);
-	m_ptrDrawer->SetOnFinishMapDrawing(CommonLib::Delegate(this, &CMapView::OnFinishMapDrawing), false);
 }
 
 BOOL CMapView::PreTranslateMessage(MSG* pMsg)
@@ -89,12 +94,20 @@ LRESULT CMapView::OnCreate(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, 
 	double dpi = (double)::GetDeviceCaps(hDC, LOGPIXELSX);
 	ReleaseDC(hDC);
 	m_ptrDrawer->SetResolution(dpi);
+
+	m_nDrawCounter = m_ptrDrawer->GetDrawCounter();
+	m_nDrawTimer = SetTimer(DrawTimerId, DrawTimerPeriod);
 	return 0;
 }
 
 LRESULT CMapView::OnDestroy(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& bHandled)
 {
 	// no more repaints / messages after the window is gone
+	if(m_nDrawTimer)
+	{
+		KillTimer(m_nDrawTimer);
+		m_nDrawTimer = 0;
+	}
 	StopConversion();
 	m_ptrDrawer->StopDraw(true);
 	bHandled = FALSE;
@@ -151,36 +164,57 @@ LRESULT CMapView::OnSize(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM lParam, BOOL& 
 	return 0;
 }
 
-void CMapView::OnInvalidate(const Display::GPoint* /*pPoint*/, const Display::GRect* /*pRect*/, bool bForce)
+LRESULT CMapView::OnTimer(UINT /*uMsg*/, WPARAM wParam, LPARAM /*lParam*/, BOOL& bHandled)
 {
-	// may be called from the draw thread: InvalidateRect is thread safe, painting happens in the UI thread
-	if(!IsWindow())
+	if(wParam != DrawTimerId)
+	{
+		bHandled = FALSE;
+		return 0;
+	}
+
+	CheckDrawer();
+	return 0;
+}
+
+void CMapView::CheckDrawer()
+{
+	uint64_t nCounter = m_ptrDrawer->GetDrawCounter();
+	if(nCounter != m_nDrawCounter)
+	{
+		// one or more drawings are finished since the last check: show the result
+		m_nDrawCounter = nCounter;
+		m_nProgressTicks = 0;
+		Invalidate(FALSE);
+		if(!m_ptrDrawer->IsDrawing())
+			OnMapDrawingFinished();
 		return;
+	}
 
-	::InvalidateRect(m_hWnd, NULL, FALSE);
-	if(bForce)
-		::UpdateWindow(m_hWnd);
+	if(!m_ptrDrawer->IsDrawing())
+	{
+		m_nProgressTicks = 0;
+		return;
+	}
+
+	// drawing in progress: show what is already drawn
+	if(++m_nProgressTicks >= ProgressTicks)
+	{
+		m_nProgressTicks = 0;
+		Invalidate(FALSE);
+	}
 }
 
-void CMapView::OnFinishMapDrawing(bool bCanceled)
-{
-	// draw thread -> UI thread
-	if(IsWindow())
-		PostMessage(WM_MAP_DRAWING_FINISHED, bCanceled ? 1 : 0, 0);
-}
-
-LRESULT CMapView::OnMapDrawingFinished(UINT /*uMsg*/, WPARAM wParam, LPARAM /*lParam*/, BOOL& /*bHandled*/)
+void CMapView::OnMapDrawingFinished()
 {
 	std::string sError = m_ptrDrawer->GetLastError();
 	if(!sError.empty() && m_hWndStatusBar)
 	{
 		std::wstring sText = L"Drawing failed: " + ToWide(sError);
 		::SetWindowText(m_hWndStatusBar, sText.c_str());
-		return 0;
+		return;
 	}
 
 	UpdateStatus(nullptr);
-	return 0;
 }
 
 void CMapView::UpdateStatus(const Display::GPoint* pPoint)
@@ -242,7 +276,10 @@ LRESULT CMapView::OnMouseMove(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM lParam, B
 		}
 
 		if(m_bPan)
+		{
 			m_ptrDrawer->MovePan(pt);
+			Invalidate(FALSE); // the drawer only moves the picture, the window repaints itself
+		}
 	}
 
 	UpdateStatus(&pt);

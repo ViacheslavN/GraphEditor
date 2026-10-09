@@ -12,7 +12,7 @@ extern "C" {
 
 #include <filesystem>
 #include <fstream>
-#include <condition_variable>
+#include <chrono>
 #include <functional>
 #include <thread>
 
@@ -98,25 +98,18 @@ namespace
         return ptrWks;
     }
 
-    struct CDrawWaiter
+    // the drawer has no callbacks: poll it until n drawings are finished and nothing is drawn now
+    bool WaitDrawn(const CMapDrawer& drawer, uint64_t n)
     {
-        std::mutex mutex;
-        std::condition_variable cv;
-        int nFinished = 0;
-
-        void OnFinish(bool)
+        auto end = std::chrono::steady_clock::now() + std::chrono::seconds(30);
+        while(drawer.GetDrawCounter() < n || drawer.IsDrawing())
         {
-            std::lock_guard<std::mutex> lock(mutex);
-            ++nFinished;
-            cv.notify_all();
+            if(std::chrono::steady_clock::now() > end)
+                return false;
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
         }
-
-        bool Wait(int n)
-        {
-            std::unique_lock<std::mutex> lock(mutex);
-            return cv.wait_for(lock, std::chrono::seconds(30), [&]{return nFinished >= n;});
-        }
-    };
+        return true;
+    }
 
     IMapPtr CreateRasterMap(std::shared_ptr<CRasterLayer> ptrLayer)
     {
@@ -181,12 +174,10 @@ TEST_CASE("Raster layer: RGB drawing keeps the orientation, rotation and 3D view
     QuadrantsTiff();
     IMapPtr ptrMap = CreateRasterMap(CreateQuadrantsLayer());
 
-    CDrawWaiter waiter;
     CMapDrawer drawer;
-    drawer.SetOnFinishMapDrawing(CommonLib::Delegate(&waiter, &CDrawWaiter::OnFinish), true);
     drawer.SetMap(ptrMap);
     drawer.SetSize(300, 200, true);
-    REQUIRE(waiter.Wait(1));
+    REQUIRE(WaitDrawn(drawer, 1));
     REQUIRE(drawer.GetLastError().empty());
     CheckQuadrants(drawer);
 
@@ -196,17 +187,15 @@ TEST_CASE("Raster layer: RGB drawing keeps the orientation, rotation and 3D view
     REQUIRE(NearRGB(PixelAt(drawer, -5, 50), 255, 255, 255));
 
     drawer.SetRotation(30.);
-    REQUIRE(waiter.Wait(2));
+    REQUIRE(WaitDrawn(drawer, 2));
     REQUIRE(drawer.GetLastError().empty());
     CheckQuadrants(drawer);
 
     drawer.SetRotation(0.);
-    REQUIRE(waiter.Wait(3));
+    REQUIRE(WaitDrawn(drawer, 3));
     drawer.SetTilt(45.);
     drawer.Set3DMode(true);
-    REQUIRE(waiter.Wait(4));
-    while(drawer.IsDrawing())
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    REQUIRE(WaitDrawn(drawer, 4));
     REQUIRE(drawer.Is3DMode());
     REQUIRE(drawer.GetLastError().empty());
     CheckQuadrants(drawer);
@@ -217,18 +206,16 @@ TEST_CASE("Raster layer: zoom in reads the full resolution window", "[cartograph
     QuadrantsTiff();
     IMapPtr ptrMap = CreateRasterMap(CreateQuadrantsLayer());
 
-    CDrawWaiter waiter;
     CMapDrawer drawer;
-    drawer.SetOnFinishMapDrawing(CommonLib::Delegate(&waiter, &CDrawWaiter::OnFinish), true);
     drawer.SetMap(ptrMap);
     drawer.SetSize(200, 200, true);
-    REQUIRE(waiter.Wait(1));
+    REQUIRE(WaitDrawn(drawer, 1));
 
     CommonLib::bbox bb;
     bb.type = CommonLib::bbox_type_normal;
     bb.xMin = 45; bb.xMax = 55; bb.yMin = 45; bb.yMax = 55;
     drawer.ZoomIn(bb);
-    REQUIRE(waiter.Wait(2));
+    REQUIRE(WaitDrawn(drawer, 2));
     REQUIRE(drawer.GetLastError().empty());
 
     // the quadrant border is exactly at 50
@@ -248,12 +235,10 @@ TEST_CASE("Raster layer: transparency and background values", "[cartography][ras
     ptrRenderer->SetDisplayBackground(false);
     ptrRenderer->SetTransparency(50);
 
-    CDrawWaiter waiter;
     CMapDrawer drawer;
-    drawer.SetOnFinishMapDrawing(CommonLib::Delegate(&waiter, &CDrawWaiter::OnFinish), true);
     drawer.SetMap(CreateRasterMap(ptrLayer));
     drawer.SetSize(300, 200, true);
-    REQUIRE(waiter.Wait(1));
+    REQUIRE(WaitDrawn(drawer, 1));
     REQUIRE(drawer.GetLastError().empty());
 
     REQUIRE(NearRGB(PixelAt(drawer, 25, 75), 255, 127, 127, 3));  // red over white, 50%
@@ -270,12 +255,10 @@ TEST_CASE("Raster layer: stretch renderer with a color ramp", "[cartography][ras
     ptrRenderer->SetStretchType(RasterStretchTypeMinMax);
     ptrRenderer->SetColorRamp(Display::Color(0, 0, 255), Display::Color(255, 0, 0));
 
-    CDrawWaiter waiter;
     CMapDrawer drawer;
-    drawer.SetOnFinishMapDrawing(CommonLib::Delegate(&waiter, &CDrawWaiter::OnFinish), true);
     drawer.SetMap(CreateRasterMap(ptrLayer));
     drawer.SetSize(400, 100, true);
-    REQUIRE(waiter.Wait(1));
+    REQUIRE(WaitDrawn(drawer, 1));
     REQUIRE(drawer.GetLastError().empty());
 
     CRasterStatisticsPtr ptrStats = ptrRenderer->GetStatistics();

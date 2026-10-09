@@ -20,49 +20,17 @@ namespace GraphEngine {
                 , m_nHeight(0)
                 , m_nFlags(0)
                 , m_backgroundColor(255, 255, 255, 255)
-                , m_nProgressInterval(500)
-                , m_bTimerActive(false)
-                , m_bTimerStop(false)
+                , m_nDrawCounter(0)
                 , m_mapTask(this)
         {
             m_panStart.x = m_panStart.y = 0;
             m_panOffset.x = m_panOffset.y = 0;
-            m_timerThread = std::thread(&CMapDrawer::TimerProc, this);
         }
 
         CMapDrawer::~CMapDrawer()
         {
             StopDraw(true);
             m_drawThread.StopThread();
-            {
-                std::lock_guard<std::mutex> lock(m_timerMutex);
-                m_bTimerStop = true;
-            }
-            m_timerEvent.notify_all();
-            if(m_timerThread.joinable())
-                m_timerThread.join();
-        }
-
-        void CMapDrawer::SetOnInvalidate(OnInvalidate* pFunck, bool bAdd)
-        {
-            if(bAdd)
-                m_OnInvalidateEvent += pFunck;
-            else
-                m_OnInvalidateEvent -= pFunck;
-        }
-
-        void CMapDrawer::SetOnFinishMapDrawing(OnFinishMapDrawing* pFunck, bool bAdd)
-        {
-            if(bAdd)
-                m_OnFinishMapDrawingEvent += pFunck;
-            else
-                m_OnFinishMapDrawingEvent -= pFunck;
-        }
-
-        void CMapDrawer::SetProgressInterval(uint32_t nMilliseconds)
-        {
-            std::lock_guard<std::mutex> lock(m_timerMutex);
-            m_nProgressInterval = nMilliseconds;
         }
 
         Display::IDisplayTransformationPtr CMapDrawer::GetTransformation() const
@@ -269,13 +237,22 @@ namespace GraphEngine {
                 SetFlag(MapDrawerDrawMap);
             }
 
-            StartTimer();
             m_drawThread.SetTask(&m_mapTask, true);
         }
 
         bool CMapDrawer::IsDrawing() const
         {
             return IsFlag(MapDrawerDrawMap);
+        }
+
+        uint64_t CMapDrawer::GetDrawCounter() const
+        {
+            return m_nDrawCounter;
+        }
+
+        bool CMapDrawer::IsDrawCompleted() const
+        {
+            return IsFlag(MapDrawerFinishedDrawMap);
         }
 
         std::string CMapDrawer::GetLastError() const
@@ -362,7 +339,7 @@ namespace GraphEngine {
                 m_panOffset.x = pt.x - m_panStart.x;
                 m_panOffset.y = pt.y - m_panStart.y;
             }
-            FireInvalidate();
+            // the window repaints itself after MovePan
         }
 
         void CMapDrawer::StopPan(const Display::GPoint& pt)
@@ -404,7 +381,6 @@ namespace GraphEngine {
 
         void CMapDrawer::StopDraw(bool bWait)
         {
-            StopTimer();
             m_mapTask.StopDraw(bWait);
             m_drawThread.StopDraw(false, bWait);
 
@@ -414,22 +390,19 @@ namespace GraphEngine {
 
         void CMapDrawer::OnFinishedDrawMapTask(CMapTask *pTask, bool bCanceled)
         {
-            StopTimer();
             {
                 std::lock_guard<std::recursive_mutex> lock(m_mutex);
-                if(!bCanceled)
+                if(IsFlag(MapDrawerDrawMap))
                 {
-                    AddFlags(MapDrawerFinishedDrawMap, MapDrawerDrawMap);
+                    // show what is drawn: the whole map, or the part drawn before a stop / an error
                     m_ptrMapGraphics->Lock();
                     m_ptrOutGraphics->Copy(m_ptrMapGraphics, Display::GPoint(0, 0), Display::GRect(0, 0,(Display::GUnits) m_nWidth, (Display::GUnits)m_nHeight), false);
                     m_ptrMapGraphics->UnLock();
                 }
+                AddFlags(bCanceled ? 0 : MapDrawerFinishedDrawMap, MapDrawerDrawMap);
             }
 
-            if(!bCanceled)
-                FireInvalidate();
-
-            m_OnFinishMapDrawingEvent.fire(bCanceled);
+            ++m_nDrawCounter;
         }
 
         void CMapDrawer::CopyTrans()
@@ -540,47 +513,6 @@ namespace GraphEngine {
         {
             std::lock_guard<std::recursive_mutex> lock(m_mutex);
             return m_ptrDispCalcTran.get() ? m_ptrDispCalcTran->GetRotation() : 0.;
-        }
-
-        void CMapDrawer::FireInvalidate()
-        {
-            m_OnInvalidateEvent.fire((const Display::GPoint*)nullptr, (const Display::GRect*)nullptr, false);
-        }
-
-        void CMapDrawer::StartTimer()
-        {
-            {
-                std::lock_guard<std::mutex> lock(m_timerMutex);
-                m_bTimerActive = true;
-            }
-            m_timerEvent.notify_all();
-        }
-
-        void CMapDrawer::StopTimer()
-        {
-            std::lock_guard<std::mutex> lock(m_timerMutex);
-            m_bTimerActive = false;
-        }
-
-        void CMapDrawer::TimerProc()
-        {
-            std::unique_lock<std::mutex> lock(m_timerMutex);
-            while(!m_bTimerStop)
-            {
-                if(!m_bTimerActive || m_nProgressInterval == 0)
-                {
-                    m_timerEvent.wait(lock);
-                    continue;
-                }
-
-                m_timerEvent.wait_for(lock, std::chrono::milliseconds(m_nProgressInterval));
-                if(m_bTimerStop || !m_bTimerActive)
-                    continue;
-
-                lock.unlock();
-                FireInvalidate();
-                lock.lock();
-            }
         }
 
         void CMapDrawer::AddFlags(uint32_t add_flag, uint32_t remove_flag)

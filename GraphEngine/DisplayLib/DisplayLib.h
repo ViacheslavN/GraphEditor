@@ -6,7 +6,6 @@
 #include "GraphTypes/Rect.h"
 #include "../CommonLib/SpatialData/IGeoShape.h"
 #include "../GisGeometry/Geometry.h"
-#include "../CommonLib/utils/delegate.h"
 #include "DisplayTypes.h"
 
 namespace GraphEngine
@@ -44,13 +43,6 @@ namespace GraphEngine
         typedef std::shared_ptr<class ITrackCancel> ITrackCancelPtr;
         typedef std::shared_ptr<class IDisplay> IDisplayPtr;
 
-
-
-        typedef CommonLib::delegate1_t<IDisplayTransformation*>         OnDeviceFrameChanged;
-        typedef CommonLib::delegate1_t<IDisplayTransformation*>         OnResolutionChanged;
-        typedef CommonLib::delegate1_t<IDisplayTransformation*>         OnRotationChanged;
-        typedef CommonLib::delegate1_t<IDisplayTransformation*>         OnUnitsChanged;
-        typedef CommonLib::delegate1_t<IDisplayTransformation*>         OnVisibleBoundsChanged;
 
 
         class IDisplayTransformation
@@ -115,12 +107,6 @@ namespace GraphEngine
             virtual void  SetClipRect(const GRect& rect) = 0;
             virtual bool  ClipExists() = 0;
             virtual void  RemoveClip() = 0;
-
-            virtual void SetOnDeviceFrameChanged(OnDeviceFrameChanged* pFunck, bool bAdd) = 0;
-            virtual void SetOnResolutionChanged(OnResolutionChanged* pFunck, bool bAdd) = 0;
-            virtual void SetOnRotationChanged(OnRotationChanged* pFunck, bool bAdd) = 0;
-            virtual void SetOnUnitsChanged(OnUnitsChanged* pFunck, bool bAdd) = 0;
-            virtual void SetOnVisibleBoundsChanged(OnVisibleBoundsChanged* pFunck, bool bAdd) = 0;
         };
 
 

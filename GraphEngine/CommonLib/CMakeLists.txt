@@ -302,7 +302,6 @@ set(COMMON_SOURCE_FILES
 		data/blob.cpp
 		SpatialData/Units.h
 		SpatialData/Units.cpp
-		utils/delegate.h
 		utils/PropertySet.h
 		utils/PropertySet.cpp
 		variant/Variant.h

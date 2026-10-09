@@ -56,7 +56,6 @@ namespace GraphEngine
 
             UpdateFlatClip();
             UpdateFittedBounds();
-            OnVisibleBoundsChangedEvent.fire((IDisplayTransformation*)this);
         }
 
         double CDisplayTransformation3D::GetTilt() const
@@ -72,7 +71,6 @@ namespace GraphEngine
             m_dFocalFactor = factor;
             UpdateFlatClip();
             UpdateFittedBounds();
-            OnVisibleBoundsChangedEvent.fire((IDisplayTransformation*)this);
         }
 
         double CDisplayTransformation3D::GetFocalFactor() const
@@ -90,7 +88,6 @@ namespace GraphEngine
             m_dMinPerspectiveScale = scale;
             UpdateFlatClip();
             UpdateFittedBounds();
-            OnVisibleBoundsChangedEvent.fire((IDisplayTransformation*)this);
         }
 
         double CDisplayTransformation3D::GetMinPerspectiveScale() const

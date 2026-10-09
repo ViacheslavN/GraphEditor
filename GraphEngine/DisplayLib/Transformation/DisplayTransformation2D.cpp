@@ -125,8 +125,6 @@ namespace GraphEngine
             m_AnchorMap[0] = centerx;
             m_AnchorMap[1] = centery;
             SetMatrix();
-
-            OnVisibleBoundsChangedEvent.fire((IDisplayTransformation*)this);
         }
 
         void CDisplayTransformation2D::SetMapPos(const CommonLib::GisXYPoint &map_pos, double new_scale)
@@ -142,7 +140,6 @@ namespace GraphEngine
             {
                 UpdateFittedBounds();
             }
-            OnVisibleBoundsChangedEvent.fire((IDisplayTransformation*)this);
         }
 
         CommonLib::GisXYPoint CDisplayTransformation2D::GetMapPos() const
@@ -217,8 +214,6 @@ namespace GraphEngine
                     throw CommonLib::CExcBase("DisplayTransformation2D: Wrong TransformationPreserveType");
                     break;
             }
-
-            OnDeviceFrameChangedEvent.fire((IDisplayTransformation*)this);
         }
 
         const GRect& CDisplayTransformation2D::GetDeviceRect() const
@@ -242,7 +237,6 @@ namespace GraphEngine
             {
                 m_dAngle = degrees;
                 SetMatrix();
-                OnRotationChangedEvent.fire((IDisplayTransformation*)this);
             }
         }
 
@@ -259,7 +253,6 @@ namespace GraphEngine
             // number of pixel in device inch width
             m_dResolution = pDpi;
             UpdateScaleRatio();
-            OnResolutionChangedEvent.fire((IDisplayTransformation*)this);
         }
 
         double CDisplayTransformation2D::GetResolution()
@@ -273,7 +266,6 @@ namespace GraphEngine
             {
                 m_mapUnits = units;
                 UpdateScaleRatio(); // the same scale is another number of map units per pixel
-                OnUnitsChangedEvent.fire((IDisplayTransformation*)this);
             }
         }
 
@@ -681,42 +673,6 @@ namespace GraphEngine
         void CDisplayTransformation2D::RemoveClip()
         {
             m_bClipExists = false;
-        }
-
-        void CDisplayTransformation2D::SetOnDeviceFrameChanged(OnDeviceFrameChanged* pFunck, bool bAdd)
-        {
-            if(bAdd)
-                OnDeviceFrameChangedEvent += pFunck;
-            else
-                OnDeviceFrameChangedEvent -= pFunck;
-        }
-        void CDisplayTransformation2D::SetOnResolutionChanged(OnResolutionChanged* pFunck, bool bAdd)
-        {
-            if(bAdd)
-                OnResolutionChangedEvent += pFunck;
-            else
-                OnResolutionChangedEvent -= pFunck;
-        }
-        void CDisplayTransformation2D::SetOnRotationChanged(OnRotationChanged* pFunck, bool bAdd)
-        {
-            if(bAdd)
-                OnRotationChangedEvent += pFunck;
-            else
-                OnRotationChangedEvent -= pFunck;
-        }
-        void CDisplayTransformation2D::SetOnUnitsChanged(OnUnitsChanged* pFunck, bool bAdd)
-        {
-            if(bAdd)
-                OnUnitsChangedEvent += pFunck;
-            else
-                OnUnitsChangedEvent -= pFunck;
-        }
-        void CDisplayTransformation2D::SetOnVisibleBoundsChanged(OnVisibleBoundsChanged* pFunck, bool bAdd)
-        {
-            if(bAdd)
-                OnVisibleBoundsChangedEvent += pFunck;
-            else
-                OnVisibleBoundsChangedEvent -= pFunck;
         }
     }
 }

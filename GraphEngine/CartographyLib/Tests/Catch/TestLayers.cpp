@@ -6,20 +6,6 @@ using namespace cartography_test;
 
 namespace
 {
-    struct CLayersListener
-    {
-        int nAdded = 0;
-        int nRemoved = 0;
-        int nMoved = 0;
-        int nCleared = 0;
-        int nLastMoveIndex = -1;
-
-        void OnAdded(ILayers*, ILayer*) {++nAdded;}
-        void OnRemoved(ILayers*, ILayer*) {++nRemoved;}
-        void OnMoved(ILayers*, ILayer*, int index) {++nMoved; nLastMoveIndex = index;}
-        void OnCleared(ILayers*) {++nCleared;}
-    };
-
     std::vector<std::string> LayerNames(ILayersPtr ptrLayers)
     {
         std::vector<std::string> names;
@@ -145,32 +131,26 @@ TEST_CASE("Remove all layers", "[cartography][layers]")
     REQUIRE(ptrLayers->GetLayerCount() == 1);
 }
 
-TEST_CASE("Layers events are fired", "[cartography][layers]")
+TEST_CASE("Layers change counter follows the changes", "[cartography][layers]")
 {
     ILayersPtr ptrLayers = std::make_shared<CLayers>();
-    CLayersListener listener;
-
-    ptrLayers->SetOnLayerAdded(CommonLib::Delegate(&listener, &CLayersListener::OnAdded), true);
-    ptrLayers->SetOnLayerRemove(CommonLib::Delegate(&listener, &CLayersListener::OnRemoved), true);
-    ptrLayers->SetOnLayerMoved(CommonLib::Delegate(&listener, &CLayersListener::OnMoved), true);
-    ptrLayers->SetOnRemoveAllLayers(CommonLib::Delegate(&listener, &CLayersListener::OnCleared), true);
+    REQUIRE(ptrLayers->GetChangeCounter() == 0);
 
     ILayerPtr ptrA = CreateFeatureLayer("a");
     ILayerPtr ptrB = CreateFeatureLayer("b");
-    ptrLayers->AddLayer(ptrA);
-    ptrLayers->InsertLayer(ptrB, 0);
-    ptrLayers->MoveLayer(ptrB, 1);
-    ptrLayers->RemoveLayer(ptrA);
-    ptrLayers->RemoveAllLayers();
+    ptrLayers->AddLayer(ptrA);                                      // +1
+    ptrLayers->InsertLayer(ptrB, 0);                                // +1
+    ptrLayers->MoveLayer(ptrB, 1);                                  // +1
+    ptrLayers->RemoveLayer(ptrA);                                   // +1
+    REQUIRE(ptrLayers->GetChangeCounter() == 4);
 
-    REQUIRE(listener.nAdded == 2);
-    REQUIRE(listener.nMoved == 1);
-    REQUIRE(listener.nLastMoveIndex == 1);
-    REQUIRE(listener.nRemoved == 1);
-    REQUIRE(listener.nCleared == 1);
+    // failed operations don't change it
+    REQUIRE_THROWS(ptrLayers->AddLayer(ptrB));                      // already added
+    REQUIRE_THROWS(ptrLayers->RemoveLayer(ptrA));                   // not in the list
+    REQUIRE_THROWS(ptrLayers->MoveLayer(ptrA, 0));
+    REQUIRE(ptrLayers->GetChangeCounter() == 4);
 
-    // unsubscribe
-    ptrLayers->SetOnLayerAdded(CommonLib::Delegate(&listener, &CLayersListener::OnAdded), false);
-    ptrLayers->AddLayer(CreateFeatureLayer("c"));
-    REQUIRE(listener.nAdded == 2);
+    ptrLayers->RemoveAllLayers();                                   // +1
+    ptrLayers->RemoveAllLayers();                                   // already empty
+    REQUIRE(ptrLayers->GetChangeCounter() == 5);
 }

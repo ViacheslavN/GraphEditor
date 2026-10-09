@@ -7,8 +7,9 @@ namespace GraphEngine {
     namespace Cartography {
 
         // Draws the map in a background thread (CDrawThread + CMapTask) into an off-screen graphics.
-        // While drawing, OnInvalidate is fired periodically so the window can show the progress;
-        // the window paints with Update(). Pan moves the last picture until StopPan, then redraws.
+        // There are no callbacks: the window polls IsDrawing() / GetDrawCounter() by a timer and
+        // paints with Update() (while drawing it shows what is already drawn).
+        // Pan moves the last picture until StopPan, then redraws.
         // Ported from GisFramework::CMapDrawer of the old engine.
         class CMapDrawer : public IMapDrawer
         {
@@ -33,6 +34,8 @@ namespace GraphEngine {
             virtual void Update(Display::IGraphicsPtr ptrGraphics, const Display::GPoint *pPoint, const Display::GRect* pRect);
             virtual void Redraw(Display::IGraphicsPtr ptrGraphics = Display::IGraphicsPtr());
             virtual bool IsDrawing() const;
+            virtual uint64_t GetDrawCounter() const;
+            virtual bool IsDrawCompleted() const;
             virtual std::string GetLastError() const;
 
             virtual void ZoomIn(const Display::GRect& rect);
@@ -52,12 +55,6 @@ namespace GraphEngine {
             virtual void StopPan(const Display::GPoint& pt);
             virtual void StopDraw(bool bWait = true);
 
-            virtual void SetOnInvalidate(OnInvalidate* pFunck, bool bAdd);
-            virtual void SetOnFinishMapDrawing(OnFinishMapDrawing* pFunck, bool bAdd);
-
-            // period of OnInvalidate while the map is being drawn, 0 - only when finished
-            void SetProgressInterval(uint32_t nMilliseconds);
-
             // called by CMapTask from the draw thread
             void OnFinishedDrawMapTask(CMapTask *pTask, bool bCanceled);
 
@@ -68,10 +65,6 @@ namespace GraphEngine {
             void Init(bool bResetTransformation);
             Display::IDisplayTransformationPtr CreateTransformation(const Display::GRect& wndRect) const;
             void CopyTrans();
-            void StartTimer();
-            void StopTimer();
-            void TimerProc();
-            void FireInvalidate();
 
             void AddFlags(uint32_t add_flag = 0, uint32_t remove_flag = 0);
             void SetFlag(uint32_t flag);
@@ -95,17 +88,7 @@ namespace GraphEngine {
             Display::GPoint m_panStart;
             Display::GPoint m_panOffset;
             mutable std::recursive_mutex m_mutex;
-
-            CommonLib::Event3<const Display::GPoint*, const Display::GRect*, bool> m_OnInvalidateEvent;
-            CommonLib::Event1<bool> m_OnFinishMapDrawingEvent;
-
-            // progress timer
-            uint32_t m_nProgressInterval;
-            bool m_bTimerActive;
-            bool m_bTimerStop;
-            std::mutex m_timerMutex;
-            std::condition_variable m_timerEvent;
-            std::thread m_timerThread;
+            std::atomic<uint64_t> m_nDrawCounter;
 
             // order matters: the thread is destroyed (joined) before the task
             CMapTask m_mapTask;

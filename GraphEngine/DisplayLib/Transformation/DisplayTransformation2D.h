@@ -82,12 +82,6 @@ namespace GraphEngine
             virtual bool  ClipExists();
             virtual void  RemoveClip();
 
-            virtual void SetOnDeviceFrameChanged(OnDeviceFrameChanged* pFunck, bool bAdd);
-            virtual void SetOnResolutionChanged(OnResolutionChanged* pFunck, bool bAdd);
-            virtual void SetOnRotationChanged(OnRotationChanged* pFunck, bool bAdd);
-            virtual void SetOnUnitsChanged(OnUnitsChanged* pFunck, bool bAdd);
-            virtual void SetOnVisibleBoundsChanged(OnVisibleBoundsChanged* pFunck, bool bAdd);
-
         protected:
             // map <-> flat (pixels relative to the window center, before the projection)
             void MapToFlat(double mapX, double mapY, double& flatX, double& flatY) const;
@@ -133,12 +127,6 @@ namespace GraphEngine
 
             bool m_bVerticalFlip;
             bool m_bHorizontalFlip;
-
-            CommonLib::Event1<IDisplayTransformation*>         OnDeviceFrameChangedEvent;
-            CommonLib::Event1<IDisplayTransformation*>         OnResolutionChangedEvent;
-            CommonLib::Event1<IDisplayTransformation*>         OnRotationChangedEvent;
-            CommonLib::Event1<IDisplayTransformation*>         OnUnitsChangedEvent;
-            CommonLib::Event1<IDisplayTransformation*>         OnVisibleBoundsChangedEvent;
 
             CConvexClipper m_flatClip;          // visible area in flat coordinates
 

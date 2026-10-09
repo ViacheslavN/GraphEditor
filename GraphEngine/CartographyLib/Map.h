@@ -51,18 +51,13 @@ namespace GraphEngine {
             virtual double							  GetReferenceScale() const;
             virtual void							  SetReferenceScale(double scale);
 
-            virtual void                              SetOnBeforeDraw(OnBeforeDraw* pFunck, bool bAdd);
-            virtual void                              SetOnAfterDraw(OnAfterDraw* pFunck, bool bAdd);
-
             virtual void Save(CommonLib::ISerializeObjPtr pObj) const;
             virtual void Load(CommonLib::ISerializeObjPtr pObj);
 
         private:
-            // the full extent is recalculated when layers change (unless set with SetFullExtent)
-            void OnLayerAdded(ILayers* pLayers, ILayer* pLayer);
-            void OnLayerRemoved(ILayers* pLayers, ILayer* pLayer);
-            void OnLayersCleared(ILayers* pLayers);
-            void ResetFullExtent();
+            // the full extent is recalculated when layers change (unless set with SetFullExtent):
+            // the layers change counter is compared with the one the extent was calculated for
+            void ResetFullExtentIfLayersChanged() const;
 
         private:
 
@@ -91,9 +86,7 @@ namespace GraphEngine {
             CommonLib::IPropertySetPtr	m_ptrPropertySet;
             bool m_bCalcBB;
             bool m_bUserFullExtent;
-
-            CommonLib::Event2<Display::IDisplay*, eDrawPhase> m_OnBeforeDrawEvent;
-            CommonLib::Event2<Display::IDisplay*, eDrawPhase> m_OnAfterDrawEvent;
+            mutable uint64_t m_nFullExtentLayersCounter;
 
         };
 

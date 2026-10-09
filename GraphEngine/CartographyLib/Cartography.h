@@ -46,7 +46,7 @@ namespace GraphEngine {
             DrawPhaseNone       = 0,
             DrawPhaseGeography  = 1,
             DrawPhaseAnnotation = 2,
-            DrawPhaseDrawAnnoCache = 4,
+            DrawPhaseLabeling   = 4,
             DrawPhaseSelection  = 8,
             DrawPhaseGraphics   = 16,
             DrawPhaseAll        = 0xFFFF
@@ -59,6 +59,44 @@ namespace GraphEngine {
             FeatureLayerID,
             RasterLayerID
 
+        };
+
+        enum eLabelStrategy
+        {
+            LabelStrategyAlone   = 0,
+            LabelStrategySimple  = 1,
+            LabelStrategyComplex = 2
+        };
+
+        enum eLineLabelOrientation
+        {
+            LineLabelOrientationHorizontal    = 0,
+            LineLabelOrientationParallel      = 1,
+            LineLabelOrientationCurved        = 2,
+            LineLabelOrientationPerpendicular = 3
+        };
+
+        enum ePolygonLabelPlacement
+        {
+            PolygonLabelPlacementHorizontal = 0,
+            PolygonLabelPlacementStraight   = 1,
+            PolygonLabelPlacementMixed      = 2
+          };
+
+        enum eDuplicateStrategy
+        {
+            DuplicateStrategyAllow    = 0,
+            DuplicateStrategyRemove   = 1,
+            DuplicateStrategyDistance = 2
+        };
+
+
+
+        struct SLabelingOptions{
+            eLabelStrategy mStrategy;
+            eLineLabelOrientation mOrientation;
+            ePolygonLabelPlacement mPlacement;
+            eDuplicateStrategy mDuplicateStrategy;
         };
 
 
@@ -82,14 +120,9 @@ namespace GraphEngine {
         typedef std::shared_ptr<class IRasterLayer> IRasterLayerPtr;
         typedef std::shared_ptr<class IRasterRenderer> IRasterRendererPtr;
         typedef std::shared_ptr<class IAnnotationRender> IAnnotationRenderPtr;
+        typedef std::shared_ptr<class ILabelRender> ILabelRenderPtr;
 
-        typedef CommonLib::delegate2_t<Display::IDisplay*, eDrawPhase>  OnBeforeDraw;
-        typedef CommonLib::delegate2_t<Display::IDisplay*, eDrawPhase>  OnAfterDraw;
-        typedef CommonLib::delegate1_t<ILayers*>                        OnRemoveAllLayers;
-        typedef CommonLib::delegate2_t<ILayers*, ILayer*>               OnLayerAdded;
-        typedef CommonLib::delegate2_t<ILayers*, ILayer*>               OnLayerRemove;
-        typedef CommonLib::delegate3_t<ILayers*, ILayer*, int>          OnLayerMoved;
-        typedef CommonLib::delegate_t                                   OnSelectChange;
+
 
 
         class IMap :  public CommonLib::ISerialize
@@ -137,9 +170,6 @@ namespace GraphEngine {
             virtual void							  SetHasReferenceScale(bool flag) = 0;
             virtual double							  GetReferenceScale() const = 0;
             virtual void							  SetReferenceScale(double scale) = 0;
-
-            virtual void                              SetOnBeforeDraw(OnBeforeDraw* pFunck, bool bAdd) = 0;
-            virtual void                              SetOnAfterDraw(OnAfterDraw* pFunck, bool bAdd) = 0;
         };
 
 
@@ -165,6 +195,7 @@ namespace GraphEngine {
             virtual bool                      IsActiveOnScale(double scale) const = 0;
             virtual uint32_t				  GetCheckCancelStep() const = 0;
             virtual void					  SetCheckCancelStep(uint32_t nCount) = 0;
+
         };
 
 
@@ -197,6 +228,10 @@ namespace GraphEngine {
             virtual void                             SetAnnoFieldName(const std::string& filedName)  = 0;
             virtual IAnnotationRenderPtr			 GetAnnotationRenderer() const = 0;
             virtual void							 SetAnnotationRenderer(IAnnotationRenderPtr ptrRenderer) = 0;
+            virtual const std::string&               GetLabelFieldName() const = 0;
+            virtual void                             SetLabelFieldName(const std::string& labelName)  = 0;
+            virtual ILabelEnginePtr                  GetLabelEngine() const = 0;
+            virtual void                             SetLabelEngine(ILabelEnginePtr ptrEngine) = 0;
 
         };
 
@@ -227,10 +262,9 @@ namespace GraphEngine {
             virtual void      RemoveAllLayers() = 0;
             virtual void      MoveLayer(ILayerPtr ptrLayer, int index) = 0;
 
-            virtual void      SetOnRemoveAllLayers(OnRemoveAllLayers* pFunck, bool bAdd) = 0;
-            virtual void      SetOnLayerAdded(OnLayerAdded* pFunck, bool bAdd) = 0;
-            virtual void      SetOnLayerRemove(OnLayerRemove* pFunck, bool bAdd) = 0;
-            virtual void      SetOnLayerMoved(OnLayerMoved* pFunck, bool bAdd) = 0;
+            // no events: incremented on every change of the layer list (add, insert, remove, move, clear),
+            // compare it with the remembered value to find out that the list has changed
+            virtual uint64_t  GetChangeCounter() const = 0;
         };
 
         class ISelection
@@ -249,7 +283,8 @@ namespace GraphEngine {
             virtual Display::ISymbolPtr		             GetSymbol() const = 0;
             virtual void                                 SetSymbol(Display::ISymbolPtr ptrSymbol) = 0;
             virtual bool                                 IsEmpty() const = 0;
-            virtual void                                 SetOnSelectChange(OnSelectChange* pFunck, bool bAdd) = 0;
+            // no events: incremented on every real change of the selection, compare it with the remembered value
+            virtual uint64_t                             GetChangeCounter() const = 0;
         };
 
         class  IElement
@@ -345,6 +380,7 @@ namespace GraphEngine {
         };
 
 
+
         class IAnnotationRender : public IFeatureRenderer {
             public:
             IAnnotationRender(){}
@@ -368,6 +404,20 @@ namespace GraphEngine {
 
         };
 
+
+        class ILabelEngine :  public CommonLib::ISerialize {
+            public:
+            ILabelEngine(){}
+            virtual ~ILabelEngine(){}
+
+            void           BeginLabeling(Display::IDisplayPtr ptrDisplay);
+            void           Clear();
+            void           AddLabel(const std::string& text,  CommonLib::IGeoShapePtr ptrShape,
+                                Display::ITextSymbolPtr ptrSymbol,  int classIndex, SLabelingOptions options);
+            virtual void           DrawLabels(Display::ITrackCancelPtr ptrTrackCancel) = 0;
+            virtual void           EndLabeling() = 0;
+
+        };
 
         class ISimpleSymbolSelector : public ISymbolSelector
         {
@@ -468,7 +518,10 @@ namespace GraphEngine {
         };
 
         // Map drawer: draws the map in a background thread into an off-screen graphics,
-        // the window copies the result with Update() (ported from GisFramework of the old engine)
+        // the window copies the result with Update() (ported from GisFramework of the old engine).
+        // The drawer has no callbacks, the window polls its state by a timer:
+        //  - while IsDrawing() - repaint periodically to show the progress,
+        //  - GetDrawCounter() changed - a drawing is finished, repaint and check GetLastError().
         enum eMapDrawerFlags
         {
             MapDrawerDrawMap          = 1,
@@ -482,11 +535,6 @@ namespace GraphEngine {
         };
 
         typedef std::shared_ptr<class IMapDrawer> IMapDrawerPtr;
-
-        // pPoint/pRect - invalidated area (nullptr - whole window), bForce - repaint immediately
-        typedef CommonLib::delegate3_t<const Display::GPoint*, const Display::GRect*, bool> OnInvalidate;
-        // bCanceled - drawing was stopped (or failed) before the end
-        typedef CommonLib::delegate1_t<bool> OnFinishMapDrawing;
 
         class IMapDrawer
         {
@@ -511,6 +559,8 @@ namespace GraphEngine {
             virtual void Update(Display::IGraphicsPtr ptrGraphics, const Display::GPoint *pPoint, const Display::GRect* pRect) = 0;
             virtual void Redraw(Display::IGraphicsPtr ptrGraphics = Display::IGraphicsPtr()) = 0;
             virtual bool IsDrawing() const = 0;
+            virtual uint64_t GetDrawCounter() const = 0;  // number of finished drawings (completed, stopped or failed)
+            virtual bool IsDrawCompleted() const = 0;     // the last drawing reached the end (not stopped, no error)
             virtual std::string GetLastError() const = 0;
 
             virtual void ZoomIn(const Display::GRect& rect) = 0;
@@ -530,9 +580,6 @@ namespace GraphEngine {
             virtual void MovePan(const Display::GPoint& pt) = 0;
             virtual void StopPan(const Display::GPoint& pt) = 0;
             virtual void StopDraw(bool bWait = true) = 0;
-
-            virtual void SetOnInvalidate(OnInvalidate* pFunck, bool bAdd) = 0;
-            virtual void SetOnFinishMapDrawing(OnFinishMapDrawing* pFunck, bool bAdd) = 0;
         };
 
     }

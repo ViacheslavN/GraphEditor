@@ -27,7 +27,7 @@ namespace GraphEngine {
             virtual Display::ISymbolPtr     GetSymbol() const;
             virtual void                    SetSymbol(Display::ISymbolPtr ptrSymbol);
             virtual bool                    IsEmpty() const;
-            virtual void                    SetOnSelectChange(OnSelectChange* pFunck, bool bAdd);
+            virtual uint64_t                GetChangeCounter() const;
 
         private:
             typedef std::set<int64_t> TFeatureIDSet;
@@ -37,7 +37,7 @@ namespace GraphEngine {
             TFeatureMap              m_features;
             Display::ISymbolPtr      m_ptrSymbol;
             mutable std::mutex       m_mutex;
-            CommonLib::Event         m_OnSelectChangeEvent;
+            std::atomic<uint64_t>    m_nChangeCounter;
         };
 
     }

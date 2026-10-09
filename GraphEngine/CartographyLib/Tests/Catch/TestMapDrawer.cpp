@@ -9,7 +9,8 @@
 #include "../../../ThirdParty/ShapeLib/shapefil.h"
 #include "../../../CommonLib/xml/XMLDoc.h"
 #include <filesystem>
-#include <condition_variable>
+#include <chrono>
+#include <thread>
 
 #include "../../../DisplayLib/Transformation/DisplayTransformation3D.h"
 
@@ -79,34 +80,18 @@ namespace
         return ptrMap;
     }
 
-    struct CDrawerListener
+    // the drawer has no callbacks: poll it until n drawings are finished and nothing is drawn now
+    bool WaitDrawn(const CMapDrawer& drawer, uint64_t n)
     {
-        std::mutex mutex;
-        std::condition_variable cv;
-        int nFinished = 0;
-        int nCanceled = 0;
-        std::atomic<int> nInvalidate{0};
-
-        void OnFinish(bool bCanceled)
+        auto end = std::chrono::steady_clock::now() + std::chrono::seconds(30);
+        while(drawer.GetDrawCounter() < n || drawer.IsDrawing())
         {
-            std::lock_guard<std::mutex> lock(mutex);
-            ++nFinished;
-            if(bCanceled)
-                ++nCanceled;
-            cv.notify_all();
+            if(std::chrono::steady_clock::now() > end)
+                return false;
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
         }
-
-        void OnInvalidate(const Display::GPoint*, const Display::GRect*, bool)
-        {
-            ++nInvalidate;
-        }
-
-        bool WaitFinished(int n)
-        {
-            std::unique_lock<std::mutex> lock(mutex);
-            return cv.wait_for(lock, std::chrono::seconds(30), [&]{return nFinished >= n;});
-        }
-    };
+        return true;
+    }
 
     Display::Color PixelAtMap(CMapDrawer& drawer, double x, double y)
     {
@@ -188,18 +173,15 @@ TEST_CASE("Map drawer draws the map in the background thread", "[cartography][dr
     GeoDatabase::ITablePtr ptrTable = OpenSquaresWorkspace()->GetTable("squares");
     IMapPtr ptrMap = CreateSquaresMap(ptrTable);
 
-    CDrawerListener listener;
     CMapDrawer drawer;
-    drawer.SetOnFinishMapDrawing(CommonLib::Delegate(&listener, &CDrawerListener::OnFinish), true);
-    drawer.SetOnInvalidate(CommonLib::Delegate(&listener, &CDrawerListener::OnInvalidate), true);
     drawer.SetMap(ptrMap);
     drawer.SetSize(300, 100, true);
 
-    REQUIRE(listener.WaitFinished(1));
-    REQUIRE(listener.nCanceled == 0);
+    REQUIRE(WaitDrawn(drawer, 1));
+    REQUIRE(drawer.IsDrawCompleted());
     REQUIRE(drawer.GetLastError().empty());
     REQUIRE_FALSE(drawer.IsDrawing());
-    REQUIRE(listener.nInvalidate > 0);
+    REQUIRE(drawer.GetDrawCounter() == 1);
 
     REQUIRE(SameRGB(PixelAtMap(drawer, 5, 5), Display::Color(200, 0, 0, 255)));     // square A
     REQUIRE(SameRGB(PixelAtMap(drawer, 25, 5), Display::Color(200, 0, 0, 255)));    // square B
@@ -225,12 +207,10 @@ TEST_CASE("Map drawer draws the selection", "[cartography][drawer][selection]")
     ILayerPtr ptrLayer = ptrMap->GetLayers()->GetLayer(0);
     REQUIRE(ptrMap->GetSelection()->GetFeatures(ptrLayer->GetLayerId()) == std::vector<int64_t>{1});
 
-    CDrawerListener listener;
     CMapDrawer drawer;
-    drawer.SetOnFinishMapDrawing(CommonLib::Delegate(&listener, &CDrawerListener::OnFinish), true);
     drawer.SetMap(ptrMap);
     drawer.SetSize(300, 100, true);
-    REQUIRE(listener.WaitFinished(1));
+    REQUIRE(WaitDrawn(drawer, 1));
 
     REQUIRE(SameRGB(PixelAtMap(drawer, 5, 5), Display::Color(200, 0, 0, 255)));   // not selected
     REQUIRE(SameRGB(PixelAtMap(drawer, 25, 5), Display::Color(0, 0, 255, 255)));   // selected
@@ -241,12 +221,10 @@ TEST_CASE("Map drawer pan and zoom", "[cartography][drawer]")
     GeoDatabase::ITablePtr ptrTable = OpenSquaresWorkspace()->GetTable("squares");
     IMapPtr ptrMap = CreateSquaresMap(ptrTable);
 
-    CDrawerListener listener;
     CMapDrawer drawer;
-    drawer.SetOnFinishMapDrawing(CommonLib::Delegate(&listener, &CDrawerListener::OnFinish), true);
     drawer.SetMap(ptrMap);
     drawer.SetSize(300, 100, true);
-    REQUIRE(listener.WaitFinished(1));
+    REQUIRE(WaitDrawn(drawer, 1));
 
     // the map point under (150 - 40, 50 - 10) must be in the center after the pan by (40, 10)
     Display::GPoint before(110, 40);
@@ -256,7 +234,7 @@ TEST_CASE("Map drawer pan and zoom", "[cartography][drawer]")
     drawer.StartPan(Display::GPoint(100, 50));
     drawer.MovePan(Display::GPoint(120, 55));
     drawer.StopPan(Display::GPoint(140, 60));
-    REQUIRE(listener.WaitFinished(2));
+    REQUIRE(WaitDrawn(drawer, 2));
 
     Display::GPoint center(150, 50);
     CommonLib::GisXYPoint actual;
@@ -269,7 +247,7 @@ TEST_CASE("Map drawer pan and zoom", "[cartography][drawer]")
     bb.type = CommonLib::bbox_type_normal;
     bb.xMin = 0; bb.xMax = 10; bb.yMin = 0; bb.yMax = 10;
     drawer.ZoomIn(bb);
-    REQUIRE(listener.WaitFinished(3));
+    REQUIRE(WaitDrawn(drawer, 3));
     const CommonLib::bbox& fitted = drawer.GetTransformation()->GetFittedBounds();
     REQUIRE(fitted.xMin <= 0.);
     REQUIRE(fitted.xMax >= 10.);
@@ -277,7 +255,7 @@ TEST_CASE("Map drawer pan and zoom", "[cartography][drawer]")
     REQUIRE(SameRGB(PixelAtMap(drawer, 5, 5), Display::Color(200, 0, 0, 255)));
 
     drawer.ZoomToFullExtent();
-    REQUIRE(listener.WaitFinished(4));
+    REQUIRE(WaitDrawn(drawer, 4));
     REQUIRE(drawer.GetTransformation()->GetFittedBounds().xMax >= 30.);
 }
 
@@ -286,12 +264,10 @@ TEST_CASE("Map drawer 3D view", "[cartography][drawer][3d]")
     GeoDatabase::ITablePtr ptrTable = OpenSquaresWorkspace()->GetTable("squares");
     IMapPtr ptrMap = CreateSquaresMap(ptrTable);
 
-    CDrawerListener listener;
     CMapDrawer drawer;
-    drawer.SetOnFinishMapDrawing(CommonLib::Delegate(&listener, &CDrawerListener::OnFinish), true);
     drawer.SetMap(ptrMap);
     drawer.SetSize(300, 200, true);
-    REQUIRE(listener.WaitFinished(1));
+    REQUIRE(WaitDrawn(drawer, 1));
 
     CommonLib::GisXYPoint pos = drawer.GetCalcTransformation()->GetMapPos();
     double scale = drawer.GetCalcTransformation()->GetScale();
@@ -303,7 +279,7 @@ TEST_CASE("Map drawer 3D view", "[cartography][drawer][3d]")
     REQUIRE(std::dynamic_pointer_cast<Display::CDisplayTransformation3D>(drawer.GetTransformation()).get() == nullptr);
 
     drawer.Set3DMode(true);
-    REQUIRE(listener.WaitFinished(2));
+    REQUIRE(WaitDrawn(drawer, 2));
     REQUIRE(drawer.Is3DMode());
     REQUIRE(drawer.GetLastError().empty());
 
@@ -320,7 +296,7 @@ TEST_CASE("Map drawer 3D view", "[cartography][drawer][3d]")
 
     // a big tilt shows the sky above the far edge of the ground
     drawer.SetTilt(78.);
-    REQUIRE(listener.WaitFinished(3));
+    REQUIRE(WaitDrawn(drawer, 3));
     ptr3D = std::dynamic_pointer_cast<Display::CDisplayTransformation3D>(drawer.GetTransformation());
     REQUIRE(ptr3D->GetTilt() == 78.);
     REQUIRE(ptr3D->GetSkyLine() > 2.);
@@ -333,21 +309,21 @@ TEST_CASE("Map drawer 3D view", "[cartography][drawer][3d]")
     drawer.GetCalcTransformation()->DeviceToMap(&start, &expected, 1);
     drawer.StartPan(start);
     drawer.StopPan(end);
-    REQUIRE(listener.WaitFinished(4));
+    REQUIRE(WaitDrawn(drawer, 4));
     CommonLib::GisXYPoint actual;
     drawer.GetTransformation()->DeviceToMap(&end, &actual, 1);
     REQUIRE(fabs(actual.x - expected.x) < 1e-6);
     REQUIRE(fabs(actual.y - expected.y) < 1e-6);
 
     drawer.SetRotation(-90.);
-    REQUIRE(listener.WaitFinished(5));
+    REQUIRE(WaitDrawn(drawer, 5));
     REQUIRE(drawer.GetRotation() == 270.);
     REQUIRE(drawer.GetTransformation()->GetRotation() == 270.);
 
     // back to the plan view: the same position, scale and rotation
     CommonLib::GisXYPoint pos3D = drawer.GetCalcTransformation()->GetMapPos();
     drawer.Set3DMode(false);
-    REQUIRE(listener.WaitFinished(6));
+    REQUIRE(WaitDrawn(drawer, 6));
     REQUIRE_FALSE(drawer.Is3DMode());
     REQUIRE(std::dynamic_pointer_cast<Display::CDisplayTransformation3D>(drawer.GetTransformation()).get() == nullptr);
     REQUIRE(fabs(drawer.GetTransformation()->GetMapPos().x - pos3D.x) < 1e-9);
@@ -399,12 +375,10 @@ TEST_CASE("Map project save / load with workspaces", "[cartography][drawer][seri
     REQUIRE(ptrLayer->GetLayerTable() != nullptr);
     REQUIRE(ptrLayer->IsValid());
 
-    CDrawerListener listener;
     CMapDrawer drawer;
-    drawer.SetOnFinishMapDrawing(CommonLib::Delegate(&listener, &CDrawerListener::OnFinish), true);
     drawer.SetMap(ptrLoaded);
     drawer.SetSize(300, 100, true);
-    REQUIRE(listener.WaitFinished(1));
+    REQUIRE(WaitDrawn(drawer, 1));
     REQUIRE(drawer.GetLastError().empty());
     REQUIRE(SameRGB(PixelAtMap(drawer, 25, 5), Display::Color(200, 0, 0, 255)));
 
@@ -501,12 +475,10 @@ TEST_CASE("Shapefile converted to SQLite: attributes, spatial search, drawing", 
     ptrMap->SelectFeatures(bb, true);
     REQUIRE(ptrMap->GetSelection()->GetFeatures(ptrMap->GetLayers()->GetLayer(0)->GetLayerId()) == std::vector<int64_t>{1});
 
-    CDrawerListener listener;
     CMapDrawer drawer;
-    drawer.SetOnFinishMapDrawing(CommonLib::Delegate(&listener, &CDrawerListener::OnFinish), true);
     drawer.SetMap(ptrMap);
     drawer.SetSize(300, 100, true);
-    REQUIRE(listener.WaitFinished(1));
+    REQUIRE(WaitDrawn(drawer, 1));
     REQUIRE(drawer.GetLastError().empty());
     REQUIRE(SameRGB(PixelAtMap(drawer, 5, 5), Display::Color(200, 0, 0, 255)));
     REQUIRE(SameRGB(PixelAtMap(drawer, 25, 5), Display::Color(0, 0, 255, 255)));   // selected

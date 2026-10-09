@@ -4,15 +4,6 @@ using namespace GraphEngine;
 using namespace GraphEngine::Cartography;
 using namespace cartography_test;
 
-namespace
-{
-    struct CSelectionListener
-    {
-        int nChanged = 0;
-        void OnChanged() {++nChanged;}
-    };
-}
-
 TEST_CASE("Empty selection", "[cartography][selection]")
 {
     CSelection selection(std::make_shared<CLayers>());
@@ -81,11 +72,10 @@ TEST_CASE("GetLayers returns only layers that exist in the map", "[cartography][
     REQUIRE(selection.GetLayers().empty());
 }
 
-TEST_CASE("Select change event fires only on real changes", "[cartography][selection]")
+TEST_CASE("Selection change counter changes only on real changes", "[cartography][selection]")
 {
     CSelection selection(std::make_shared<CLayers>());
-    CSelectionListener listener;
-    selection.SetOnSelectChange(CommonLib::Delegate(&listener, &CSelectionListener::OnChanged), true);
+    REQUIRE(selection.GetChangeCounter() == 0);
 
     CommonLib::CGuid layer = CommonLib::CGuid::CreateNew();
     selection.AddRow(layer, 1);                                     // +1
@@ -98,7 +88,7 @@ TEST_CASE("Select change event fires only on real changes", "[cartography][selec
     selection.ClearForLayer(layer);                                 // +1
     selection.Clear();                                              // already empty
 
-    REQUIRE(listener.nChanged == 4);
+    REQUIRE(selection.GetChangeCounter() == 4);
 }
 
 TEST_CASE("Selection symbol", "[cartography][selection]")

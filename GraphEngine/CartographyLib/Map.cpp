@@ -21,40 +21,25 @@ namespace GraphEngine {
                 m_bDelayDrawing(false),
                 m_dReferenceScale(0.),
                 m_bCalcBB(false),
-                m_bUserFullExtent(false)
+                m_bUserFullExtent(false),
+                m_nFullExtentLayersCounter(0)
         {
             m_ptrLayers  = std::make_shared<CLayers>();
-            m_ptrLayers->SetOnLayerAdded(CommonLib::Delegate(this, &CMap::OnLayerAdded), true);
-            m_ptrLayers->SetOnLayerRemove(CommonLib::Delegate(this, &CMap::OnLayerRemoved), true);
-            m_ptrLayers->SetOnRemoveAllLayers(CommonLib::Delegate(this, &CMap::OnLayersCleared), true);
             m_ptrSelection = std::make_shared<CSelection>(m_ptrLayers);
         }
 
         CMap::~CMap()
         {
-            // the layers can outlive the map (shared_ptr), the delegates point to this map
-            m_ptrLayers->SetOnLayerAdded(CommonLib::Delegate(this, &CMap::OnLayerAdded), false);
-            m_ptrLayers->SetOnLayerRemove(CommonLib::Delegate(this, &CMap::OnLayerRemoved), false);
-            m_ptrLayers->SetOnRemoveAllLayers(CommonLib::Delegate(this, &CMap::OnLayersCleared), false);
+
         }
 
-        void CMap::OnLayerAdded(ILayers* pLayers, ILayer* pLayer)
+        void CMap::ResetFullExtentIfLayersChanged() const
         {
-            ResetFullExtent();
-        }
+            uint64_t nCounter = m_ptrLayers->GetChangeCounter();
+            if(nCounter == m_nFullExtentLayersCounter)
+                return;
 
-        void CMap::OnLayerRemoved(ILayers* pLayers, ILayer* pLayer)
-        {
-            ResetFullExtent();
-        }
-
-        void CMap::OnLayersCleared(ILayers* pLayers)
-        {
-            ResetFullExtent();
-        }
-
-        void CMap::ResetFullExtent()
-        {
+            m_nFullExtentLayersCounter = nCounter;
             if(!m_bUserFullExtent)
                 m_ptrFullExtent.reset();
         }
@@ -113,6 +98,7 @@ namespace GraphEngine {
         {
             try
             {
+            ResetFullExtentIfLayersChanged();
             if(m_ptrFullExtent.get())
                 return Geometry::IEnvelopePtr( m_ptrFullExtent->Clone());
 
@@ -173,22 +159,6 @@ namespace GraphEngine {
             m_ptrSpatialRef = spatRef;
         }
 
-        void CMap::SetOnBeforeDraw(OnBeforeDraw* pFunck, bool bAdd)
-        {
-            if(bAdd)
-                m_OnBeforeDrawEvent += pFunck;
-            else
-                m_OnBeforeDrawEvent -= pFunck;
-        }
-
-        void CMap::SetOnAfterDraw(OnAfterDraw* pFunck, bool bAdd)
-        {
-            if(bAdd)
-                m_OnAfterDrawEvent += pFunck;
-            else
-                m_OnAfterDrawEvent -= pFunck;
-        }
-
         void  CMap::Draw(Display::IDisplayPtr ptrDisplay, Display::ITrackCancelPtr ptrTrackCancel) {
             PartialDraw(DrawPhaseAll, ptrDisplay, ptrTrackCancel);
 
@@ -207,9 +177,6 @@ namespace GraphEngine {
                 double maximumScale = GetMaximumScale();
                 double minimumScale = GetMinimumScale();
 
-
-                m_OnBeforeDrawEvent.fire(ptrDisplay.get(), DrawPhaseNone);
-
                 double oldScale = ptrTrans->GetReferenceScale();
                 //if(GetHasReferenceScale() && GetReferenceScale() != 0.0)
                 if(m_bHasReferenceScale && m_dReferenceScale)
@@ -219,9 +186,11 @@ namespace GraphEngine {
 
                 int layerCount = m_ptrLayers->GetLayerCount();
                 int classIndex = 0;
-                if ( phase & DrawPhaseAnnotation )
+                if ( phase & DrawPhaseLabeling )
                 {
-                    //TO DO Draw Label
+                    if (m_ptrLabelEngine) {
+                        m_ptrLabelEngine->BeginLabeling(ptrDisplay);
+                    }
                 }
 
                 eDrawPhase phaseMask = (eDrawPhase)(phase & (DrawPhaseGeography | DrawPhaseAnnotation));
@@ -231,11 +200,6 @@ namespace GraphEngine {
 
                     if ( m_ptrBackgroundSymbol.get() )
                     {
-                        /*
-                        GisBoundingBox box;
-                        trans->DeviceToMap(trans->GetDeviceRect(), box);
-                        CommonLib::CGeoShape shape(box);
-                        */
                         m_ptrBackgroundSymbol->Prepare(ptrDisplay);
                         m_ptrBackgroundSymbol->FillRect(ptrDisplay, ptrTrans->GetDeviceRect());
                         m_ptrBackgroundSymbol->Reset();
@@ -244,8 +208,6 @@ namespace GraphEngine {
 
                 if(phaseMask)
                 {
-                    m_OnBeforeDrawEvent.fire(ptrDisplay.get(), phaseMask);
-
                     for(int i = 0; i < layerCount; i++)
                     {
                         if(!ptrTrackCancel->Continue())
@@ -263,21 +225,12 @@ namespace GraphEngine {
                 }
                 if ( phase & DrawPhaseSelection )
                 {
-
-                    m_OnBeforeDrawEvent.fire(ptrDisplay.get(), DrawPhaseSelection);
                     if(m_ptrSelection.get())
                         m_ptrSelection->Draw(ptrDisplay, ptrTrackCancel);
-                    m_OnAfterDrawEvent.fire(ptrDisplay.get(), DrawPhaseSelection);
                 }
-
-                if ( phase & DrawPhaseGeography )
-                    m_OnAfterDrawEvent.fire(ptrDisplay.get(), DrawPhaseGeography);
-
 
                 if ( phase & DrawPhaseGraphics )
                 {
-                    m_OnBeforeDrawEvent.fire(ptrDisplay.get(), DrawPhaseGraphics);
-
                     for(int i = 0; i < layerCount; i++)
                     {
                         ILayerPtr pLayer = m_ptrLayers->GetLayer(i);
@@ -298,10 +251,15 @@ namespace GraphEngine {
 
                         }
                     }
-                    m_OnAfterDrawEvent.fire(ptrDisplay.get(), DrawPhaseGraphics);
 
                 }
 
+                if ( phase & DrawPhaseLabeling )
+                {
+                    if (m_ptrLabelEngine) {
+                        m_ptrLabelEngine->EndLabeling();
+                    }
+                }
 
                 if(m_ptrForegroundSymbol.get())
                 {
@@ -311,7 +269,6 @@ namespace GraphEngine {
                 }
 
                 ptrTrans->SetReferenceScale(oldScale);
-                m_OnAfterDrawEvent.fire(ptrDisplay.get(), DrawPhaseNone);
             }
             catch (std::exception& exc)
             {

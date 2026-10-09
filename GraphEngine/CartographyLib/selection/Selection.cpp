@@ -3,7 +3,7 @@
 namespace GraphEngine {
     namespace Cartography {
 
-        CSelection::CSelection(ILayersPtr ptrLayers) : m_ptrLayers(ptrLayers)
+        CSelection::CSelection(ILayersPtr ptrLayers) : m_ptrLayers(ptrLayers), m_nChangeCounter(0)
         {
 
         }
@@ -13,22 +13,16 @@ namespace GraphEngine {
 
         }
 
-        void CSelection::SetOnSelectChange(OnSelectChange* pFunck, bool bAdd)
+        uint64_t CSelection::GetChangeCounter() const
         {
-            if(bAdd)
-                m_OnSelectChangeEvent += pFunck;
-            else
-                m_OnSelectChangeEvent -= pFunck;
+            return m_nChangeCounter;
         }
 
         void CSelection::AddRow(CommonLib::CGuid layerId, int64_t rowID)
         {
-            {
-                std::lock_guard lock(m_mutex);
-                if(!m_features[layerId].insert(rowID).second)
-                    return;
-            }
-            m_OnSelectChangeEvent.fire();
+            std::lock_guard lock(m_mutex);
+            if(m_features[layerId].insert(rowID).second)
+                ++m_nChangeCounter;
         }
 
         bool CSelection::IsEmpty() const
@@ -39,41 +33,34 @@ namespace GraphEngine {
 
         void CSelection::Clear()
         {
-            {
-                std::lock_guard lock(m_mutex);
-                if(m_features.empty())
-                    return;
+            std::lock_guard lock(m_mutex);
+            if(m_features.empty())
+                return;
 
-                m_features.clear();
-            }
-            m_OnSelectChangeEvent.fire();
+            m_features.clear();
+            ++m_nChangeCounter;
         }
 
         void CSelection::ClearForLayer(CommonLib::CGuid layerId)
         {
-            {
-                std::lock_guard lock(m_mutex);
-                if(m_features.erase(layerId) == 0)
-                    return;
-            }
-            m_OnSelectChangeEvent.fire();
+            std::lock_guard lock(m_mutex);
+            if(m_features.erase(layerId) != 0)
+                ++m_nChangeCounter;
         }
 
         void CSelection::RemoveFeature(CommonLib::CGuid layerId, int64_t rowID)
         {
-            {
-                std::lock_guard lock(m_mutex);
-                auto it = m_features.find(layerId);
-                if(it == m_features.end())
-                    return;
+            std::lock_guard lock(m_mutex);
+            auto it = m_features.find(layerId);
+            if(it == m_features.end())
+                return;
 
-                if(it->second.erase(rowID) == 0)
-                    return;
+            if(it->second.erase(rowID) == 0)
+                return;
 
-                if(it->second.empty())
-                    m_features.erase(it);
-            }
-            m_OnSelectChangeEvent.fire();
+            if(it->second.empty())
+                m_features.erase(it);
+            ++m_nChangeCounter;
         }
 
         std::vector<ILayerPtr> CSelection::GetLayers() const

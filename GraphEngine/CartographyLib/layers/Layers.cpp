@@ -3,7 +3,7 @@
 namespace GraphEngine {
     namespace Cartography {
 
-        CLayers::CLayers()
+        CLayers::CLayers() : m_nChangeCounter(0)
         {
 
         }
@@ -12,36 +12,9 @@ namespace GraphEngine {
 
         }
 
-        void CLayers::SetOnRemoveAllLayers(OnRemoveAllLayers* pFunck, bool bAdd)
+        uint64_t CLayers::GetChangeCounter() const
         {
-            if(bAdd)
-                m_OnRemoveAllLayersEvent += pFunck;
-            else
-                m_OnRemoveAllLayersEvent -= pFunck;
-        }
-
-        void CLayers::SetOnLayerAdded(OnLayerAdded* pFunck, bool bAdd)
-        {
-            if(bAdd)
-                m_OnLayerAddedEvent += pFunck;
-            else
-                m_OnLayerAddedEvent -= pFunck;
-        }
-
-        void CLayers::SetOnLayerRemove(OnLayerRemove* pFunck, bool bAdd)
-        {
-            if(bAdd)
-                m_OnLayerRemoveEvent += pFunck;
-            else
-                m_OnLayerRemoveEvent -= pFunck;
-        }
-
-        void CLayers::SetOnLayerMoved(OnLayerMoved* pFunck, bool bAdd)
-        {
-            if(bAdd)
-                m_OnLayerMovedEvent += pFunck;
-            else
-                m_OnLayerMovedEvent -= pFunck;
+            return m_nChangeCounter;
         }
 
         int CLayers::GetLayerCount() const
@@ -85,49 +58,43 @@ namespace GraphEngine {
                 m_vecLayers.insert(m_vecLayers.begin() + index, ptrLayer);
 
             m_layersById.insert(std::make_pair(ptrLayer->GetLayerId(), ptrLayer));
+            ++m_nChangeCounter;
         }
 
         void CLayers::AddLayer(ILayerPtr ptrLayer)
         {
-            {
-                std::lock_guard lock(m_mutex);
-                InsertLayerImpl(ptrLayer, -1);
-            }
-            m_OnLayerAddedEvent.fire(this, ptrLayer.get());
+            std::lock_guard lock(m_mutex);
+            InsertLayerImpl(ptrLayer, -1);
         }
 
         void CLayers::InsertLayer(ILayerPtr ptrLayer, int index)
         {
-            {
-                std::lock_guard lock(m_mutex);
-                InsertLayerImpl(ptrLayer, index);
-            }
-            m_OnLayerAddedEvent.fire(this, ptrLayer.get());
+            std::lock_guard lock(m_mutex);
+            InsertLayerImpl(ptrLayer, index);
         }
 
         void CLayers::RemoveLayer(ILayerPtr ptrLayerToRemove)
         {
-            {
-                std::lock_guard lock(m_mutex);
-                CommonLib::CGuid layerId = ptrLayerToRemove->GetLayerId();
-                auto it = m_layersById.find(layerId);
-                if(it == m_layersById.end())
-                    throw CommonLib::CExcBase("Layers: failed to remove layer, layer with id: {0}, name: {1} dosen't exisit", layerId.ToAstr(false), ptrLayerToRemove->GetName());
+            std::lock_guard lock(m_mutex);
+            CommonLib::CGuid layerId = ptrLayerToRemove->GetLayerId();
+            auto it = m_layersById.find(layerId);
+            if(it == m_layersById.end())
+                throw CommonLib::CExcBase("Layers: failed to remove layer, layer with id: {0}, name: {1} dosen't exisit", layerId.ToAstr(false), ptrLayerToRemove->GetName());
 
-                m_layersById.erase(it);
-                m_vecLayers.erase(std::remove_if(m_vecLayers.begin(), m_vecLayers.end(), [&layerId](const ILayerPtr& ptrLayer){return layerId == ptrLayer->GetLayerId();}), m_vecLayers.end());
-            }
-            m_OnLayerRemoveEvent.fire(this, ptrLayerToRemove.get());
+            m_layersById.erase(it);
+            m_vecLayers.erase(std::remove_if(m_vecLayers.begin(), m_vecLayers.end(), [&layerId](const ILayerPtr& ptrLayer){return layerId == ptrLayer->GetLayerId();}), m_vecLayers.end());
+            ++m_nChangeCounter;
         }
 
         void CLayers::RemoveAllLayers()
         {
-            {
-                std::lock_guard lock(m_mutex);
-                m_layersById.clear();
-                m_vecLayers.clear();
-            }
-            m_OnRemoveAllLayersEvent.fire(this);
+            std::lock_guard lock(m_mutex);
+            if(m_vecLayers.empty())
+                return;
+
+            m_layersById.clear();
+            m_vecLayers.clear();
+            ++m_nChangeCounter;
         }
 
         void CLayers::MoveLayer(ILayerPtr ptrLayer, int index)
@@ -146,8 +113,9 @@ namespace GraphEngine {
                     m_vecLayers.push_back(ptrStored);
                 else
                     m_vecLayers.insert(m_vecLayers.begin() + index, ptrStored);
+
+                ++m_nChangeCounter;
             }
-            m_OnLayerMovedEvent.fire(this, ptrLayer.get(), index);
         }
 
     }
