@@ -136,6 +136,38 @@ namespace GraphEngine
                 }
             }
 
+            // the same without a CGeoShape: the points of the parts one after another (pPartSizes - the points of every part,
+            // nParts = 0 - a point / multipoint); no copy into a shape buffer
+            bool Compress(CommonLib::eShapeType type, const CommonLib::GisXYPoint* pPoints, uint32_t nPoints,
+                          const uint32_t* pPartSizes, uint32_t nParts, std::vector<TByte>& out)
+            {
+                try
+                {
+                    return CompressPointsImpl(type, pPoints, nPoints, pPartSizes, nParts, out);
+                }
+                catch (std::exception& exc)
+                {
+                    CommonLib::CExcBase::RegenExcT("Failed to compress a shape of type {0}", (int)type, exc);
+                    throw;
+                }
+            }
+
+            // integer coordinates already in the units of the scale (value * 10^k, f.e. OSM 1e-7 degrees for k = 7):
+            // no rounding, the result is exact
+            bool CompressQuantized(CommonLib::eShapeType type, const int64_t* pX, const int64_t* pY, uint32_t nPoints,
+                                   const uint32_t* pPartSizes, uint32_t nParts, std::vector<TByte>& out)
+            {
+                try
+                {
+                    return Encode(type, pX, pY, nPoints, pPartSizes, nParts, out);
+                }
+                catch (std::exception& exc)
+                {
+                    CommonLib::CExcBase::RegenExcT("Failed to compress a shape of type {0}", (int)type, exc);
+                    throw;
+                }
+            }
+
         private:
             bool Quantize(double dValue, int64_t& nValue) const
             {
@@ -158,6 +190,21 @@ namespace GraphEngine
                 if(nPoints > 0 && !pPoints)
                     throw CommonLib::CExcBase("the shape has {0} points, but no coordinates", nPoints);
 
+                m_vecShapeParts.clear();
+                if(genType == CommonLib::shape_type_general_polyline || genType == CommonLib::shape_type_general_polygon)
+                {
+                    uint32_t nParts = shape.GetPartCount();
+                    for(uint32_t i = 0; i < nParts; ++i)
+                        m_vecShapeParts.push_back(shape.GetPart(i));
+                }
+                return CompressPointsImpl(type, pPoints, nPoints, m_vecShapeParts.data(), (uint32_t)m_vecShapeParts.size(), out);
+            }
+
+            bool CompressPointsImpl(CommonLib::eShapeType type, const CommonLib::GisXYPoint* pPoints, uint32_t nPoints,
+                                    const uint32_t* pPartSizes, uint32_t nParts, std::vector<TByte>& out)
+            {
+                if(!IsSupported(type))
+                    return false;
                 m_vecX.resize(nPoints);
                 m_vecY.resize(nPoints);
                 for(uint32_t i = 0; i < nPoints; ++i)
@@ -165,6 +212,16 @@ namespace GraphEngine
                     if(!Quantize(pPoints[i].x, m_vecX[i]) || !Quantize(pPoints[i].y, m_vecY[i]))
                         return false;
                 }
+                return Encode(type, m_vecX.data(), m_vecY.data(), nPoints, pPartSizes, nParts, out);
+            }
+
+            // the coordinates are integers in 10^-k units already
+            bool Encode(CommonLib::eShapeType type, const int64_t* pX, const int64_t* pY, uint32_t nPoints,
+                        const uint32_t* pPartSizes, uint32_t nParts, std::vector<TByte>& out)
+            {
+                if(!IsSupported(type))
+                    return false;
+                CommonLib::eShapeType genType = CommonLib::IGeoShape::GeneralType(type);
 
                 m_vecBlob.clear();
                 m_vecBlob.push_back(ShapeCompressedFlag);
@@ -179,27 +236,24 @@ namespace GraphEngine
                 {
                     if(nPoints != 1)
                         throw CommonLib::CExcBase("a point shape has {0} points", nPoints);
-                    WriteVarint(m_vecBlob, ZigZag(m_vecX[0]));
-                    WriteVarint(m_vecBlob, ZigZag(m_vecY[0]));
+                    WriteVarint(m_vecBlob, ZigZag(pX[0]));
+                    WriteVarint(m_vecBlob, ZigZag(pY[0]));
                     m_vecBlob[nOptionsPos] = (TByte)(ShapeFormatVersion << ShapeOptionVersionShift);
                     out.swap(m_vecBlob);
                     return true;
                 }
 
-                // parts
-                m_vecParts.clear();
-                uint32_t nParts = 0;
-                if(genType != CommonLib::shape_type_general_multipoint)
+                // parts (a multipoint has none)
+                if(genType == CommonLib::shape_type_general_multipoint)
+                    nParts = 0;
+                if(nParts > 0)
                 {
-                    nParts = shape.GetPartCount();
+                    if(!pPartSizes)
+                        throw CommonLib::CExcBase("the shape has {0} parts, but no part sizes", nParts);
                     uint64_t nSum = 0;
                     for(uint32_t i = 0; i < nParts; ++i)
-                    {
-                        uint32_t nPart = shape.GetPart(i);
-                        m_vecParts.push_back(nPart);
-                        nSum += nPart;
-                    }
-                    if(nParts > 0 && nSum != nPoints)
+                        nSum += pPartSizes[i];
+                    if(nSum != nPoints)
                         throw CommonLib::CExcBase("the parts have {0} points, the shape has {1}", nSum, nPoints);
                 }
 
@@ -207,9 +261,9 @@ namespace GraphEngine
                 bool bClosed = genType == CommonLib::shape_type_general_polygon && nParts > 0;
                 for(uint32_t i = 0, nStart = 0; i < nParts && bClosed; ++i)
                 {
-                    uint32_t nPart = m_vecParts[i];
+                    uint32_t nPart = pPartSizes[i];
                     uint32_t nLast = nStart + nPart - 1;
-                    if(nPart < 4 || m_vecX[nStart] != m_vecX[nLast] || m_vecY[nStart] != m_vecY[nLast])
+                    if(nPart < 4 || pX[nStart] != pX[nLast] || pY[nStart] != pY[nLast])
                         bClosed = false;
                     nStart += nPart;
                 }
@@ -217,10 +271,10 @@ namespace GraphEngine
                 int64_t xMin = 0, yMin = 0, xMax = 0, yMax = 0;
                 for(uint32_t i = 0; i < nPoints; ++i)
                 {
-                    if(i == 0 || m_vecX[i] < xMin) xMin = m_vecX[i];
-                    if(i == 0 || m_vecX[i] > xMax) xMax = m_vecX[i];
-                    if(i == 0 || m_vecY[i] < yMin) yMin = m_vecY[i];
-                    if(i == 0 || m_vecY[i] > yMax) yMax = m_vecY[i];
+                    if(i == 0 || pX[i] < xMin) xMin = pX[i];
+                    if(i == 0 || pX[i] > xMax) xMax = pX[i];
+                    if(i == 0 || pY[i] < yMin) yMin = pY[i];
+                    if(i == 0 || pY[i] > yMax) yMax = pY[i];
                 }
 
                 WriteVarint(m_vecBlob, nPoints);
@@ -228,7 +282,7 @@ namespace GraphEngine
                 {
                     WriteVarint(m_vecBlob, nParts);
                     for(uint32_t i = 0; i + 1 < nParts; ++i)
-                        WriteVarint(m_vecBlob, m_vecParts[i]);
+                        WriteVarint(m_vecBlob, pPartSizes[i]);
                 }
                 WriteVarint(m_vecBlob, ZigZag(xMin));
                 WriteVarint(m_vecBlob, ZigZag(yMin));
@@ -239,21 +293,21 @@ namespace GraphEngine
                 m_vecValues.clear();
                 m_vecValues.reserve((size_t)nPoints * 2);
                 int64_t xPrev = xMin, yPrev = yMin;
-                uint32_t nPart = 0, nPartLeft = nParts > 0 ? m_vecParts[0] : nPoints;
+                uint32_t nPart = 0, nPartLeft = nParts > 0 ? pPartSizes[0] : nPoints;
                 for(uint32_t i = 0; i < nPoints; ++i)
                 {
                     while(nPartLeft == 0 && nPart + 1 < nParts)
-                        nPartLeft = m_vecParts[++nPart];
+                        nPartLeft = pPartSizes[++nPart];
 
                     bool bSkip = bClosed && nPartLeft == 1;   // the closing point of the ring
                     --nPartLeft;
                     if(bSkip)
                         continue;
 
-                    m_vecValues.push_back(ZigZag(m_vecX[i] - xPrev));
-                    m_vecValues.push_back(ZigZag(m_vecY[i] - yPrev));
-                    xPrev = m_vecX[i];
-                    yPrev = m_vecY[i];
+                    m_vecValues.push_back(ZigZag(pX[i] - xPrev));
+                    m_vecValues.push_back(ZigZag(pY[i] - yPrev));
+                    xPrev = pX[i];
+                    yPrev = pY[i];
                 }
 
                 eValueCoding coding = CValueEncoder::ChooseCoding(m_vecValues.data(), m_vecValues.size());
@@ -271,7 +325,7 @@ namespace GraphEngine
             bool   m_bMultiply;
             std::vector<int64_t>  m_vecX;
             std::vector<int64_t>  m_vecY;
-            std::vector<uint32_t> m_vecParts;
+            std::vector<uint32_t> m_vecShapeParts;
             std::vector<uint64_t> m_vecValues;
             std::vector<TByte>    m_vecBlob;
         };

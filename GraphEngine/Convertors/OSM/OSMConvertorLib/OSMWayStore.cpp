@@ -28,11 +28,11 @@ namespace GraphEngine {
             ++m_nCount;
         }
 
-        void COSMWayStore::Add(int64_t nId, const TOSMPoints& points)
+        void COSMWayStore::Add(int64_t nId, const CommonLib::GisXYPoint* pPoints, size_t nCount)
         {
             if(m_bFinished)
                 throw CommonLib::CExcBase("Way store: a way is added after Finish");
-            if(points.empty() || nId == m_nLastId)
+            if(nCount == 0 || nId == m_nLastId)
                 return;
             if(nId < m_nLastId)
                 m_bSorted = false;
@@ -41,9 +41,9 @@ namespace GraphEngine {
             SEntry entry;
             entry.nId = nId;
             entry.nOffset = m_nPoints;
-            entry.nCount = (uint32_t)points.size();
-            m_ptrPoints->Write(points.data(), points.size() * sizeof(CommonLib::GisXYPoint));
-            m_nPoints += points.size();
+            entry.nCount = (uint32_t)nCount;
+            m_ptrPoints->Write(pPoints, nCount * sizeof(CommonLib::GisXYPoint));
+            m_nPoints += nCount;
             WriteEntry(entry);
         }
 

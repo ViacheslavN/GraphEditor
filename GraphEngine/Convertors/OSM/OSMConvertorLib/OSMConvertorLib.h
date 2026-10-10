@@ -248,7 +248,8 @@ namespace GraphEngine {
 
         struct SOSMConvertSettings
         {
-            std::string sTempDir;              // temporary files (node coordinates), empty - the system temporary folder
+            std::string sTempDir;              // UTF-8, the temporary files (node coordinates ~115 GB for the planet, multipolygon ways,
+                                               // spatial index runs), created if it doesn't exist; empty - the system temporary folder
             uint32_t    nNodeCacheMB = 512;    // memory for the node coordinates (the sorted node store) and the multipolygon ways, the rest is in temporary files
             bool        bWebMercator = true;   // geometry in Web Mercator (EPSG:3857), false - longitude / latitude (EPSG:4326)
             std::string sNameLanguage;         // "en", "de" ...: name:<language> is used for the names when it exists

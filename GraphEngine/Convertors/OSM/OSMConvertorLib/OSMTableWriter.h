@@ -34,6 +34,8 @@ namespace GraphEngine {
             void SetInt64(int nField, int64_t nValue);
             void SetText(int nField, const std::string& sValue);
             void SetShape(CommonLib::IGeoShapePtr ptrShape);
+            // a blob compressed already (CShapeCompressor, the parallel ways pass): it is written as it is
+            void SetShapeBlob(const uint8_t* pData, size_t nSize);
             // the shapes are written compressed (GeometryCompression), null - as they are
             // the spatial index is packed once by Finish (IInsertCursor::SetBulkSpatialIndex)
             // nMemoryBytes - the boxes kept in memory, the rest goes to a temporary file (all the layers are loaded at once)
@@ -73,6 +75,7 @@ namespace GraphEngine {
             std::shared_ptr<GeometryCompression::CShapeCompressor>    m_ptrCompressor;
             std::shared_ptr<CommonLib::CGeoShape> m_ptrCompressed;   // reused for every row
             std::vector<uint8_t>              m_vecBlob;
+            bool                              m_bShapeCompressed = false;   // the shape is a compressed blob already
         };
 
         typedef std::shared_ptr<COSMTableWriter> COSMTableWriterPtr;

@@ -38,18 +38,28 @@ namespace GraphEngine {
                 }
             }
 
+            // after all the ids are added: Contains doesn't change the set (several threads)
+            void Seal()
+            {
+                if(!m_bNegativeSorted)
+                {
+                    std::sort(m_negative.begin(), m_negative.end());
+                    m_negative.erase(std::unique(m_negative.begin(), m_negative.end()), m_negative.end());
+                    m_bNegativeSorted = true;
+                }
+            }
+
             bool Contains(int64_t nId)
             {
+                Seal();
+                return ContainsSealed(nId);
+            }
+
+            // thread safe after Seal
+            bool ContainsSealed(int64_t nId) const
+            {
                 if(nId < 0)
-                {
-                    if(!m_bNegativeSorted)
-                    {
-                        std::sort(m_negative.begin(), m_negative.end());
-                        m_negative.erase(std::unique(m_negative.begin(), m_negative.end()), m_negative.end());
-                        m_bNegativeSorted = true;
-                    }
                     return std::binary_search(m_negative.begin(), m_negative.end(), nId);
-                }
                 uint64_t nPage = (uint64_t)nId >> PageBits;
                 if(nPage >= m_pages.size() || !m_pages[(size_t)nPage])
                     return false;
@@ -83,7 +93,8 @@ namespace GraphEngine {
             COSMWayStore(const std::string& sTempDir, uint64_t nCacheBytes);
             ~COSMWayStore();
 
-            void Add(int64_t nId, const TOSMPoints& points);
+            void Add(int64_t nId, const TOSMPoints& points) { Add(nId, points.data(), points.size()); }
+            void Add(int64_t nId, const CommonLib::GisXYPoint* pPoints, size_t nCount);
             void Finish();
             bool Get(int64_t nId, TOSMPoints& points);
             uint64_t Count() const { return m_nCount; }

@@ -143,6 +143,9 @@ namespace GraphEngine {
                 FlushBuffer();
                 std::vector<SRecord>().swap(m_buffer);
                 m_vecSegments.resize((size_t)((m_nFileRecords + ((uint64_t)1 << SegmentBits) - 1) >> SegmentBits));
+                // all the segments are mapped now (address space only): the lookups of the threads don't change the store
+                for(size_t i = 0; i < m_vecSegments.size(); ++i)
+                    Segment(i);
                 m_bFinished = true;
                 if(progress)
                     progress(m_nCount);
@@ -166,6 +169,64 @@ namespace GraphEngine {
                 ptrSegment = std::move(ptrMapping);
             }
             return (const SRecord*)ptrSegment->Data();
+        }
+
+        const COSMFlatNodeStore::SRecord* COSMFlatNodeStore::Find(int64_t nId) const
+        {
+            if(nId < 0)
+            {
+                auto it = m_negative.find(nId);
+                return it != m_negative.end() ? &it->second : nullptr;
+            }
+            if((uint64_t)nId >= m_nFileRecords)
+                return nullptr;
+            const std::unique_ptr<CommonLib::file::CFileMapping>& ptrSegment = m_vecSegments[(size_t)((uint64_t)nId >> SegmentBits)];
+            const SRecord& record = ((const SRecord*)ptrSegment->Data())[(size_t)((uint64_t)nId & (((uint64_t)1 << SegmentBits) - 1))];
+            return record.lat != 0 ? &record : nullptr;
+        }
+
+        bool COSMFlatNodeStore::GetE7(int64_t nId, int32_t& nLon, int32_t& nLat) const
+        {
+            const SRecord* pRecord = Find(nId);
+            if(!pRecord)
+                return false;
+            nLon = pRecord->lon;
+            nLat = (int32_t)((int64_t)pRecord->lat - LatBias);
+            return true;
+        }
+
+        namespace
+        {
+            class CFlatLookup : public IOSMNodeLookup
+            {
+            public:
+                explicit CFlatLookup(const COSMFlatNodeStore& store) : m_store(store) {}
+
+                virtual bool Get(int64_t nId, double& dLon, double& dLat) override
+                {
+                    int32_t nLon = 0, nLat = 0;
+                    if(!m_store.GetE7(nId, nLon, nLat))
+                        return false;
+                    dLon = nLon / CoordScale;
+                    dLat = nLat / CoordScale;
+                    return true;
+                }
+
+                virtual bool GetE7(int64_t nId, int32_t& nLon, int32_t& nLat) override
+                {
+                    return m_store.GetE7(nId, nLon, nLat);
+                }
+
+            private:
+                const COSMFlatNodeStore& m_store;
+            };
+        }
+
+        std::unique_ptr<IOSMNodeLookup> COSMFlatNodeStore::CreateLookup(uint64_t /*nCacheBytes*/) const
+        {
+            if(!m_bFinished)
+                throw CommonLib::CExcBase("Flat node store: Finish isn't called");
+            return std::unique_ptr<IOSMNodeLookup>(new CFlatLookup(*this));
         }
 
         bool COSMFlatNodeStore::Get(int64_t nId, double& dLon, double& dLat)

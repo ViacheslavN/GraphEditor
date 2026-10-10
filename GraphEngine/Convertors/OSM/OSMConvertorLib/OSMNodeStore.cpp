@@ -1,6 +1,7 @@
 #include "OSMNodeStore.h"
 #include "../../../CommonLib/exception/exc_base.h"
 #include <algorithm>
+#include <cstdint>
 #include <cmath>
 #include <filesystem>
 #include <limits>
@@ -15,12 +16,15 @@ namespace GraphEngine {
             const double CoordScale = 1e7;
         }
 
-        COSMNodeStore::COSMNodeStore(const std::string& sTempDir, uint64_t nMemoryBytes) :
+        COSMNodeStore::COSMNodeStore(const std::string& sTempDir, uint64_t nMemoryBytes, uint64_t nExpectedNodes) :
                 m_sTempDir(sTempDir), m_nFileNodes(0), m_nCount(0), m_nLastId((std::numeric_limits<int64_t>::min)()),
                 m_bSorted(true), m_bFinished(false), m_pLastBlock(nullptr), m_nLastBlock(0), m_nHits(0), m_nMisses(0)
         {
             m_nMemoryNodes = (std::max)((uint64_t)BlockSize, nMemoryBytes / sizeof(SNode));
             m_nCacheBlocks = (size_t)(std::max)((uint64_t)16, nMemoryBytes / (sizeof(SNode) * BlockSize));
+            // the buffer doesn't grow by copying (1.8 GB of the nodes of a country were copied several times)
+            if(nExpectedNodes)
+                m_buffer.reserve((size_t)(std::min)(m_nMemoryNodes, nExpectedNodes + nExpectedNodes / 8));
             if(m_sTempDir.empty())
             {
                 std::error_code ec;
@@ -46,8 +50,10 @@ namespace GraphEngine {
             sPath = TempFileName("_nodes.bin");
             try
             {
+                // the lookups of the threads open it again for reading
                 return CommonLib::file::CFileCreator::OpenFileA(sPath.c_str(), CommonLib::file::ofmCreateAlways, CommonLib::file::aeReadWrite,
-                                                                CommonLib::file::smNoMode, CommonLib::file::oftBinary);
+                                                                (CommonLib::file::enShareMode)(CommonLib::file::smRead | CommonLib::file::smWrite),
+                                                                CommonLib::file::oftBinary);
             }
             catch (std::exception& exc)
             {
@@ -351,6 +357,92 @@ namespace GraphEngine {
             return m_pLastBlock;
         }
 
+        // the lookup of one thread: the nodes in memory are shared, the blocks of the file are read by its own handle
+        class COSMNodeStore::CLookup : public IOSMNodeLookup
+        {
+        public:
+            CLookup(const COSMNodeStore& store, uint64_t nCacheBytes) : m_store(store)
+            {
+                if(!store.m_ptrFile.get())
+                    return;
+                m_ptrFile = CommonLib::file::CFileCreator::OpenFileA(store.m_sFilePath.c_str(), CommonLib::file::ofmOpenExisting, CommonLib::file::arRead,
+                                                                     (CommonLib::file::enShareMode)(CommonLib::file::smRead | CommonLib::file::smWrite),
+                                                                     CommonLib::file::oftBinary);
+                size_t nSlots = (size_t)(std::max)((uint64_t)16, nCacheBytes / (sizeof(SNode) * BlockSize));
+                m_cache.resize(nSlots);
+            }
+
+            virtual bool Get(int64_t nId, double& dLon, double& dLat) override
+            {
+                const SNode* pNode = FindNode(nId);
+                if(!pNode)
+                    return false;
+                dLon = pNode->lon / CoordScale;
+                dLat = pNode->lat / CoordScale;
+                return true;
+            }
+
+            virtual bool GetE7(int64_t nId, int32_t& nLon, int32_t& nLat) override
+            {
+                const SNode* pNode = FindNode(nId);
+                if(!pNode)
+                    return false;
+                nLon = pNode->lon;
+                nLat = pNode->lat;
+                return true;
+            }
+
+        private:
+            struct SSlot
+            {
+                uint64_t nBlock = UINT64_MAX;
+                std::vector<SNode> nodes;
+            };
+
+            static const SNode* Search(const SNode* pNodes, size_t nCount, int64_t nId)
+            {
+                const SNode* pEnd = pNodes + nCount;
+                const SNode* pFound = std::lower_bound(pNodes, pEnd, nId, [](const SNode& node, int64_t id) { return node.id < id; });
+                return pFound != pEnd && pFound->id == nId ? pFound : nullptr;
+            }
+
+            const SNode* FindNode(int64_t nId)
+            {
+                if(!m_ptrFile.get())
+                    return Search(m_store.m_buffer.data(), m_store.m_buffer.size(), nId);
+
+                const std::vector<int64_t>& firstIds = m_store.m_vecBlockFirstIds;
+                if(firstIds.empty() || nId < firstIds[0])
+                    return nullptr;
+                auto it = std::upper_bound(firstIds.begin(), firstIds.end(), nId);
+                uint64_t nBlock = (uint64_t)(it - firstIds.begin()) - 1;
+
+                SSlot& slot = m_cache[(size_t)(nBlock % m_cache.size())];
+                if(slot.nBlock != nBlock)
+                {
+                    uint64_t nStart = nBlock * BlockSize;
+                    size_t nRead = (size_t)(std::min)((uint64_t)BlockSize, m_store.m_nFileNodes - nStart);
+                    slot.nodes.resize(nRead);
+                    slot.nBlock = UINT64_MAX;
+                    COSMNodeStore::Read(m_ptrFile, nStart, slot.nodes.data(), nRead);
+                    slot.nBlock = nBlock;
+                }
+                return Search(slot.nodes.data(), slot.nodes.size(), nId);
+            }
+
+        private:
+            const COSMNodeStore& m_store;
+            CommonLib::file::TFilePtr m_ptrFile;
+            std::vector<SSlot> m_cache;   // direct mapped by the block number
+        };
+
+        std::unique_ptr<IOSMNodeLookup> COSMNodeStore::CreateLookup(uint64_t nCacheBytes) const
+        {
+            if(!m_bFinished)
+                throw CommonLib::CExcBase("Node store: Finish isn't called");
+            return std::unique_ptr<IOSMNodeLookup>(new CLookup(*this, nCacheBytes));
+        }
+
         bool COSMNodeStore::Get(int64_t nId, double& dLon, double& dLat)
         {
             if(!m_bFinished)
@@ -393,7 +485,10 @@ namespace GraphEngine {
         {
             if(ResolveType(type, sOSMPath, nFileSize) == OSMNodeStoreFlat)
                 return std::unique_ptr<IOSMNodeStore>(new COSMFlatNodeStore(sTempDir));
-            return std::unique_ptr<IOSMNodeStore>(new COSMNodeStore(sTempDir, nMemoryBytes));
+            // a .pbf has about 150 million nodes per GB (the buffer is reserved, it doesn't grow by copying)
+            bool bPbf = sOSMPath.size() >= 4 && (sOSMPath.compare(sOSMPath.size() - 4, 4, ".pbf") == 0 || sOSMPath.compare(sOSMPath.size() - 4, 4, ".PBF") == 0);
+            uint64_t nExpected = bPbf ? nFileSize / 1024 * 150 : 0;
+            return std::unique_ptr<IOSMNodeStore>(new COSMNodeStore(sTempDir, nMemoryBytes, nExpected));
         }
     }
 }

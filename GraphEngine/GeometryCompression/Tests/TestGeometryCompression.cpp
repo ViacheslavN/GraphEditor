@@ -413,3 +413,74 @@ TEST_CASE("Geometry compression: precision by the units and the extent", "[geomc
     degrees.xMin = -180; degrees.xMax = 180; degrees.yMin = -90; degrees.yMax = 90;
     REQUIRE(MaxCompressParamsForExtent(degrees).nScaleExponent == 13);
 }
+
+TEST_CASE("Geometry compression: points without a shape and quantized integers", "[geomcompress]")
+{
+    using namespace GraphEngine::GeometryCompression;
+    std::mt19937 rnd(5);
+    std::uniform_int_distribution<int32_t> step(-3000, 3000);
+
+    // two rings of a polygon in 1e-7 degrees (OSM integers), closed
+    std::vector<int64_t> xs, ys;
+    std::vector<uint32_t> parts;
+    for(int ring = 0; ring < 2; ++ring)
+    {
+        int64_t x = 140000000 + ring * 500000, y = 500000000;
+        size_t nStart = xs.size();
+        for(int i = 0; i < 300; ++i)
+        {
+            xs.push_back(x);
+            ys.push_back(y);
+            x += step(rnd);
+            y += step(rnd);
+        }
+        xs.push_back(xs[nStart]);
+        ys.push_back(ys[nStart]);
+        parts.push_back((uint32_t)(xs.size() - nStart));
+    }
+
+    std::vector<CommonLib::GisXYPoint> points(xs.size());
+    for(size_t i = 0; i < xs.size(); ++i)
+    {
+        points[i].x = xs[i] / 1e7;
+        points[i].y = ys[i] / 1e7;
+    }
+
+    CommonLib::CGeoShape shape;
+    shape.Create(CommonLib::shape_type_polygon, (uint32_t)points.size(), (uint32_t)parts.size());
+    std::copy(points.begin(), points.end(), shape.GetPoints());
+    shape.GetParts()[0] = 0;
+    shape.GetParts()[1] = parts[0];
+    shape.CalcBB();
+
+    SShapeCompressParams params;
+    params.nScaleExponent = 7;
+    CShapeCompressor compressor(params);
+    std::vector<TByte> fromShape, fromPoints, fromIntegers;
+    REQUIRE(compressor.Compress(shape, fromShape));
+    REQUIRE(compressor.Compress(CommonLib::shape_type_polygon, points.data(), (uint32_t)points.size(), parts.data(), (uint32_t)parts.size(), fromPoints));
+    REQUIRE(compressor.CompressQuantized(CommonLib::shape_type_polygon, xs.data(), ys.data(), (uint32_t)xs.size(), parts.data(), (uint32_t)parts.size(), fromIntegers));
+    // the same blob: the doubles of the OSM integers come back exactly
+    REQUIRE(fromPoints == fromShape);
+    REQUIRE(fromIntegers == fromShape);
+
+    CommonLib::CGeoShape read;
+    read.Import(fromIntegers.data(), (uint32_t)fromIntegers.size());
+    REQUIRE(read.GetPartCount() == 2);
+    REQUIRE(read.GetPointCnt() == xs.size());
+    REQUIRE(read.GetPoints()[100].x == points[100].x);
+    REQUIRE(read.GetPoints()[400].y == points[400].y);
+
+    // a polyline of one part, a point
+    REQUIRE(compressor.CompressQuantized(CommonLib::shape_type_polyline, xs.data(), ys.data(), 50, nullptr, 0, fromIntegers) == true);
+    read.Import(fromIntegers.data(), (uint32_t)fromIntegers.size());
+    REQUIRE(read.GetPointCnt() == 50);
+    REQUIRE(compressor.CompressQuantized(CommonLib::shape_type_point, xs.data(), ys.data(), 1, nullptr, 0, fromIntegers));
+    read.Import(fromIntegers.data(), (uint32_t)fromIntegers.size());
+    REQUIRE(read.GetPoints()[0].x == points[0].x);
+
+    // wrong parts
+    uint32_t wrong[2] = {10, 10};
+    REQUIRE_THROWS(compressor.CompressQuantized(CommonLib::shape_type_polyline, xs.data(), ys.data(), 50, wrong, 2, fromIntegers));
+    REQUIRE_FALSE(compressor.CompressQuantized(CommonLib::shape_type_polyline_z, xs.data(), ys.data(), 50, nullptr, 0, fromIntegers));
+}

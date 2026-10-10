@@ -106,6 +106,16 @@ namespace GraphEngine {
         void COSMTableWriter::SetShape(CommonLib::IGeoShapePtr ptrShape)
         {
             m_ptrShape = ptrShape;
+            m_bShapeCompressed = false;
+        }
+
+        void COSMTableWriter::SetShapeBlob(const uint8_t* pData, size_t nSize)
+        {
+            if(!m_ptrCompressed.get())
+                m_ptrCompressed = std::make_shared<CommonLib::CGeoShape>();
+            m_ptrCompressed->Import(pData, (uint32_t)nSize);
+            m_ptrShape = m_ptrCompressed;
+            m_bShapeCompressed = true;
         }
 
         void COSMTableWriter::Insert()
@@ -134,7 +144,7 @@ namespace GraphEngine {
 
                 if(m_nShapeColumn >= 0)
                 {
-                    if(m_ptrShape.get() && m_ptrCompressor.get() && m_ptrCompressor->Compress(*m_ptrShape, m_vecBlob))
+                    if(m_ptrShape.get() && !m_bShapeCompressed && m_ptrCompressor.get() && m_ptrCompressor->Compress(*m_ptrShape, m_vecBlob))
                     {
                         // the box of the compressed shape is the one of the rounded coordinates
                         if(!m_ptrCompressed.get())
@@ -161,6 +171,7 @@ namespace GraphEngine {
                         m_ptrInsert->BindBlob(m_nShapeColumn, nullptr, 0, true);
                 }
                 m_ptrShape.reset();
+                m_bShapeCompressed = false;
 
                 m_ptrInsert->Next();
             }

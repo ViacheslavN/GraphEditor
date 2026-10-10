@@ -8,6 +8,10 @@
 #include "OSMConvertor.h"
 #include <algorithm>
 #include <chrono>
+#include <condition_variable>
+#include <deque>
+#include <mutex>
+#include <thread>
 #include <filesystem>
 #include <cstdlib>
 #include <cstring>
@@ -98,6 +102,21 @@ namespace GraphEngine {
 
                 void Write(int64_t nId, char cType, const SOSMMatch& match, const COSMTags& tags, CommonLib::IGeoShapePtr ptrShape)
                 {
+                    SetFields(nId, cType, match, tags);
+                    m_ptrWriter->SetShape(ptrShape);
+                    m_ptrWriter->Insert();
+                }
+
+                // the geometry is a compressed blob (the parallel ways pass)
+                void WriteBlob(int64_t nId, char cType, const SOSMMatch& match, const COSMTags& tags, const uint8_t* pBlob, size_t nBlobSize)
+                {
+                    SetFields(nId, cType, match, tags);
+                    m_ptrWriter->SetShapeBlob(pBlob, nBlobSize);
+                    m_ptrWriter->Insert();
+                }
+
+                void SetFields(int64_t nId, char cType, const SOSMMatch& match, const COSMTags& tags)
+                {
                     m_ptrWriter->SetInt64(0, nId);
                     m_ptrWriter->SetText(1, std::string(1, cType));
                     const char* pszName = m_sNameKey.empty() ? nullptr : tags.Get(m_sNameKey.c_str());
@@ -135,8 +154,6 @@ namespace GraphEngine {
                                 break;
                         }
                     }
-                    m_ptrWriter->SetShape(ptrShape);
-                    m_ptrWriter->Insert();
                 }
 
                 COSMTableWriterPtr Writer() const { return m_ptrWriter; }
@@ -545,11 +562,57 @@ namespace GraphEngine {
                 std::vector<int64_t> m_vecWays;
             };
 
-            // pass 2: ways (lines, polygons, members of the multipolygons)
+            // pass 2: ways (lines, polygons, members of the multipolygons) in parallel:
+            //  - the reader thread copies the ways of the blocks into batches;
+            //  - the workers find the layers, the node coordinates (each worker has its own node lookup) and make the
+            //    geometry: compressed blobs straight from the points (no CGeoShape), for longitude / latitude with 7 decimals
+            //    straight from the OSM integers of the node store;
+            //  - the reader thread writes the results of the batches in the order of the file: the table rows,
+            //    the multipolygon ways, the tags table. The output is the same as the one of a sequential pass.
             class CWaysHandler : public IOSMReadHandler
             {
             public:
-                explicit CWaysHandler(CRun& run) : m_run(run) {}
+                CWaysHandler(CRun& run, std::shared_ptr<GeometryCompression::CShapeCompressor> ptrCompressor, int nThreads, uint64_t nNodeCacheBytes) :
+                        m_run(run), m_ptrCompressor(ptrCompressor), m_pCurrent(nullptr), m_bStop(false)
+                {
+                    if(nThreads <= 0)
+                    {
+                        unsigned int nCores = std::thread::hardware_concurrency();
+                        nThreads = nCores > 1 ? (int)nCores - 1 : 1;
+                    }
+                    nThreads = (std::min)(nThreads, 32);
+                    m_nMaxInFlight = (size_t)nThreads * 2 + 2;
+
+                    // the OSM integers go to the blob as they are: 1e-7 degrees = 7 decimals of longitude / latitude
+                    m_bIntegers = m_ptrCompressor.get() && !m_run.projection.IsWebMercator() && m_ptrCompressor->GetParams().nScaleExponent == 7;
+
+                    m_run.memberWays.Seal();
+                    m_vecWorkers.resize((size_t)nThreads);
+                    for(size_t i = 0; i < m_vecWorkers.size(); ++i)
+                    {
+                        SWorker& worker = m_vecWorkers[i];
+                        if(m_run.pNodes)
+                            worker.ptrLookup = m_run.pNodes->CreateLookup((std::max)((uint64_t)16 * 1024 * 1024, nNodeCacheBytes / m_vecWorkers.size()));
+                        if(m_ptrCompressor.get())
+                            worker.ptrCompressor.reset(new GeometryCompression::CShapeCompressor(m_ptrCompressor->GetParams()));
+                    }
+                    try
+                    {
+                        for(size_t i = 0; i < m_vecWorkers.size(); ++i)
+                            m_vecWorkers[i].thread = std::thread(&CWaysHandler::WorkerLoop, this, i);
+                    }
+                    catch (...)
+                    {
+                        Stop();
+                        throw;
+                    }
+                    m_pCurrent = NewBatch();
+                }
+
+                ~CWaysHandler()
+                {
+                    Stop();
+                }
 
                 virtual bool OnNode(const readosm_node&) { return true; }
                 virtual bool OnRelation(const readosm_relation&) { return true; }
@@ -562,70 +625,439 @@ namespace GraphEngine {
                 virtual bool OnWay(const readosm_way& way)
                 {
                     ++m_run.progress.nWays;
-                    if(way.node_ref_count < 2)
-                        return m_run.Step();
-
-                    bool bMember = !m_run.memberWays.IsEmpty() && m_run.memberWays.Contains(way.id);
-
-                    SOSMMatch line, polygon;
-                    CFeatureWriter* pLine = nullptr;
-                    CFeatureWriter* pPolygon = nullptr;
-                    COSMTags tags(way.tags, way.tag_count);
-                    bool bClosed = way.node_ref_count >= 4 && way.node_refs[0] == way.node_refs[way.node_ref_count - 1];
-                    if(way.tag_count > 0)
+                    SBatch& batch = *m_pCurrent;
+                    SWay item;
+                    item.nId = way.id;
+                    item.nRefStart = (uint32_t)batch.refs.size();
+                    item.nRefCount = (uint32_t)(way.node_ref_count > 0 ? way.node_ref_count : 0);
+                    item.nTagStart = (uint32_t)(batch.tagOffsets.size() / 2);
+                    item.nTagCount = (uint32_t)(way.tag_count > 0 ? way.tag_count : 0);
+                    batch.refs.insert(batch.refs.end(), way.node_refs, way.node_refs + item.nRefCount);
+                    for(uint32_t i = 0; i < item.nTagCount; ++i)
                     {
-                        m_run.schema.MatchWay(tags, bClosed, line, polygon);
-                        pLine = m_run.LayerWriter(line);
-                        pPolygon = m_run.LayerWriter(polygon);
+                        batch.tagOffsets.push_back((uint32_t)batch.text.size());
+                        const char* pszKey = way.tags[i].key ? way.tags[i].key : "";
+                        batch.text.append(pszKey, strlen(pszKey) + 1);
+                        batch.tagOffsets.push_back((uint32_t)batch.text.size());
+                        const char* pszValue = way.tags[i].value ? way.tags[i].value : "";
+                        batch.text.append(pszValue, strlen(pszValue) + 1);
                     }
+                    batch.ways.push_back(item);
 
-                    if(pLine || pPolygon || bMember)
-                    {
-                        m_points.clear();
-                        for(int i = 0; i < way.node_ref_count; ++i)
-                        {
-                            CommonLib::GisXYPoint pt;
-                            if(m_run.Project(way.node_refs[i], pt))
-                                m_points.push_back(pt);
-                        }
-
-                        if(pLine && m_points.size() >= 2)
-                        {
-                            std::vector<TOSMPoints> parts(1, m_points);
-                            CommonLib::IGeoShapePtr ptrShape = COSMGeometry::CreatePolyline(parts);
-                            if(ptrShape.get())
-                            {
-                                pLine->Write(way.id, 'w', line, tags, ptrShape);
-                                ++m_run.nFeatures;
-                            }
-                        }
-
-                        // the ring is closed if the nodes are (a missing node of an extract can make it open)
-                        bool bRing = m_points.size() >= 4 && m_points.front().x == m_points.back().x && m_points.front().y == m_points.back().y;
-                        if(pPolygon && bRing)
-                        {
-                            std::vector<TOSMPoints> rings(1, m_points);
-                            std::vector<bool> outer(1, true);
-                            CommonLib::IGeoShapePtr ptrShape = COSMGeometry::CreatePolygon(rings, outer);
-                            if(ptrShape.get())
-                            {
-                                pPolygon->Write(way.id, 'w', polygon, tags, ptrShape);
-                                ++m_run.nFeatures;
-                            }
-                        }
-
-                        if(bMember && m_points.size() >= 2)
-                            m_run.ptrWays->Add(way.id, m_points);
-                    }
-
-                    if(way.tag_count > 0 && (m_run.IsSelectedLayer(line) || m_run.IsSelectedLayer(polygon)))
-                        m_run.WriteTags('w', way.id, tags, way.tags);
+                    if(batch.ways.size() >= BatchWays || batch.refs.size() >= BatchRefs || batch.text.size() >= BatchText)
+                        Submit();
                     return m_run.Step();
                 }
 
+                // after the reading: the last batches are written
+                void Finish()
+                {
+                    Submit();
+                    while(!m_inFlight.empty())
+                        WriteFront();
+                }
+
             private:
-                CRun&      m_run;
-                TOSMPoints m_points;
+                static const size_t BatchWays = 4096;
+                static const size_t BatchRefs = 512 * 1024;
+                static const size_t BatchText = 4 * 1024 * 1024;
+
+                struct SWay
+                {
+                    int64_t  nId;
+                    uint32_t nRefStart;
+                    uint32_t nRefCount;
+                    uint32_t nTagStart;   // pairs in tagOffsets
+                    uint32_t nTagCount;
+                };
+
+                struct SResult
+                {
+                    CFeatureWriter* pLine = nullptr;
+                    CFeatureWriter* pPolygon = nullptr;
+                    SOSMMatch line;
+                    SOSMMatch polygon;
+                    CommonLib::IGeoShapePtr ptrLine;      // not compressed (no compressor / out of the integer range)
+                    CommonLib::IGeoShapePtr ptrPolygon;
+                    uint32_t nLineBlob = 0, nLineBlobSize = 0;
+                    uint32_t nPolygonBlob = 0, nPolygonBlobSize = 0;
+                    uint32_t nMemberStart = 0, nMemberCount = 0;   // the points of a multipolygon member way
+                    bool     bTags = false;                        // the tags go to the tags table
+                };
+
+                struct SBatch
+                {
+                    std::vector<SWay>     ways;
+                    std::vector<int64_t>  refs;
+                    std::vector<uint32_t> tagOffsets;   // key, value: offsets of the strings in text
+                    std::string           text;
+
+                    std::vector<SResult>  results;
+                    std::vector<GeometryCompression::TByte> blobs;
+                    TOSMPoints            memberPoints;
+                    uint64_t              nMissingNodes = 0;
+                    std::exception_ptr    ptrError;
+                    bool                  bDone = false;
+
+                    void Clear()
+                    {
+                        ways.clear();
+                        refs.clear();
+                        tagOffsets.clear();
+                        text.clear();
+                        results.clear();
+                        blobs.clear();
+                        memberPoints.clear();
+                        nMissingNodes = 0;
+                        ptrError = nullptr;
+                        bDone = false;
+                    }
+
+                    void Tags(const SWay& way, std::vector<readosm_tag>& tags) const
+                    {
+                        tags.clear();
+                        for(uint32_t i = 0; i < way.nTagCount; ++i)
+                        {
+                            readosm_tag tag = {text.data() + tagOffsets[2 * (way.nTagStart + i)], text.data() + tagOffsets[2 * (way.nTagStart + i) + 1]};
+                            tags.push_back(tag);
+                        }
+                    }
+                };
+
+                struct SWorker
+                {
+                    std::unique_ptr<IOSMNodeLookup> ptrLookup;
+                    std::unique_ptr<GeometryCompression::CShapeCompressor> ptrCompressor;
+                    std::vector<readosm_tag> tags;
+                    TOSMPoints points;
+                    std::vector<int64_t> xs, ys;
+                    std::vector<GeometryCompression::TByte> blob;
+                    std::thread thread;
+                };
+
+                SBatch* NewBatch()
+                {
+                    if(!m_vecFree.empty())
+                    {
+                        SBatch* pBatch = m_vecFree.back();
+                        m_vecFree.pop_back();
+                        pBatch->Clear();
+                        return pBatch;
+                    }
+                    m_vecBatches.push_back(std::unique_ptr<SBatch>(new SBatch()));
+                    return m_vecBatches.back().get();
+                }
+
+                void Submit()
+                {
+                    if(!m_pCurrent || m_pCurrent->ways.empty())
+                        return;
+                    {
+                        std::lock_guard<std::mutex> lock(m_mutex);
+                        m_queue.push_back(m_pCurrent);
+                    }
+                    m_cvWork.notify_one();
+                    m_inFlight.push_back(m_pCurrent);
+                    m_pCurrent = NewBatch();
+
+                    // the finished batches are written, the reader waits when too many are in work
+                    while(!m_inFlight.empty() && (m_inFlight.size() > m_nMaxInFlight || IsDone(m_inFlight.front())))
+                        WriteFront();
+                }
+
+                bool IsDone(SBatch* pBatch)
+                {
+                    std::lock_guard<std::mutex> lock(m_mutex);
+                    return pBatch->bDone;
+                }
+
+                void WriteFront()
+                {
+                    SBatch* pBatch = m_inFlight.front();
+                    {
+                        std::unique_lock<std::mutex> lock(m_mutex);
+                        m_cvDone.wait(lock, [pBatch]() { return pBatch->bDone; });
+                    }
+                    m_inFlight.pop_front();
+                    m_vecFree.push_back(pBatch);
+                    if(pBatch->ptrError)
+                        std::rethrow_exception(pBatch->ptrError);
+                    Write(*pBatch);
+                }
+
+                void Stop()
+                {
+                    {
+                        std::lock_guard<std::mutex> lock(m_mutex);
+                        m_bStop = true;
+                        m_queue.clear();    // not processed: the conversion stops
+                    }
+                    m_cvWork.notify_all();
+                    for(size_t i = 0; i < m_vecWorkers.size(); ++i)
+                    {
+                        if(m_vecWorkers[i].thread.joinable())
+                            m_vecWorkers[i].thread.join();
+                    }
+                }
+
+                void WorkerLoop(size_t nWorker)
+                {
+                    SWorker& worker = m_vecWorkers[nWorker];
+                    for(;;)
+                    {
+                        SBatch* pBatch = nullptr;
+                        {
+                            std::unique_lock<std::mutex> lock(m_mutex);
+                            m_cvWork.wait(lock, [this]() { return m_bStop || !m_queue.empty(); });
+                            if(m_bStop)
+                                return;
+                            pBatch = m_queue.front();
+                            m_queue.pop_front();
+                        }
+                        try
+                        {
+                            Process(worker, *pBatch);
+                        }
+                        catch (...)
+                        {
+                            pBatch->ptrError = std::current_exception();
+                        }
+                        {
+                            std::lock_guard<std::mutex> lock(m_mutex);
+                            pBatch->bDone = true;
+                        }
+                        m_cvDone.notify_all();
+                    }
+                }
+
+                // positive - counter clockwise; relative to the first point (the integers of the planet stay exact)
+                template<class TX>
+                static double SignedArea(const TX* pX, const TX* pY, size_t nCount)
+                {
+                    double dArea = 0.;
+                    for(size_t i = 1; i + 1 < nCount; ++i)
+                        dArea += double(pX[i] - pX[0]) * double(pY[i + 1] - pY[0]) - double(pX[i + 1] - pX[0]) * double(pY[i] - pY[0]);
+                    return dArea / 2.;
+                }
+
+                void AppendBlob(SBatch& batch, const std::vector<GeometryCompression::TByte>& blob, uint32_t& nStart, uint32_t& nSize)
+                {
+                    nStart = (uint32_t)batch.blobs.size();
+                    nSize = (uint32_t)blob.size();
+                    batch.blobs.insert(batch.blobs.end(), blob.begin(), blob.end());
+                }
+
+                // the workers: everything but the writing
+                void Process(SWorker& worker, SBatch& batch)
+                {
+                    batch.results.assign(batch.ways.size(), SResult());
+                    for(size_t w = 0; w < batch.ways.size(); ++w)
+                    {
+                        const SWay& way = batch.ways[w];
+                        SResult& result = batch.results[w];
+                        if(way.nRefCount < 2)
+                            continue;
+
+                        batch.Tags(way, worker.tags);
+                        COSMTags tags(worker.tags.empty() ? nullptr : worker.tags.data(), (int)worker.tags.size());
+                        const int64_t* pRefs = batch.refs.data() + way.nRefStart;
+                        const uint32_t nRefs = way.nRefCount;
+
+                        bool bMember = !m_run.memberWays.IsEmpty() && m_run.memberWays.ContainsSealed(way.nId);
+                        bool bClosed = nRefs >= 4 && pRefs[0] == pRefs[nRefs - 1];
+                        SOSMMatch line, polygon;
+                        CFeatureWriter* pLine = nullptr;
+                        CFeatureWriter* pPolygon = nullptr;
+                        if(way.nTagCount > 0)
+                        {
+                            m_run.schema.MatchWay(tags, bClosed, line, polygon);
+                            pLine = m_run.LayerWriter(line);
+                            pPolygon = m_run.LayerWriter(polygon);
+                            result.bTags = m_run.IsSelectedLayer(line) || m_run.IsSelectedLayer(polygon);
+                        }
+                        if(!(pLine || pPolygon || bMember) || !worker.ptrLookup)
+                            continue;
+
+                        if(m_bIntegers)
+                            ProcessIntegers(worker, batch, result, pRefs, nRefs, pLine, line, pPolygon, polygon, bMember);
+                        else
+                            ProcessDoubles(worker, batch, result, pRefs, nRefs, pLine, line, pPolygon, polygon, bMember);
+                    }
+                }
+
+                void ProcessDoubles(SWorker& worker, SBatch& batch, SResult& result, const int64_t* pRefs, uint32_t nRefs,
+                                    CFeatureWriter* pLine, const SOSMMatch& line, CFeatureWriter* pPolygon, const SOSMMatch& polygon, bool bMember)
+                {
+                    TOSMPoints& points = worker.points;
+                    points.clear();
+                    for(uint32_t i = 0; i < nRefs; ++i)
+                    {
+                        double dLon, dLat;
+                        if(!worker.ptrLookup->Get(pRefs[i], dLon, dLat))
+                        {
+                            ++batch.nMissingNodes;
+                            continue;
+                        }
+                        CommonLib::GisXYPoint pt;
+                        m_run.projection.Project(dLon, dLat, pt.x, pt.y);
+                        points.push_back(pt);
+                    }
+                    const uint32_t nPoints = (uint32_t)points.size();
+
+                    if(pLine && nPoints >= 2)
+                    {
+                        result.pLine = pLine;
+                        result.line = line;
+                        if(!worker.ptrCompressor || !worker.ptrCompressor->Compress(CommonLib::shape_type_polyline, points.data(), nPoints, &nPoints, 1, worker.blob))
+                            result.ptrLine = COSMGeometry::CreatePolyline(std::vector<TOSMPoints>(1, points));
+                        else
+                            AppendBlob(batch, worker.blob, result.nLineBlob, result.nLineBlobSize);
+                    }
+
+                    // the ring is closed if the nodes are (a missing node of an extract can make it open)
+                    bool bRing = nPoints >= 4 && points.front().x == points.back().x && points.front().y == points.back().y;
+                    if(pPolygon && bRing)
+                    {
+                        result.pPolygon = pPolygon;
+                        result.polygon = polygon;
+                        bool bCompressed = false;
+                        if(worker.ptrCompressor)
+                        {
+                            // outer ring: clockwise (y goes up), as COSMGeometry::CreatePolygon
+                            TOSMPoints ring(points);
+                            double dArea = 0.;
+                            for(uint32_t i = 1; i + 1 < nPoints; ++i)
+                                dArea += (ring[i].x - ring[0].x) * (ring[i + 1].y - ring[0].y) - (ring[i + 1].x - ring[0].x) * (ring[i].y - ring[0].y);
+                            if(dArea > 0.)
+                                std::reverse(ring.begin(), ring.end());
+                            bCompressed = worker.ptrCompressor->Compress(CommonLib::shape_type_polygon, ring.data(), nPoints, &nPoints, 1, worker.blob);
+                            if(bCompressed)
+                                AppendBlob(batch, worker.blob, result.nPolygonBlob, result.nPolygonBlobSize);
+                        }
+                        if(!bCompressed)
+                            result.ptrPolygon = COSMGeometry::CreatePolygon(std::vector<TOSMPoints>(1, points), std::vector<bool>(1, true));
+                    }
+
+                    if(bMember && nPoints >= 2)
+                    {
+                        result.nMemberStart = (uint32_t)batch.memberPoints.size();
+                        result.nMemberCount = nPoints;
+                        batch.memberPoints.insert(batch.memberPoints.end(), points.begin(), points.end());
+                    }
+                }
+
+                // longitude / latitude, 7 decimals: the integers of the node store are the quantized coordinates
+                void ProcessIntegers(SWorker& worker, SBatch& batch, SResult& result, const int64_t* pRefs, uint32_t nRefs,
+                                     CFeatureWriter* pLine, const SOSMMatch& line, CFeatureWriter* pPolygon, const SOSMMatch& polygon, bool bMember)
+                {
+                    std::vector<int64_t>& xs = worker.xs;
+                    std::vector<int64_t>& ys = worker.ys;
+                    xs.clear();
+                    ys.clear();
+                    for(uint32_t i = 0; i < nRefs; ++i)
+                    {
+                        int32_t nLon, nLat;
+                        if(!worker.ptrLookup->GetE7(pRefs[i], nLon, nLat))
+                        {
+                            ++batch.nMissingNodes;
+                            continue;
+                        }
+                        xs.push_back(nLon);
+                        ys.push_back(nLat);
+                    }
+                    const uint32_t nPoints = (uint32_t)xs.size();
+
+                    if(pLine && nPoints >= 2)
+                    {
+                        result.pLine = pLine;
+                        result.line = line;
+                        worker.ptrCompressor->CompressQuantized(CommonLib::shape_type_polyline, xs.data(), ys.data(), nPoints, &nPoints, 1, worker.blob);
+                        AppendBlob(batch, worker.blob, result.nLineBlob, result.nLineBlobSize);
+                    }
+
+                    bool bRing = nPoints >= 4 && xs.front() == xs.back() && ys.front() == ys.back();
+                    if(pPolygon && bRing)
+                    {
+                        result.pPolygon = pPolygon;
+                        result.polygon = polygon;
+                        if(SignedArea(xs.data(), ys.data(), nPoints) > 0.)
+                        {
+                            std::vector<int64_t> rx(xs.rbegin(), xs.rend()), ry(ys.rbegin(), ys.rend());
+                            worker.ptrCompressor->CompressQuantized(CommonLib::shape_type_polygon, rx.data(), ry.data(), nPoints, &nPoints, 1, worker.blob);
+                        }
+                        else
+                            worker.ptrCompressor->CompressQuantized(CommonLib::shape_type_polygon, xs.data(), ys.data(), nPoints, &nPoints, 1, worker.blob);
+                        AppendBlob(batch, worker.blob, result.nPolygonBlob, result.nPolygonBlobSize);
+                    }
+
+                    if(bMember && nPoints >= 2)
+                    {
+                        result.nMemberStart = (uint32_t)batch.memberPoints.size();
+                        result.nMemberCount = nPoints;
+                        for(uint32_t i = 0; i < nPoints; ++i)
+                        {
+                            CommonLib::GisXYPoint pt;
+                            pt.x = xs[i] / 1e7;
+                            pt.y = ys[i] / 1e7;
+                            batch.memberPoints.push_back(pt);
+                        }
+                    }
+                }
+
+                // the reader thread, in the order of the file
+                void Write(SBatch& batch)
+                {
+                    m_run.nMissingNodes += batch.nMissingNodes;
+                    for(size_t w = 0; w < batch.ways.size(); ++w)
+                    {
+                        const SWay& way = batch.ways[w];
+                        SResult& result = batch.results[w];
+                        if(!result.pLine && !result.pPolygon && !result.nMemberCount && !result.bTags)
+                            continue;
+
+                        batch.Tags(way, m_tags);
+                        COSMTags tags(m_tags.empty() ? nullptr : m_tags.data(), (int)m_tags.size());
+                        if(result.pLine)
+                        {
+                            if(result.ptrLine.get())
+                                result.pLine->Write(way.nId, 'w', result.line, tags, result.ptrLine);
+                            else
+                                result.pLine->WriteBlob(way.nId, 'w', result.line, tags, batch.blobs.data() + result.nLineBlob, result.nLineBlobSize);
+                            ++m_run.nFeatures;
+                        }
+                        if(result.pPolygon)
+                        {
+                            if(result.ptrPolygon.get())
+                                result.pPolygon->Write(way.nId, 'w', result.polygon, tags, result.ptrPolygon);
+                            else
+                                result.pPolygon->WriteBlob(way.nId, 'w', result.polygon, tags, batch.blobs.data() + result.nPolygonBlob, result.nPolygonBlobSize);
+                            ++m_run.nFeatures;
+                        }
+                        if(result.nMemberCount)
+                            m_run.ptrWays->Add(way.nId, batch.memberPoints.data() + result.nMemberStart, result.nMemberCount);
+                        if(result.bTags)
+                            m_run.WriteTags('w', way.nId, tags, m_tags.data());
+                    }
+                }
+
+            private:
+                CRun& m_run;
+                std::shared_ptr<GeometryCompression::CShapeCompressor> m_ptrCompressor;
+                bool m_bIntegers = false;
+                size_t m_nMaxInFlight = 4;
+
+                std::vector<std::unique_ptr<SBatch> > m_vecBatches;   // all the batches, they live longer than the workers
+                std::vector<SBatch*> m_vecFree;
+                std::deque<SBatch*>  m_inFlight;     // submitted, in the order of the file
+                SBatch*              m_pCurrent;
+                std::vector<readosm_tag> m_tags;
+
+                std::mutex m_mutex;
+                std::condition_variable m_cvWork;
+                std::condition_variable m_cvDone;
+                std::deque<SBatch*> m_queue;          // waiting for a worker
+                bool m_bStop;
+                std::vector<SWorker> m_vecWorkers;    // the last member: the threads are stopped first
             };
 
             void Read(const std::string& sPath, IOSMReadHandler& handler, int nObjects, int nThreads)
@@ -804,6 +1236,13 @@ namespace GraphEngine {
                 bool bWays = run.bLines || run.tagsTable.ptrWriter.get();
 
                 std::error_code ec;
+                // the folder of the temporary files (node coordinates, multipolygons, spatial index runs) is created
+                if(!m_settings.sTempDir.empty())
+                {
+                    std::filesystem::create_directories(std::filesystem::u8path(m_settings.sTempDir), ec);
+                    if(!std::filesystem::is_directory(std::filesystem::u8path(m_settings.sTempDir), ec))
+                        throw CommonLib::CExcBase("The folder for the temporary files can't be created: {0}", m_settings.sTempDir);
+                }
                 uint64_t nFileSize = std::filesystem::file_size(std::filesystem::u8path(m_ptrOSMMap->GetPath()), ec);
                 if(ec)
                     nFileSize = 0;
@@ -853,8 +1292,9 @@ namespace GraphEngine {
                     }
 
                     run.StartPass(2, OSMStageWays, "Reading ways");
-                    CWaysHandler handler(run);
+                    CWaysHandler handler(run, ptrCompressor, m_settings.nThreads, (uint64_t)m_settings.nNodeCacheMB * 1024 * 1024);
                     Read(m_ptrOSMMap->GetPath(), handler, COSMReader::ReadWays, m_settings.nThreads);
+                    handler.Finish();
                     if(run.ptrWays.get())
                         run.ptrWays->Finish();
                 }

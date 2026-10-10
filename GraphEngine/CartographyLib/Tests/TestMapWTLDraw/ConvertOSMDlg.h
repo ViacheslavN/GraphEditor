@@ -43,6 +43,9 @@ public:
 		COMMAND_ID_HANDLER(IDC_OSM_CLEAR_ALL, OnSelectAll)
 		COMMAND_HANDLER(IDC_OSM_PATH, EN_CHANGE, OnPathChanged)
 		COMMAND_HANDLER(IDC_OSM_NODE_STORE, CBN_SELCHANGE, OnNodeStoreChanged)
+		COMMAND_ID_HANDLER(IDC_OSM_TEMP_BROWSE, OnTempBrowse)
+		COMMAND_HANDLER(IDC_OSM_TEMP_DIR, EN_CHANGE, OnTempChanged)
+		COMMAND_HANDLER(IDC_OSM_OUTPUT, EN_CHANGE, OnTempChanged)
 	END_MSG_MAP()
 
 	LRESULT OnInitDialog(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/);
@@ -59,6 +62,8 @@ public:
 	LRESULT OnSelectAll(WORD /*wNotifyCode*/, WORD wID, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnPathChanged(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnNodeStoreChanged(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
+	LRESULT OnTempBrowse(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
+	LRESULT OnTempChanged(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 
 private:
 	// reads the metadata and the layers of the file (progress window, can be canceled), true - read
@@ -71,6 +76,10 @@ private:
 	void UpdateCompressControls();
 	// the node store chosen for the file (Auto - by its size) and its disk space
 	void UpdateNodeStoreInfo();
+	// the folder of the temporary files: the field, empty - the folder of the output database
+	std::wstring TempFolder() const;
+	// the folder and its free disk space
+	void UpdateTempInfo();
 	void FillDatasets();
 	void UpdateInfo();
 	GraphEngine::Convertors::IOSMDatasetPtr GetDataset(int nItem) const;
@@ -90,6 +99,7 @@ private:
 	bool          m_bAddToMap;
 	bool          m_bExportTags;    // the tags table is converted (off by default: it is the biggest table)
 	bool          m_bUpdating;      // the list / check box are changed by the code
+	static std::wstring s_sTempDir; // the folder of the temporary files, kept while the application runs
 };
 
 #endif

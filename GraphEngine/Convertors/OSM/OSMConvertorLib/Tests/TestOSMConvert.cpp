@@ -18,6 +18,8 @@
 #include <filesystem>
 #include <fstream>
 #include <random>
+#include <atomic>
+#include <thread>
 
 using namespace GraphEngine;
 using namespace GraphEngine::Convertors;
@@ -89,6 +91,7 @@ namespace
         settings.sTempDir = TestDir().string();
         settings.nNodeCacheMB = 1;
         settings.sNameLanguage = "en";
+        settings.nThreads = 4;     // several workers of the ways pass even on a small machine
         return settings;
     }
 }
@@ -117,6 +120,31 @@ TEST_CASE("OSM node store: unsorted nodes in a file", "[osm][nodes]")
     double dLon, dLat;
     REQUIRE_FALSE(store.Get(2, dLon, dLat));
     REQUIRE_FALSE(store.Get(1000000000, dLon, dLat));
+
+    // the lookups of the threads: their own file handles and caches, the same results
+    std::vector<std::thread> threads;
+    std::atomic<int> nErrors(0);
+    for(int t = 0; t < 4; ++t)
+    {
+        threads.emplace_back([&store, &ids, &nErrors, t]()
+        {
+            std::unique_ptr<IOSMNodeLookup> ptrLookup = store.CreateLookup(64 * 1024);
+            for(size_t i = (size_t)t; i < ids.size(); i += 7)
+            {
+                int32_t nLon = 0, nLat = 0;
+                double dLon = 0, dLat = 0;
+                if(!ptrLookup->GetE7(ids[i], nLon, nLat) || !ptrLookup->Get(ids[i], dLon, dLat) ||
+                   nLon != (int32_t)std::lround(((ids[i] % 3600) / 10.0 - 180) * 1e7) || dLat != nLat / 1e7)
+                    ++nErrors;
+            }
+            int32_t nLon, nLat;
+            if(ptrLookup->GetE7(2, nLon, nLat))
+                ++nErrors;
+        });
+    }
+    for(std::thread& thread : threads)
+        thread.join();
+    REQUIRE(nErrors == 0);
 }
 
 TEST_CASE("OSM geometry: multipolygon with a hole", "[osm][geometry]")

@@ -72,6 +72,8 @@ namespace
 	}
 }
 
+std::wstring CConvertOSMDlg::s_sTempDir;
+
 CConvertOSMDlg::CConvertOSMDlg() : m_bAddToMap(true), m_bExportTags(false), m_bUpdating(false)
 {
 
@@ -109,6 +111,9 @@ LRESULT CConvertOSMDlg::OnInitDialog(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*
 	comboStore.AddString(L"Flat file (continents, the planet)");
 	comboStore.SetCurSel((int)m_settings.nodeStore);
 	UpdateNodeStoreInfo();
+
+	SetDlgItemText(IDC_OSM_TEMP_DIR, s_sTempDir.c_str());
+	UpdateTempInfo();
 
 	UpdateInfo();
 	return TRUE;
@@ -331,9 +336,11 @@ LRESULT CConvertOSMDlg::OnBrowse(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWnd
 	if(fileDlg.DoModal() != IDOK)
 		return 0;
 
+	// only the path: the file is read by Read (a big file takes minutes) or converted at once by Convert all
 	m_editPath.SetWindowText(fileDlg.m_szFileName);
 	m_editOutput.SetWindowText(DefaultOutputPath(fileDlg.m_szFileName).c_str());
-	ReadMap(fileDlg.m_szFileName);
+	UpdateInfo();
+	GotoDlgCtrl(GetDlgItem(IDC_OSM_READ));
 	return 0;
 }
 
@@ -368,6 +375,64 @@ void CConvertOSMDlg::UpdateNodeStoreInfo()
 	sInfo += resolved == OSMNodeStoreFlat ? L"Temporary file up to ~115 GB (sparse), 64-bit only" :
 	                                        L"Temporary file of 16 bytes per node, the cache in memory";
 	SetDlgItemText(IDC_OSM_NODE_STORE_INFO, sInfo.c_str());
+}
+
+std::wstring CConvertOSMDlg::TempFolder() const
+{
+	std::wstring sFolder = Trim(GetText(GetDlgItem(IDC_OSM_TEMP_DIR)));
+	if(!sFolder.empty())
+		return sFolder;
+	// the drive of the result is chosen for the big data: the temporary files go next to it
+	std::wstring sOutput = Trim(GetText(GetDlgItem(IDC_OSM_OUTPUT)));
+	if(sOutput.empty())
+		return std::wstring();
+	return std::filesystem::path(sOutput).parent_path().wstring();
+}
+
+void CConvertOSMDlg::UpdateTempInfo()
+{
+	std::wstring sFolder = TempFolder();
+	if(sFolder.empty())
+	{
+		SetDlgItemText(IDC_OSM_TEMP_INFO, L"Empty - the folder of the output database (the planet needs about 150 GB there)");
+		return;
+	}
+
+	// the free space of the nearest existing folder (the folder is created by Run)
+	std::filesystem::path path(sFolder);
+	std::error_code ec;
+	while(!path.empty() && !std::filesystem::exists(path, ec) && path.has_parent_path() && path.parent_path() != path)
+		path = path.parent_path();
+	std::wstring sInfo = Trim(GetText(GetDlgItem(IDC_OSM_TEMP_DIR))).empty() ? L"The output folder: " : L"";
+	std::filesystem::space_info space = std::filesystem::space(path, ec);
+	if(!ec)
+	{
+		wchar_t szFree[64];
+		swprintf(szFree, 64, L"%.1f GB free", space.available / (1024. * 1024 * 1024));
+		sInfo += std::wstring(szFree) + L" (the node coordinates of the planet need ~115 GB, of a country 16 bytes per node)";
+	}
+	else
+		sInfo += L"the folder isn't available";
+	SetDlgItemText(IDC_OSM_TEMP_INFO, sInfo.c_str());
+}
+
+LRESULT CConvertOSMDlg::OnTempChanged(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/)
+{
+	UpdateTempInfo();
+	return 0;
+}
+
+LRESULT CConvertOSMDlg::OnTempBrowse(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/)
+{
+	std::wstring sCurrent = TempFolder();
+	CFolderDialog dlg(m_hWnd, L"Folder for the temporary files of the conversion (node coordinates, multipolygon ways)",
+	                  BIF_RETURNONLYFSDIRS | BIF_NEWDIALOGSTYLE);
+	if(!sCurrent.empty())
+		dlg.SetInitialFolder(sCurrent.c_str());
+	if(dlg.DoModal() != IDOK)
+		return 0;
+	SetDlgItemText(IDC_OSM_TEMP_DIR, dlg.GetFolderPath());
+	return 0;
 }
 
 LRESULT CConvertOSMDlg::OnPathChanged(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/)
@@ -502,6 +567,23 @@ bool CConvertOSMDlg::PrepareRun()
 	BOOL bOk = FALSE;
 	UINT nCacheMB = GetDlgItemInt(IDC_OSM_NODE_CACHE, &bOk, FALSE);
 	m_settings.nNodeCacheMB = bOk && nCacheMB >= 16 ? nCacheMB : 16;
+
+	// the temporary files: the folder is created when it doesn't exist
+	s_sTempDir = Trim(GetText(GetDlgItem(IDC_OSM_TEMP_DIR)));
+	std::wstring sTempDir = TempFolder();
+	if(!sTempDir.empty())
+	{
+		std::error_code ec;
+		std::filesystem::create_directories(std::filesystem::path(sTempDir), ec);
+		if(!std::filesystem::is_directory(std::filesystem::path(sTempDir), ec))
+		{
+			std::wstring sMsg = L"The folder for the temporary files can't be created:\n" + sTempDir;
+			MessageBox(sMsg.c_str(), Caption, MB_OK | MB_ICONWARNING);
+			GotoDlgCtrl(GetDlgItem(IDC_OSM_TEMP_DIR));
+			return false;
+		}
+	}
+	m_settings.sTempDir = WideToUtf8(sTempDir);   // empty - the system temporary folder
 	int nStore = CComboBox(GetDlgItem(IDC_OSM_NODE_STORE)).GetCurSel();
 	m_settings.nodeStore = nStore == OSMNodeStoreSorted ? OSMNodeStoreSorted : (nStore == OSMNodeStoreFlat ? OSMNodeStoreFlat : OSMNodeStoreAuto);
 	m_settings.bWebMercator = IsDlgButtonChecked(IDC_OSM_WEB_MERCATOR) == BST_CHECKED;

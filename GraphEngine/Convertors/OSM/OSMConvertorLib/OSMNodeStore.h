@@ -15,6 +15,17 @@ namespace GraphEngine {
 
         // Coordinates of the OSM nodes by id: the conversion stores them in the first pass (Add), the ways get them
         // in the second one (Get). The coordinates are stored with 1e-7 degree precision (as in OSM itself).
+        // Lookups of a finished node store for one thread (the parallel ways pass): every object has its own cache
+        // and file handle, the objects of one store can be used by different threads at the same time.
+        class IOSMNodeLookup
+        {
+        public:
+            virtual ~IOSMNodeLookup() {}
+            virtual bool Get(int64_t nId, double& dLon, double& dLat) = 0;
+            // the coordinates as stored: 1e-7 degrees (the OSM integers)
+            virtual bool GetE7(int64_t nId, int32_t& nLon, int32_t& nLat) = 0;
+        };
+
         class IOSMNodeStore
         {
         public:
@@ -30,6 +41,8 @@ namespace GraphEngine {
             virtual bool IsFinished() const = 0;
             virtual bool Get(int64_t nId, double& dLon, double& dLat) = 0;
             virtual uint64_t Count() const = 0;
+            // after Finish; nCacheBytes - the memory of the lookup for the cached blocks (a store on the disk)
+            virtual std::unique_ptr<IOSMNodeLookup> CreateLookup(uint64_t nCacheBytes) const = 0;
 
             // the store for the settings: Auto - the flat one for the files of a continent / the planet (see FlatNodeStoreFileSize)
             // on a 64-bit build, the sorted one otherwise; nFileSize - the size of the OSM file
@@ -51,7 +64,8 @@ namespace GraphEngine {
         class COSMNodeStore : public IOSMNodeStore
         {
         public:
-            COSMNodeStore(const std::string& sTempDir, uint64_t nMemoryBytes);
+            // nExpectedNodes - the buffer is reserved for so many nodes (up to the memory limit), 0 - unknown
+            COSMNodeStore(const std::string& sTempDir, uint64_t nMemoryBytes, uint64_t nExpectedNodes = 0);
             ~COSMNodeStore();
 
             virtual void Add(int64_t nId, double dLon, double dLat) override;
@@ -62,6 +76,7 @@ namespace GraphEngine {
             virtual bool Get(int64_t nId, double& dLon, double& dLat) override;
 
             virtual uint64_t Count() const override { return m_nCount; }
+            virtual std::unique_ptr<IOSMNodeLookup> CreateLookup(uint64_t nCacheBytes) const override;
             bool     IsInFile() const { return m_ptrFile.get() != nullptr; }
             uint64_t GetCacheHits() const { return m_nHits; }
             uint64_t GetCacheMisses() const { return m_nMisses; }
@@ -69,6 +84,8 @@ namespace GraphEngine {
             static const uint32_t BlockSize = 4096;   // nodes
 
         private:
+            class CLookup;
+            friend class CLookup;
             COSMNodeStore(const COSMNodeStore&);
             COSMNodeStore& operator=(const COSMNodeStore&);
 
@@ -89,8 +106,8 @@ namespace GraphEngine {
 
             void SpillBuffer();
             void Merge(TProgress progress);
-            void Read(CommonLib::file::TFilePtr ptrFile, uint64_t nPos, SNode* pNodes, size_t nCount);
-            void Write(CommonLib::file::TFilePtr ptrFile, uint64_t nPos, const SNode* pNodes, size_t nCount);
+            static void Read(CommonLib::file::TFilePtr ptrFile, uint64_t nPos, SNode* pNodes, size_t nCount);
+            static void Write(CommonLib::file::TFilePtr ptrFile, uint64_t nPos, const SNode* pNodes, size_t nCount);
             CommonLib::file::TFilePtr CreateTempFile(std::string& sPath) const;
             static void DeleteTempFile(CommonLib::file::TFilePtr& ptrFile, const std::string& sPath);
             void IndexNode(const SNode& node, uint64_t nIndex);

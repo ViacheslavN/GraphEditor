@@ -264,9 +264,13 @@ TEST_CASE("OSM conversion: the flat node store", "[osm][stores][convert]")
 
     for(eOSMNodeStore type : {OSMNodeStoreSorted, OSMNodeStoreFlat})
     {
+        // a new folder with a non-ASCII name: created by the conversion, empty after it (the temporary files are deleted)
+        std::filesystem::path tempDir = StoresDir() / std::filesystem::u8path(u8"temp \u0444\u0430\u0439\u043B\u044B") / std::to_string((int)type);
+        std::filesystem::remove_all(tempDir);
         SOSMConvertSettings settings;
-        settings.sTempDir = StoresDir().u8string();
+        settings.sTempDir = tempDir.u8string();
         settings.nodeStore = type;
+        settings.nThreads = 4;
         std::string sDb = (StoresDir() / ("flat_" + std::to_string((int)type) + ".sqlite")).u8string();
         for(const char* ext : {"", "-wal", "-shm", "-journal"})
             std::filesystem::remove(std::filesystem::u8path(sDb + ext));
@@ -281,6 +285,9 @@ TEST_CASE("OSM conversion: the flat node store", "[osm][stores][convert]")
         REQUIRE(ptrShape->GetPartCount() == 2);
         REQUIRE(ptrShape->GetPointCnt() == 10);
         REQUIRE_FALSE(ptrCursor->Next());
+
+        REQUIRE(std::filesystem::is_directory(tempDir));
+        REQUIRE(std::filesystem::is_empty(tempDir));
 
         // the missing node 99 is skipped
         ptrCursor = ptrDb->GetTable("osm_roads")->Select("SELECT Shape FROM osm_roads");

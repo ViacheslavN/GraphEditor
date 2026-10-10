@@ -131,6 +131,9 @@
 #define IDC_RASTER_NODATA               1251
 #define IDC_RASTER_INFO                 1252
 #define IDC_RASTER_RESET                1253
+#define IDC_OSM_TEMP_DIR                1254
+#define IDC_OSM_TEMP_BROWSE             1255
+#define IDC_OSM_TEMP_INFO               1256
 #define IDC_TABS                        1010
 #define IDC_SELECTOR_TYPE               1011
 #define IDC_SYMB_FIELD                  1012
@@ -208,7 +211,7 @@
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        201
 #define _APS_NEXT_COMMAND_VALUE         32799
-#define _APS_NEXT_CONTROL_VALUE         1254
+#define _APS_NEXT_CONTROL_VALUE         1257
 #define _APS_NEXT_SYMED_VALUE           114
 #endif
 #endif

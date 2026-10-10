@@ -28,6 +28,9 @@ namespace GraphEngine {
             virtual bool IsFinished() const override { return m_bFinished; }
             virtual bool Get(int64_t nId, double& dLon, double& dLat) override;
             virtual uint64_t Count() const override { return m_nCount; }
+            // the segments are mapped by Finish: the lookups only read the mapped memory
+            virtual std::unique_ptr<IOSMNodeLookup> CreateLookup(uint64_t nCacheBytes) const override;
+            bool GetE7(int64_t nId, int32_t& nLon, int32_t& nLat) const;
 
             uint64_t FileSize() const { return m_nFileRecords * sizeof(SRecord); }
             const std::string& FilePath() const { return m_sFilePath; }
@@ -51,6 +54,7 @@ namespace GraphEngine {
             static void Decode(const SRecord& record, double& dLon, double& dLat);
             void FlushBuffer();
             const SRecord* Segment(uint64_t nSegment);
+            const SRecord* Find(int64_t nId) const;
             void Close();
 
         private:
