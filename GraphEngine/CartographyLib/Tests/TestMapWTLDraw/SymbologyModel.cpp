@@ -20,6 +20,7 @@
 #include "../../../CommonLib/SpatialData/GeoShape.h"
 
 #include <algorithm>
+#include <functional>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -179,7 +180,9 @@ namespace TestMapDraw
         }
     }
 
-    std::vector<SPropertyInfo> CSymbolFactory::GetProperties(eSymbolKind kind)
+    namespace
+    {
+    std::vector<SPropertyInfo> KindProperties(eSymbolKind kind)
     {
         switch(kind)
         {
@@ -222,6 +225,14 @@ namespace TestMapDraw
         }
         return std::vector<SPropertyInfo>();
     }
+    }
+
+    std::vector<SPropertyInfo> CSymbolFactory::GetProperties(eSymbolKind kind)
+    {
+        std::vector<SPropertyInfo> vecProps = KindProperties(kind);
+        vecProps.push_back(Prop(PropScaleDependent, "Scale dependent", PropertyChoice, {"No", "Yes (map reference scale)"}));
+        return vecProps;
+    }
 
     SSymbolParams CSymbolFactory::CreateDefault(eSymbolKind kind, const Display::Color& color)
     {
@@ -258,8 +269,10 @@ namespace TestMapDraw
         SSymbolParams result = CreateDefault(kind, params.color);
         result.outlineColor = params.outlineColor;
         result.sBitmapFile = params.sBitmapFile;
+        result.ptrBitmap = params.ptrBitmap;
         result.sFontFace = params.sFontFace;
         result.nCharCode = params.nCharCode;
+        result.bScaleDependent = params.bScaleDependent;
         return result;
     }
 
@@ -291,7 +304,9 @@ namespace TestMapDraw
         throw CommonLib::CExcBase("Unsupported image format {0} (png, jpg)", sFileUtf8);
     }
 
-    Display::ISymbolPtr CSymbolFactory::CreateSymbol(const SSymbolParams& params)
+    namespace
+    {
+    Display::ISymbolPtr CreateSymbolOfKind(const SSymbolParams& params)
     {
         switch(params.kind)
         {
@@ -319,7 +334,8 @@ namespace TestMapDraw
             }
             case SymbolPictureMarker:
             {
-                std::shared_ptr<Display::CPictureMarkerSymbol> ptrPicture = std::make_shared<Display::CPictureMarkerSymbol>(LoadBitmapFile(params.sBitmapFile), params.dSize);
+                Display::BitmapPtr ptrBitmap = params.sBitmapFile.empty() && params.ptrBitmap.get() ? params.ptrBitmap : CSymbolFactory::LoadBitmapFile(params.sBitmapFile);
+                std::shared_ptr<Display::CPictureMarkerSymbol> ptrPicture = std::make_shared<Display::CPictureMarkerSymbol>(ptrBitmap, params.dSize);
                 ptrPicture->SetAngle(params.dAngle);
                 return ptrPicture;
             }
@@ -361,13 +377,259 @@ namespace TestMapDraw
             }
             case SymbolPictureFill:
             {
-                std::shared_ptr<Display::CPictureFillSymbol> ptrFill = std::make_shared<Display::CPictureFillSymbol>(LoadBitmapFile(params.sBitmapFile));
+                Display::BitmapPtr ptrBitmap = params.sBitmapFile.empty() && params.ptrBitmap.get() ? params.ptrBitmap : CSymbolFactory::LoadBitmapFile(params.sBitmapFile);
+                std::shared_ptr<Display::CPictureFillSymbol> ptrFill = std::make_shared<Display::CPictureFillSymbol>(ptrBitmap);
                 ptrFill->SetColor(params.color);
                 ptrFill->SetOutlineSymbol(CreateOutline(params));
                 return ptrFill;
             }
         }
         throw CommonLib::CExcBase("Unknown symbol kind {0}", (int)params.kind);
+    }
+    }
+
+    Display::ISymbolPtr CSymbolFactory::CreateSymbol(const SSymbolParams& params)
+    {
+        Display::ISymbolPtr ptrSymbol = CreateSymbolOfKind(params);
+        SetScaleDependent(ptrSymbol, params.bScaleDependent);
+        return ptrSymbol;
+    }
+
+    namespace
+    {
+        const Display::Color NoColor(Display::Color::Black, Display::Color::Transparent);
+
+        // outline of a fill made by CreateOutline: none or a solid simple line
+        bool OutlineFromSymbol(Display::ILineSymbolPtr ptrOutline, SSymbolParams& params)
+        {
+            if(!ptrOutline.get())
+            {
+                params.outlineColor = NoColor;
+                return true;
+            }
+
+            std::shared_ptr<Display::CSimpleLineSymbol> ptrLine = std::dynamic_pointer_cast<Display::CSimpleLineSymbol>(ptrOutline);
+            params.outlineColor = ptrOutline->GetColor();
+            params.dOutlineWidth = ptrOutline->GetWidth();
+            return ptrLine.get() && ptrLine->GetStyle() == Display::PenTypeSolid;
+        }
+
+        double TemplateInterval(Display::LineTemplatePtr ptrTemplate, double dDefault)
+        {
+            return ptrTemplate.get() ? ptrTemplate->GetInterval() : dDefault;
+        }
+    }
+
+    namespace
+    {
+    bool FromSymbolOfKind(Display::ISymbolPtr ptrSymbol, SSymbolParams& params)
+    {
+        params = SSymbolParams();
+        Display::ISymbol* pSymbol = ptrSymbol.get();
+        if(!pSymbol)
+            return false;
+
+        switch(pSymbol->GetSymbolID())
+        {
+            case Display::SimpleMarketSymbolID:
+            {
+                Display::CSimpleMarketSymbol* pMarker = dynamic_cast<Display::CSimpleMarketSymbol*>(pSymbol);
+                if(!pMarker)
+                    return false;
+                params.kind = SymbolSimpleMarker;
+                params.nStyle = ClampStyle((int)pMarker->GetStyle(), sizeof(MarkerStyles) / sizeof(MarkerStyles[0]));
+                params.color = pMarker->GetColor();
+                params.dSize = pMarker->GetSize();
+                params.outlineColor = pMarker->IsOutline() ? pMarker->GetOutlineColor() : NoColor;
+                params.dOutlineWidth = pMarker->GetOutlineSize();
+                params.dAngle = pMarker->GetAngle();
+                return params.nStyle == (int)pMarker->GetStyle();
+            }
+            case Display::ArrowMarkerSymbolID:
+            {
+                Display::CArrowMarkerSymbol* pArrow = dynamic_cast<Display::CArrowMarkerSymbol*>(pSymbol);
+                if(!pArrow)
+                    return false;
+                params.kind = SymbolArrowMarker;
+                params.color = pArrow->GetColor();
+                params.dSize = pArrow->GetLength();
+                params.dSeparation = pArrow->GetWidth();
+                params.dAngle = pArrow->GetAngle();
+                return true;
+            }
+            case Display::CharacterMarkerSymbolID:
+            {
+                Display::CCharacterMarkerSymbol* pChar = dynamic_cast<Display::CCharacterMarkerSymbol*>(pSymbol);
+                if(!pChar)
+                    return false;
+                params.kind = SymbolCharacterMarker;
+                if(pChar->GetFont().get())
+                    params.sFontFace = pChar->GetFont()->GetFace();
+                params.nCharCode = pChar->GetCharacterIndex();
+                params.color = pChar->GetColor();
+                params.dSize = pChar->GetSize();
+                params.dAngle = pChar->GetAngle();
+                return true;
+            }
+            case Display::PictureMarkerSymbolID:
+            {
+                Display::CPictureMarkerSymbol* pPicture = dynamic_cast<Display::CPictureMarkerSymbol*>(pSymbol);
+                if(!pPicture)
+                    return false;
+                params.kind = SymbolPictureMarker;
+                params.ptrBitmap = pPicture->GetBitmap();
+                params.dSize = pPicture->GetSize();
+                params.dAngle = pPicture->GetAngle();
+                return params.ptrBitmap.get() != nullptr;
+            }
+            case Display::SimpleLineSymbolID:
+            {
+                Display::CSimpleLineSymbol* pLine = dynamic_cast<Display::CSimpleLineSymbol*>(pSymbol);
+                if(!pLine)
+                    return false;
+                params.kind = SymbolSimpleLine;
+                params.color = pLine->GetColor();
+                params.dSize = pLine->GetWidth();
+                params.nStyle = ClampStyle((int)pLine->GetStyle(), sizeof(LineStyles) / sizeof(LineStyles[0]));
+                return params.nStyle == (int)pLine->GetStyle() && pLine->GetDashes().empty();   // a custom dash pattern isn't on the page
+            }
+            case Display::HashLineSymbolID:
+            {
+                Display::CHashLineSymbol* pHash = dynamic_cast<Display::CHashLineSymbol*>(pSymbol);
+                if(!pHash)
+                    return false;
+                params.kind = SymbolHashLine;
+                params.color = pHash->GetColor();
+                params.dSize = pHash->GetWidth();
+                params.dSeparation = TemplateInterval(pHash->GetTemplate(), params.dSeparation);
+                params.dAngle = pHash->GetAngle();
+                params.dOutlineWidth = pHash->GetHashSymbol().get() ? pHash->GetHashSymbol()->GetWidth() : 1.;
+                return std::dynamic_pointer_cast<Display::CSimpleLineSymbol>(pHash->GetHashSymbol()).get() != nullptr;
+            }
+            case Display::MarkerLineSymbolID:
+            {
+                Display::CMarkerLineSymbol* pMarkerLine = dynamic_cast<Display::CMarkerLineSymbol*>(pSymbol);
+                if(!pMarkerLine)
+                    return false;
+                params.kind = SymbolMarkerLine;
+                params.color = pMarkerLine->GetColor();
+                params.dSize = pMarkerLine->GetWidth();
+                params.dSeparation = TemplateInterval(pMarkerLine->GetTemplate(), params.dSeparation);
+                std::shared_ptr<Display::CSimpleMarketSymbol> ptrMarker = std::dynamic_pointer_cast<Display::CSimpleMarketSymbol>(pMarkerLine->GetMarkerSymbol());
+                if(!ptrMarker.get())
+                    return false;
+                params.nStyle = ClampStyle((int)ptrMarker->GetStyle(), sizeof(MarkerStyles) / sizeof(MarkerStyles[0]));
+                return true;
+            }
+            case Display::SimpleFillSymbolID:
+            {
+                Display::CSimpleFillSymbol* pFill = dynamic_cast<Display::CSimpleFillSymbol*>(pSymbol);
+                if(!pFill)
+                    return false;
+                params.kind = SymbolSimpleFill;
+                params.color = pFill->GetColor();
+                // the list has no "Null": index 0 - solid, index i - style i + 1
+                int nStyle = (int)pFill->GetStyle();
+                bool bExact = nStyle != Display::SimpleFillStyleNull;
+                params.nStyle = nStyle <= Display::SimpleFillStyleNull ? 0 : ClampStyle(nStyle - 1, sizeof(FillStyles) / sizeof(FillStyles[0]));
+                return OutlineFromSymbol(pFill->GetOutlineSymbol(), params) && bExact;
+            }
+            case Display::LineFillSymbolID:
+            {
+                Display::CLineFillSymbol* pFill = dynamic_cast<Display::CLineFillSymbol*>(pSymbol);
+                if(!pFill)
+                    return false;
+                params.kind = SymbolLineFill;
+                params.color = pFill->GetColor();
+                params.dSize = pFill->GetLineSymbol().get() ? pFill->GetLineSymbol()->GetWidth() : params.dSize;
+                params.dAngle = pFill->GetAngle();
+                params.dSeparation = pFill->GetSeparation();
+                return OutlineFromSymbol(pFill->GetOutlineSymbol(), params) && pFill->GetOffset() == 0.;
+            }
+            case Display::MarkerFillSymbolID:
+            {
+                Display::CMarkerFillSymbol* pFill = dynamic_cast<Display::CMarkerFillSymbol*>(pSymbol);
+                if(!pFill)
+                    return false;
+                params.kind = SymbolMarkerFill;
+                params.color = pFill->GetColor();
+                params.dSize = pFill->GetMarkerSymbol().get() ? pFill->GetMarkerSymbol()->GetSize() : params.dSize;
+                params.dSeparation = pFill->GetXSeparation();
+                params.nStyle = pFill->GetStyle() == Display::MarkerFillStyleRandom ? 1 : 0;
+                return OutlineFromSymbol(pFill->GetOutlineSymbol(), params) && pFill->GetXSeparation() == pFill->GetYSeparation();
+            }
+            case Display::PictureFillSymbolID:
+            {
+                Display::CPictureFillSymbol* pFill = dynamic_cast<Display::CPictureFillSymbol*>(pSymbol);
+                if(!pFill)
+                    return false;
+                params.kind = SymbolPictureFill;
+                params.ptrBitmap = pFill->GetBitmap();
+                params.color = pFill->GetColor();
+                return OutlineFromSymbol(pFill->GetOutlineSymbol(), params) && params.ptrBitmap.get() != nullptr;
+            }
+            default:
+                break;
+        }
+
+        // multi layer and other symbols: only the color of the main type is kept
+        if(Display::IMarkerSymbol* pMarker = dynamic_cast<Display::IMarkerSymbol*>(pSymbol))
+            params = CSymbolFactory::CreateDefault(SymbolSimpleMarker, pMarker->GetColor());
+        else if(Display::ILineSymbol* pLine = dynamic_cast<Display::ILineSymbol*>(pSymbol))
+            params = CSymbolFactory::CreateDefault(SymbolSimpleLine, pLine->GetColor());
+        else if(Display::IFillSymbol* pFill = dynamic_cast<Display::IFillSymbol*>(pSymbol))
+            params = CSymbolFactory::CreateDefault(SymbolSimpleFill, pFill->GetColor());
+        return false;
+    }
+    }
+
+    bool CSymbolFactory::FromSymbol(Display::ISymbolPtr ptrSymbol, SSymbolParams& params)
+    {
+        bool bExact = FromSymbolOfKind(ptrSymbol, params);
+        int nScaleDependent = GetScaleDependent(ptrSymbol);
+        params.bScaleDependent = nScaleDependent == ScaleDependentYes;
+        // a symbol with scaled and not scaled parts can't be described by one flag
+        return bExact && nScaleDependent != ScaleDependentMixed;
+    }
+
+    namespace
+    {
+        // the symbol and the symbols it is made of (outline, hash, marker, layers)
+        void ForEachSymbolPart(Display::ISymbolPtr ptrSymbol, const std::function<void(Display::ISymbol*)>& func)
+        {
+            Display::ISymbol* pSymbol = ptrSymbol.get();
+            if(!pSymbol)
+                return;
+            func(pSymbol);
+
+            if(Display::IMultiLayerSymbol* pMulti = dynamic_cast<Display::IMultiLayerSymbol*>(pSymbol))
+            {
+                for(int i = 0; i < pMulti->GetCount(); ++i)
+                    ForEachSymbolPart(pMulti->GetLayer(i), func);
+            }
+            if(Display::IFillSymbol* pFill = dynamic_cast<Display::IFillSymbol*>(pSymbol))
+                ForEachSymbolPart(pFill->GetOutlineSymbol(), func);
+            if(Display::ILineFillSymbol* pLineFill = dynamic_cast<Display::ILineFillSymbol*>(pSymbol))
+                ForEachSymbolPart(pLineFill->GetLineSymbol(), func);
+            if(Display::IMarkerFillSymbol* pMarkerFill = dynamic_cast<Display::IMarkerFillSymbol*>(pSymbol))
+                ForEachSymbolPart(pMarkerFill->GetMarkerSymbol(), func);
+            if(Display::IHashLineSymbol* pHash = dynamic_cast<Display::IHashLineSymbol*>(pSymbol))
+                ForEachSymbolPart(pHash->GetHashSymbol(), func);
+            if(Display::IMarkerLineSymbol* pMarkerLine = dynamic_cast<Display::IMarkerLineSymbol*>(pSymbol))
+                ForEachSymbolPart(pMarkerLine->GetMarkerSymbol(), func);
+        }
+    }
+
+    int CSymbolFactory::GetScaleDependent(Display::ISymbolPtr ptrSymbol)
+    {
+        bool bYes = false, bNo = false;
+        ForEachSymbolPart(ptrSymbol, [&](Display::ISymbol* pSymbol) { (pSymbol->GetScaleDependent() ? bYes : bNo) = true; });
+        return bYes && bNo ? ScaleDependentMixed : (bYes ? ScaleDependentYes : ScaleDependentNo);
+    }
+
+    void CSymbolFactory::SetScaleDependent(Display::ISymbolPtr ptrSymbol, bool bScaleDependent)
+    {
+        ForEachSymbolPart(ptrSymbol, [bScaleDependent](Display::ISymbol* pSymbol) { pSymbol->SetScaleDependent(bScaleDependent); });
     }
 
     std::string CSymbolFactory::ColorToText(const Display::Color& color)
@@ -411,6 +673,7 @@ namespace TestMapDraw
             case PropAngle:        return CSymbologyBuilder::NumberToText(params.dAngle);
             case PropSeparation:   return CSymbologyBuilder::NumberToText(params.dSeparation);
             case PropBitmapFile:   return params.sBitmapFile;
+            case PropScaleDependent: return params.bScaleDependent ? "1" : "0";
             case PropFontFace:     return params.sFontFace;
             case PropCharCode:
             {
@@ -431,6 +694,7 @@ namespace TestMapDraw
             case PropStyle:        params.nStyle = (int)ParseNumber(sText); break;
             case PropAngle:        params.dAngle = ParseNumber(sText); break;
             case PropBitmapFile:   params.sBitmapFile = sText; break;
+            case PropScaleDependent: params.bScaleDependent = ParseNumber(sText) != 0.; break;
             case PropFontFace:     params.sFontFace = sText; break;
             case PropSize:
             case PropOutlineWidth:
@@ -463,6 +727,8 @@ namespace TestMapDraw
         std::string s = GetSymbolKindName(params.kind);
         if(params.kind == SymbolPictureMarker || params.kind == SymbolPictureFill)
         {
+            if(params.sBitmapFile.empty() && params.ptrBitmap.get())
+                return s + " <layer image>";
             std::filesystem::path path(params.sBitmapFile);
             return s + " " + path.filename().string();
         }
@@ -514,6 +780,81 @@ namespace TestMapDraw
             }
         }
         throw CommonLib::CExcBase("Unknown symbol selector {0}", (int)symbology.selector);
+    }
+
+    bool CSymbologyBuilder::FromSelector(Cartography::ISymbolSelectorPtr ptrSelector, eGeometryKind geometry, SSymbology& symbology)
+    {
+        symbology = SSymbology();
+        symbology.simpleSymbol = CSymbolFactory::CreateDefault(geometry, Display::Color(255, 204, 0));
+        symbology.otherSymbol = CSymbolFactory::CreateDefault(geometry, Display::Color(190, 190, 190));
+
+        // a symbol of another geometry (the selector of another layer) is replaced by the default
+        auto readSymbol = [geometry](Display::ISymbolPtr ptrSymbol, SSymbolParams& params) -> bool
+        {
+            SSymbolParams read;
+            bool bExact = CSymbolFactory::FromSymbol(ptrSymbol, read);
+            if(CSymbolFactory::GetGeometryKind(read.kind) != geometry)
+            {
+                params = CSymbolFactory::CreateDefault(geometry, read.color);
+                return false;
+            }
+            params = read;
+            return bExact;
+        };
+
+        if(std::shared_ptr<Cartography::ISimpleSymbolSelector> ptrSimple = std::dynamic_pointer_cast<Cartography::ISimpleSymbolSelector>(ptrSelector))
+        {
+            symbology.selector = SelectorSimple;
+            return readSymbol(ptrSimple->GetSymbol(), symbology.simpleSymbol);
+        }
+
+        bool bExact = true;
+        if(std::shared_ptr<Cartography::IUniqueValueSymbolSelector> ptrUnique = std::dynamic_pointer_cast<Cartography::IUniqueValueSymbolSelector>(ptrSelector))
+        {
+            if(ptrUnique->GetFieldCount() != 1)
+                return false;   // the page has one field
+
+            symbology.selector = SelectorUniqueValues;
+            symbology.sField = ptrUnique->GetField(0);
+            for(int i = 0, sz = ptrUnique->GetValueCount(); i < sz; ++i)
+            {
+                SUniqueValueItem item;
+                item.value = ptrUnique->GetValue(i, 0);
+                item.sLabel = ptrUnique->GetLabel(i);
+                if(item.sLabel.empty())
+                    item.sLabel = ValueToText(item.value);
+                bExact = readSymbol(ptrUnique->GetSymbol(i), item.symbol) && bExact;
+                symbology.vecValues.push_back(item);
+            }
+
+            symbology.bDrawOther = ptrUnique->GetUseDefaultSymbol() && ptrUnique->GetDefaultSymbol().get();
+            if(ptrUnique->GetDefaultSymbol().get())
+                bExact = readSymbol(ptrUnique->GetDefaultSymbol(), symbology.otherSymbol) && bExact;
+            return bExact;
+        }
+
+        if(std::shared_ptr<Cartography::IRangeSymbolSelector> ptrRange = std::dynamic_pointer_cast<Cartography::IRangeSymbolSelector>(ptrSelector))
+        {
+            symbology.selector = SelectorRanges;
+            symbology.sField = ptrRange->GetField();
+            for(int i = 0, sz = ptrRange->GetRangeCount(); i < sz; ++i)
+            {
+                SRangeItem item;
+                ptrRange->GetRange(i, &item.dFrom, &item.dTo);
+                item.sLabel = ptrRange->GetLabel(i);
+                if(item.sLabel.empty())
+                    item.sLabel = NumberToText(item.dFrom) + " - " + NumberToText(item.dTo);
+                bExact = readSymbol(ptrRange->GetSymbol(i), item.symbol) && bExact;
+                symbology.vecRanges.push_back(item);
+            }
+
+            symbology.bDrawOther = ptrRange->GetUseDefaultSymbol() && ptrRange->GetDefaultSymbol().get();
+            if(ptrRange->GetDefaultSymbol().get())
+                bExact = readSymbol(ptrRange->GetDefaultSymbol(), symbology.otherSymbol) && bExact;
+            return bExact;
+        }
+
+        return false;   // unknown selector: the defaults
     }
 
     Display::Color CSymbologyBuilder::PaletteColor(int nIndex)

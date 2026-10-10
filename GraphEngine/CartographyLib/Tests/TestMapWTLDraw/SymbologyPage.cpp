@@ -19,7 +19,7 @@ namespace
 	const wchar_t* SelectorNames[] = {L"Simple (one symbol)", L"Unique values", L"Ranges"};
 }
 
-CSymbologyPage::CSymbologyPage() : m_geometry(GeometryPolygon), m_baseColor(255, 204, 0), m_bHasSource(false), m_bUpdating(false), m_nEditRow(-1)
+CSymbologyPage::CSymbologyPage() : m_geometry(GeometryPolygon), m_baseColor(255, 204, 0), m_bHasSource(false), m_bUpdating(false), m_bModified(false), m_nEditRow(-1)
 {
 	m_symbology.simpleSymbol = CSymbolFactory::CreateDefault(m_geometry, m_baseColor);
 	m_symbology.otherSymbol = m_symbology.simpleSymbol;
@@ -79,6 +79,7 @@ void CSymbologyPage::SetSource(const STableInfo* pTable, const Color& baseColor,
 	m_symbology.vecValues.clear();
 	m_symbology.vecRanges.clear();
 	m_symbology.sField.clear();
+	m_bModified = false;
 
 	if(!IsWindow())
 		return;
@@ -87,6 +88,25 @@ void CSymbologyPage::SetSource(const STableInfo* pTable, const Color& baseColor,
 	FillFields();
 	FillList(OtherRow);
 	UpdateControls();
+}
+
+void CSymbologyPage::SetSymbology(const SSymbology& symbology)
+{
+	m_symbology = symbology;
+	m_bModified = false;
+	if(!IsWindow())
+		return;
+
+	m_bUpdating = true;
+	m_comboSelector.SetCurSel((int)m_symbology.selector);
+	m_checkDrawOther.SetCheck(m_symbology.bDrawOther ? BST_CHECKED : BST_UNCHECKED);
+	m_bUpdating = false;
+
+	m_editor.SetGeometry(m_geometry);
+	FillFields();
+	FillList(m_symbology.selector == SelectorSimple || ItemCount() == 0 ? OtherRow : 1);
+	UpdateControls();
+	m_bModified = false;   // filling the controls isn't a change
 }
 
 int CSymbologyPage::ItemCount() const
@@ -192,6 +212,7 @@ void CSymbologyPage::OnEditorChanged()
 		return;
 
 	*RowSymbol(m_nEditRow) = m_editor.GetParams();
+	m_bModified = true;
 	if(m_nEditRow >= 0 && m_nEditRow < m_list.GetItemCount())
 		m_list.SetItemText(m_nEditRow, 1, Utf8ToWide(CSymbolFactory::Describe(m_editor.GetParams())).c_str());
 }
@@ -240,6 +261,7 @@ LRESULT CSymbologyPage::OnSelectorChanged(WORD /*wNotifyCode*/, WORD /*wID*/, HW
 	if(selector == m_symbology.selector)
 		return 0;
 
+	m_bModified = true;
 	m_symbology.selector = selector;
 	FillFields();   // ranges show the numeric fields only
 	FillList(OtherRow);
@@ -257,6 +279,7 @@ LRESULT CSymbologyPage::OnFieldChanged(WORD /*wNotifyCode*/, WORD /*wID*/, HWND 
 		return 0;
 
 	// the values of the old field don't fit
+	m_bModified = true;
 	m_symbology.sField = sField;
 	m_symbology.vecValues.clear();
 	m_symbology.vecRanges.clear();
@@ -277,6 +300,7 @@ LRESULT CSymbologyPage::OnAddValues(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*h
 		bool bTruncated = false;
 		std::vector<CommonLib::CVariant> vecValues = m_uniqueQuery(sField, bTruncated);
 		m_symbology.vecValues = CSymbologyBuilder::MakeUniqueItems(vecValues, BaseSymbol());
+		m_bModified = true;
 		FillList(m_symbology.vecValues.empty() ? OtherRow : 1);
 		UpdateControls();
 
@@ -318,6 +342,7 @@ LRESULT CSymbologyPage::OnClassify(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hW
 		}
 
 		m_symbology.vecRanges = CSymbologyBuilder::MakeRanges(dMin, dMax, nClasses, BaseSymbol());
+		m_bModified = true;
 		FillList(1);
 		UpdateControls();
 	}
@@ -335,6 +360,7 @@ LRESULT CSymbologyPage::OnRemoveItem(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*
 		return 0;   // the other values row stays
 
 	int nItem = nRow - 1;
+	m_bModified = true;
 	if(m_symbology.selector == SelectorUniqueValues && nItem < (int)m_symbology.vecValues.size())
 		m_symbology.vecValues.erase(m_symbology.vecValues.begin() + nItem);
 	else if(m_symbology.selector == SelectorRanges && nItem < (int)m_symbology.vecRanges.size())
@@ -348,6 +374,7 @@ LRESULT CSymbologyPage::OnRemoveItem(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*
 LRESULT CSymbologyPage::OnDrawOther(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/)
 {
 	m_symbology.bDrawOther = m_checkDrawOther.GetCheck() == BST_CHECKED;
+	m_bModified = true;
 	return 0;
 }
 

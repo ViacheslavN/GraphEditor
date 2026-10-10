@@ -1,5 +1,6 @@
 #include "SimpleSymbolSelector.h"
 #include "../../DisplayLib/Symbols/SymbolsLoader.h"
+#include "../legend/Legend.h"
 
 namespace GraphEngine {
     namespace Cartography {
@@ -82,23 +83,24 @@ namespace GraphEngine {
             m_ptrSymbol = ptrSymbol;
         }
 
-        int CSimpleSymbolSelector::GetSymbolCount() const
+        int CSimpleSymbolSelector::GetLegendGroupCount() const
         {
-            return 1;
+            return m_ptrSymbol.get() ? 1 : 0;
         }
 
-        Display::ISymbolPtr CSimpleSymbolSelector::GetSymbolByIndex(int index) const
+        ILegendGroupPtr CSimpleSymbolSelector::GetLegendGroup(int nIndex) const
         {
-            if(index == 0)
-                return m_ptrSymbol;
+            if(nIndex != 0 || !m_ptrSymbol.get())
+                throw CommonLib::CExcBase("SimpleSymbolSelector: legend group index out of range: {0}", nIndex);
 
-            return Display::ISymbolPtr();
-        }
+            std::weak_ptr<CSimpleSymbolSelector> wSelf = std::const_pointer_cast<CSimpleSymbolSelector>(weak_from_this().lock());
+            CLegendClass::TSymbolWriter writer = CLegendUtils::MakeSymbolWriter(wSelf, m_ptrSymbol,
+                    [](CSimpleSymbolSelector& selector) { return selector.GetSymbol(); },
+                    [](CSimpleSymbolSelector& selector, Display::ISymbolPtr ptrSymbol) { selector.SetSymbol(ptrSymbol); });
 
-        void CSimpleSymbolSelector::SetSymbolByIndex(int index, Display::ISymbolPtr ptrSymbol)
-        {
-            if(index == 0)
-                m_ptrSymbol = ptrSymbol;
+            CLegendGroupPtr ptrGroup = std::make_shared<CLegendGroup>();
+            ptrGroup->AddClass(std::make_shared<CLegendClass>(m_sLabel, m_ptrSymbol, m_sDescription, writer));
+            return ptrGroup;
         }
 
         void CSimpleSymbolSelector::Save(CommonLib::ISerializeObjPtr pObj) const

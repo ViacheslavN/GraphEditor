@@ -81,6 +81,8 @@ set(COMMON_SOURCE_FILES
         Symbols/SymbolFillBase.h
         Symbols/SymbolsLoader.h
         Symbols/SymbolsLoader.cpp
+        Symbols/SymbolPreview.h
+        Symbols/SymbolPreview.cpp
         Symbols/SimpleLineSymbol.h
         Symbols/SimpleLineSymbol.cpp
         Symbols/MarkerSymbolBase.h

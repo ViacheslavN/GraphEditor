@@ -61,18 +61,27 @@ namespace GraphEngine {
             return m_ptrLayers;
         }
 
-        void	CMap::SelectFeatures(const CommonLib::bbox& extent, bool resetSelection)
+        namespace
         {
-            try
+            // selects in the visible feature layers of the list and of its visible group layers
+            void SelectInLayers(ILayersPtr ptrLayers, const CommonLib::bbox& extent, ISelectionPtr ptrSelection, Geometry::ISpatialReferencePtr ptrSpatialRef)
             {
-                if(resetSelection)
-                    m_ptrSelection->Clear();
-
-                int layerCount = m_ptrLayers->GetLayerCount();
+                int layerCount = ptrLayers->GetLayerCount();
                 for(int i = 0; i < layerCount; ++i)
                 {
-                    ILayerPtr pLayer = m_ptrLayers->GetLayer(i);
-                    if(!pLayer->GetVisible() || !pLayer->IsValid() || pLayer->GetLayerTypeID() != FeatureLayerID)
+                    ILayerPtr pLayer = ptrLayers->GetLayer(i);
+                    if(!pLayer->GetVisible() || !pLayer->IsValid())
+                        continue;
+
+                    if(pLayer->GetLayerTypeID() == GroupLayerID)
+                    {
+                        IGroupLayer *pGroupLayer = dynamic_cast< IGroupLayer *>(pLayer.get());
+                        if(pGroupLayer)
+                            SelectInLayers(pGroupLayer->GetChildren(), extent, ptrSelection, ptrSpatialRef);
+                        continue;
+                    }
+
+                    if(pLayer->GetLayerTypeID() != FeatureLayerID)
                         continue;
 
                     IFeatureLayer *pFeatureLayer = dynamic_cast< IFeatureLayer *>(pLayer.get());
@@ -82,8 +91,19 @@ namespace GraphEngine {
                     if(!pFeatureLayer->GetSelectable())
                         continue;
 
-                    pFeatureLayer->SelectFeatures(extent, m_ptrSelection, m_ptrSpatialRef);
+                    pFeatureLayer->SelectFeatures(extent, ptrSelection, ptrSpatialRef);
                 }
+            }
+        }
+
+        void	CMap::SelectFeatures(const CommonLib::bbox& extent, bool resetSelection)
+        {
+            try
+            {
+                if(resetSelection)
+                    m_ptrSelection->Clear();
+
+                SelectInLayers(m_ptrLayers, extent, m_ptrSelection, m_ptrSpatialRef);
             }
             catch (std::exception& exc)
             {
@@ -159,6 +179,9 @@ namespace GraphEngine {
         void   CMap::SetSpatialReference(Geometry::ISpatialReferencePtr spatRef)
         {
             m_ptrSpatialRef = spatRef;
+            // the cached full extent is in the old coordinate system (the user one is kept)
+            if(!m_bUserFullExtent)
+                m_ptrFullExtent.reset();
         }
 
         namespace

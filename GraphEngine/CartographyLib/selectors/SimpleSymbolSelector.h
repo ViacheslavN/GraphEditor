@@ -4,7 +4,7 @@
 namespace GraphEngine {
     namespace Cartography {
 
-        class CSimpleSymbolSelector : public ISimpleSymbolSelector, public ILegendInfo
+        class CSimpleSymbolSelector : public ISimpleSymbolSelector, public ILegendInfo, public std::enable_shared_from_this<CSimpleSymbolSelector>
         {
         public:
             CSimpleSymbolSelector();
@@ -33,10 +33,9 @@ namespace GraphEngine {
             virtual Display::ISymbolPtr    GetSymbol() const;
             virtual void                   SetSymbol(Display::ISymbolPtr ptrSymbol);
 
-            // ILegendInfo
-            virtual int                    GetSymbolCount() const;
-            virtual Display::ISymbolPtr    GetSymbolByIndex(int index) const;
-            virtual void                   SetSymbolByIndex(int index, Display::ISymbolPtr ptrSymbol);
+            // ILegendInfo: one group with one class
+            virtual int                    GetLegendGroupCount() const;
+            virtual ILegendGroupPtr        GetLegendGroup(int nIndex) const;
 
             // ISerialize
             virtual void Save(CommonLib::ISerializeObjPtr pObj) const;

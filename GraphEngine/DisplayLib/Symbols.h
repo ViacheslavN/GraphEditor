@@ -178,6 +178,7 @@ namespace GraphEngine {
         public:
             ISimpleMarkerSymbol(){}
             virtual ~ISimpleMarkerSymbol(){}
+            virtual eSimpleMarkerStyle   GetStyle() const = 0;
             virtual void                 SetStyle(eSimpleMarkerStyle style) = 0;
             virtual void                 SetOutline(bool bOutline) = 0;
             virtual bool                 IsOutline() const = 0;

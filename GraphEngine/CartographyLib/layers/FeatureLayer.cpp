@@ -3,6 +3,7 @@
 #include "../GeoDatabase/QueryFilter.h"
 #include "../DisplayLib/DisplayUtils.h"
 #include "renders/RenderersLoader.h"
+#include "legend/Legend.h"
 #include "../GeoDatabase/DatasetLoader.h"
 
 namespace GraphEngine {
@@ -399,6 +400,64 @@ namespace GraphEngine {
         void  CFeatureLayer::SetSelectable(bool flag)
         {
             m_bSelectable = flag;
+        }
+
+        std::vector<ILegendGroupPtr> CFeatureLayer::CollectLegendGroups() const
+        {
+            // the symbols of the renderers hidden from the legend (road casings) by the class label: a shown class with
+            // the same label gets them under its symbol in the legend (casing + fill), the drawing isn't changed
+            std::map<std::string, Display::ISymbolPtr> mapHidden;
+            for(size_t i = 0; i < m_vecRenderers.size(); ++i)
+            {
+                if(!m_vecRenderers[i].get() || m_vecRenderers[i]->GetShowInLegend())
+                    continue;
+
+                ISymbolSelectorPtr ptrSelector = m_vecRenderers[i]->GetSymbolSelector();
+                std::vector<ILegendGroupPtr> vecHidden = CLegendUtils::GetLegendGroups(dynamic_cast<const ILegendInfo*>(ptrSelector.get()));
+                for(size_t g = 0; g < vecHidden.size(); ++g)
+                    for(int c = 0; c < vecHidden[g]->GetClassCount(); ++c)
+                        mapHidden.insert(std::make_pair(vecHidden[g]->GetClass(c)->GetLabel(), vecHidden[g]->GetClass(c)->GetSymbol()));
+            }
+
+            std::vector<ILegendGroupPtr> vecGroups;
+            for(size_t i = 0; i < m_vecRenderers.size(); ++i)
+            {
+                if(!m_vecRenderers[i].get() || !m_vecRenderers[i]->GetShowInLegend())
+                    continue;
+
+                ISymbolSelectorPtr ptrSelector = m_vecRenderers[i]->GetSymbolSelector();
+                std::vector<ILegendGroupPtr> vecSelectorGroups = CLegendUtils::GetLegendGroups(dynamic_cast<const ILegendInfo*>(ptrSelector.get()));
+                if(!mapHidden.empty())
+                {
+                    for(size_t g = 0; g < vecSelectorGroups.size(); ++g)
+                        vecSelectorGroups[g] = CLegendUtils::UnderlayGroup(vecSelectorGroups[g], mapHidden);
+                }
+                vecGroups.insert(vecGroups.end(), vecSelectorGroups.begin(), vecSelectorGroups.end());
+            }
+            return vecGroups;
+        }
+
+        int CFeatureLayer::GetLegendGroupCount() const
+        {
+            int nCount = 0;
+            for(size_t i = 0; i < m_vecRenderers.size(); ++i)
+            {
+                ISymbolSelectorPtr ptrSelector = m_vecRenderers[i].get() && m_vecRenderers[i]->GetShowInLegend() ?
+                                                 m_vecRenderers[i]->GetSymbolSelector() : ISymbolSelectorPtr();
+                const ILegendInfo* pLegendInfo = dynamic_cast<const ILegendInfo*>(ptrSelector.get());
+                if(pLegendInfo)
+                    nCount += pLegendInfo->GetLegendGroupCount();
+            }
+            return nCount;
+        }
+
+        ILegendGroupPtr CFeatureLayer::GetLegendGroup(int nIndex) const
+        {
+            std::vector<ILegendGroupPtr> vecGroups = CollectLegendGroups();
+            if(nIndex < 0 || nIndex >= (int)vecGroups.size())
+                throw CommonLib::CExcBase("FeatureLayer: legend group index out of range: {0}", nIndex);
+
+            return vecGroups[nIndex];
         }
 
         int	  CFeatureLayer::GetRendererCount() const

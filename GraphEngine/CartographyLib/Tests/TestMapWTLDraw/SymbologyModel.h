@@ -42,7 +42,8 @@ namespace TestMapDraw
         PropSeparation,     // interval along a line, distance between fill lines / markers
         PropBitmapFile,
         PropFontFace,
-        PropCharCode
+        PropCharCode,
+        PropScaleDependent  // the sizes are scaled by the map reference scale (choice No / Yes)
     };
 
     enum ePropertyKind
@@ -73,8 +74,10 @@ namespace TestMapDraw
         double      dAngle = 0.;
         double      dSeparation = 3.;
         std::string sBitmapFile;   // UTF-8
+        GraphEngine::Display::BitmapPtr ptrBitmap;   // image of a picture symbol of a layer (no file), used when sBitmapFile is empty
         std::string sFontFace = "Arial";
         int         nCharCode = 0x2605;   // star
+        bool        bScaleDependent = false;   // sizes are kept at the map reference scale, scaled on other scales
     };
 
     class CSymbolFactory
@@ -93,6 +96,13 @@ namespace TestMapDraw
 
         // throws when a bitmap file can't be read
         static GraphEngine::Display::ISymbolPtr CreateSymbol(const SSymbolParams& params);
+        // parameters of a symbol made by CreateSymbol (symbols of a layer), false - the symbol can't be described
+        // by the parameters (multi layer symbol, outline / marker of another type ...), params get the main color only
+        static bool FromSymbol(GraphEngine::Display::ISymbolPtr ptrSymbol, SSymbolParams& params);
+        // scale dependence of the symbol and all the symbols it is made of (outline, layers ...)
+        enum { ScaleDependentNo = 0, ScaleDependentYes = 1, ScaleDependentMixed = 2 };
+        static int  GetScaleDependent(GraphEngine::Display::ISymbolPtr ptrSymbol);
+        static void SetScaleDependent(GraphEngine::Display::ISymbolPtr ptrSymbol, bool bScaleDependent);
         static GraphEngine::Display::BitmapPtr  LoadBitmapFile(const std::string& sFileUtf8);   // png, jpg
 
         // property as text for the editor and back, SetPropertyText throws on a wrong value
@@ -141,6 +151,9 @@ namespace TestMapDraw
     {
     public:
         static GraphEngine::Cartography::ISymbolSelectorPtr CreateSelector(const SSymbology& symbology);
+        // symbology of a selector of a layer (simple, unique values of one field, ranges);
+        // false - the selector or some of its symbols can't be described (they are replaced by the defaults for the geometry)
+        static bool FromSelector(GraphEngine::Cartography::ISymbolSelectorPtr ptrSelector, eGeometryKind geometry, SSymbology& symbology);
 
         // items with distinct colors, the symbol kind / properties are taken from the base
         static std::vector<SUniqueValueItem> MakeUniqueItems(const std::vector<CommonLib::CVariant>& values, const SSymbolParams& base);

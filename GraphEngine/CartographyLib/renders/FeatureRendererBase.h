@@ -9,7 +9,7 @@ namespace GraphEngine {
         {
         public:
             CFeatureRendererBase() : m_dMinimumScale(0.), m_dMaximumScale(0.), m_nShapeFieldIndex(-1),
-                                     m_nFeatureRendererID(UndefineFeatureRendererID)
+                                     m_nFeatureRendererID(UndefineFeatureRendererID), m_bShowInLegend(true)
             {}
 
             virtual ~CFeatureRendererBase()
@@ -51,12 +51,23 @@ namespace GraphEngine {
                 m_nShapeFieldIndex = -1;
             }
 
+            virtual bool GetShowInLegend() const
+            {
+                return m_bShowInLegend;
+            }
+
+            virtual void SetShowInLegend(bool bShow)
+            {
+                m_bShowInLegend = bShow;
+            }
+
             virtual void Save(CommonLib::ISerializeObjPtr pObj) const
             {
                 pObj->AddPropertyInt32U("FeatureRendererID", GetFeatureRendererID());
                 pObj->AddPropertyDouble("MinScale", m_dMinimumScale);
                 pObj->AddPropertyDouble("MaxScale", m_dMaximumScale);
                 pObj->AddPropertyString("ShapeField", m_sShapeField);
+                pObj->AddPropertyBool("ShowInLegend", m_bShowInLegend);
             }
 
             virtual void Load(CommonLib::ISerializeObjPtr pObj)
@@ -64,6 +75,7 @@ namespace GraphEngine {
                 m_dMinimumScale = pObj->GetPropertyDouble("MinScale", m_dMinimumScale);
                 m_dMaximumScale = pObj->GetPropertyDouble("MaxScale", m_dMaximumScale);
                 m_sShapeField = pObj->GetPropertyString("ShapeField", m_sShapeField);
+                m_bShowInLegend = pObj->GetPropertyBool("ShowInLegend", true);
                 m_nShapeFieldIndex = -1;
             }
 
@@ -142,6 +154,7 @@ namespace GraphEngine {
             mutable std::string       m_sShapeField;
             mutable int32_t           m_nShapeFieldIndex;
             uint32_t                  m_nFeatureRendererID;
+            bool                      m_bShowInLegend;
         };
 
     }

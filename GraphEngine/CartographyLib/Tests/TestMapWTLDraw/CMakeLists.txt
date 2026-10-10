@@ -36,6 +36,16 @@ set(SOURCE_FILES
         LabelPage.cpp
         LayerPages.h
         LayerPages.cpp
+        LayerGeneralPage.h
+        LayerGeneralPage.cpp
+        LayerDataPage.h
+        LayerDataPage.cpp
+        MapPropertiesDlg.h
+        MapPropertiesDlg.cpp
+        LayerPropertiesDlg.h
+        LayerPropertiesDlg.cpp
+        LayerTreePane.h
+        LayerTreePane.cpp
         ConvertOSMDlg.h
         ConvertOSMDlg.cpp
         OSMProgressDlg.h

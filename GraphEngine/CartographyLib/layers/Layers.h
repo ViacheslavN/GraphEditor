@@ -19,6 +19,7 @@ namespace GraphEngine {
             // ILayers
             virtual int       GetLayerCount() const;
             virtual ILayerPtr GetLayer(int index) const;
+            // searches the children of the group layers too
             virtual ILayerPtr GetLayerById(CommonLib::CGuid layerId) const;
             virtual void      AddLayer(ILayerPtr ptrLayer);
             virtual void      InsertLayer(ILayerPtr ptrLayer, int index);
@@ -26,10 +27,13 @@ namespace GraphEngine {
             virtual void      RemoveAllLayers();
             virtual void      MoveLayer(ILayerPtr ptrLayer, int index);
 
+            // changes of the children of the group layers are counted too
             virtual uint64_t  GetChangeCounter() const;
 
         private:
             void InsertLayerImpl(ILayerPtr ptrLayer, int index);
+            std::vector<ILayersPtr> GetGroupChildren() const;   // children of the group layers of the list
+            static uint64_t GetChildrenCounter(const ILayerPtr& ptrLayer);
 
         private:
             std::vector<ILayerPtr> m_vecLayers;

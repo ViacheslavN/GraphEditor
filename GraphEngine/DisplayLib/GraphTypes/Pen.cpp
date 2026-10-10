@@ -162,9 +162,10 @@ namespace GraphEngine
                     m_pTexture->Load(pPenNode, "Texture");
                 }
 
+                m_vecTemplates.clear();
                 if(pPenNode->IsChildExists("Templates"))
                 {
-                    CommonLib::ISerializeObjPtr pTemplatesNode = pObj->GetChild("Templates");
+                    CommonLib::ISerializeObjPtr pTemplatesNode = pPenNode->GetChild("Templates");   // saved under the pen node
                     CommonLib::Data::TVecBuffer blob;
                     pTemplatesNode->GetBlob(blob);
 
@@ -176,9 +177,10 @@ namespace GraphEngine
                         m_vecTemplates.reserve(nSize);
                         for (size_t i = 0; i < nSize; ++i)
                         {
-                            stream.Read(m_vecTemplates[i].first);
-                            stream.Read(m_vecTemplates[i].second);
-
+                            GUnits dash = 0, gap = 0;
+                            stream.Read(dash);
+                            stream.Read(gap);
+                            m_vecTemplates.push_back(std::make_pair(dash, gap));
                         }
                     }
 

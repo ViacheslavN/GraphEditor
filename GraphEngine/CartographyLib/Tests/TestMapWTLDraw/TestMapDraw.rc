@@ -97,6 +97,11 @@ BEGIN
         MENUITEM SEPARATOR
         MENUITEM "&Convert Shape File to SQLite...", ID_CONVERT_SHAPE_TO_SQLITE
         MENUITEM SEPARATOR
+        MENUITEM "New &group layer",            ID_NEW_GROUP_LAYER
+        MENUITEM "Layer &properties...",        ID_LAYER_PROPERTIES
+        MENUITEM "&Zoom to the selected layer", ID_LAYER_ZOOM
+        MENUITEM "Re&move the selected layer\tDel", ID_LAYER_REMOVE
+        MENUITEM SEPARATOR
         MENUITEM "&Remove all layers",          ID_REMOVE_ALL_LAYERS
     END
     POPUP "&Conversions"
@@ -113,11 +118,14 @@ BEGIN
         MENUITEM "Zoom &out\t-",                ID_ZOOM_OUT
         MENUITEM SEPARATOR
         MENUITEM "&Clear selection\tEsc",       ID_CLEAR_SELECTION
+        MENUITEM SEPARATOR
+        MENUITEM "Map &properties...",          ID_MAP_PROPERTIES
     END
     POPUP "&View"
     BEGIN
         MENUITEM "&Toolbar",                    ID_VIEW_TOOLBAR
         MENUITEM "&Status Bar",                 ID_VIEW_STATUS_BAR
+        MENUITEM "&Layers panel",               ID_VIEW_LAYERS
         MENUITEM SEPARATOR
         MENUITEM "&3D view (navigator)\tF3",    ID_VIEW_3D
         MENUITEM "Tilt &up\tPgUp / Ctrl+Wheel", ID_TILT_UP
@@ -286,6 +294,97 @@ BEGIN
     PUSHBUTTON      "...",IDC_PROP_BTN7,150,144,20,14
 END
 
+IDD_LAYER_PROPERTIES DIALOG 0, 0, 372, 284
+STYLE DS_SETFONT | DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Layer Properties"
+FONT 8, "MS Shell Dlg"
+BEGIN
+    CONTROL         "",IDC_TABS,"SysTabControl32",WS_TABSTOP | WS_CLIPSIBLINGS,7,7,358,250
+    LTEXT           "",IDC_SYMBOLOGY_NOTE,7,265,190,16
+    DEFPUSHBUTTON   "OK",IDOK,201,263,50,14
+    PUSHBUTTON      "Cancel",IDCANCEL,258,263,50,14
+    PUSHBUTTON      "&Apply",IDC_APPLY,315,263,50,14
+END
+
+IDD_PAGE_GENERAL DIALOG 0, 0, 350, 228
+STYLE DS_SETFONT | DS_CONTROL | WS_CHILD
+FONT 8, "MS Shell Dlg"
+BEGIN
+    LTEXT           "Name:",IDC_STATIC,4,8,50,8
+    EDITTEXT        IDC_LAYER_NAME,60,5,286,14,ES_AUTOHSCROLL
+    LTEXT           "Source:",IDC_STATIC,4,26,50,8
+    EDITTEXT        IDC_LAYER_SOURCE,60,24,286,42,ES_MULTILINE | ES_READONLY | ES_AUTOVSCROLL | WS_VSCROLL
+    CONTROL         "Visible",IDC_LAYER_VISIBLE,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,60,72,80,10
+    CONTROL         "Selectable",IDC_LAYER_SELECTABLE,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,150,72,80,10
+    GROUPBOX        "Visible scale range (empty - no limit)",IDC_STATIC,4,90,342,70
+    LTEXT           "Hide when zoomed out beyond 1:",IDC_STATIC,10,107,116,8
+    EDITTEXT        IDC_LAYER_MIN_SCALE,130,104,80,14,ES_AUTOHSCROLL
+    PUSHBUTTON      "Current scale",IDC_MIN_SCALE_CURRENT,216,104,60,14
+    LTEXT           "Hide when zoomed in beyond 1:",IDC_STATIC,10,125,116,8
+    EDITTEXT        IDC_LAYER_MAX_SCALE,130,122,80,14,ES_AUTOHSCROLL
+    PUSHBUTTON      "Current scale",IDC_MAX_SCALE_CURRENT,216,122,60,14
+    LTEXT           "",IDC_CURRENT_SCALE,10,143,330,8
+    GROUPBOX        "Symbol size",IDC_STATIC,4,166,342,52
+    CONTROL         "Scale the symbols with the map reference scale",IDC_LAYER_SCALE_SYMBOLS,"Button",BS_AUTO3STATE | WS_TABSTOP,10,180,330,10
+    LTEXT           "",IDC_LAYER_REF_SCALE_NOTE,10,194,330,20
+END
+
+IDD_MAP_PROPERTIES DIALOG 0, 0, 372, 262
+STYLE DS_SETFONT | DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Map Properties"
+FONT 8, "MS Shell Dlg"
+BEGIN
+    LTEXT           "Name:",IDC_STATIC,7,9,50,8
+    EDITTEXT        IDC_MAP_NAME,62,7,303,14,ES_AUTOHSCROLL
+    GROUPBOX        "Coordinate system (the layers are projected into it)",IDC_STATIC,7,27,358,104
+    LTEXT           "Choose:",IDC_STATIC,14,42,44,8
+    COMBOBOX        IDC_MAP_CS_PRESET,62,40,296,150,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    LTEXT           "EPSG code:",IDC_STATIC,14,60,44,8
+    EDITTEXT        IDC_MAP_EPSG,62,58,60,14,ES_NUMBER
+    PUSHBUTTON      "Set",IDC_MAP_EPSG_SET,126,58,40,14
+    LTEXT           "Proj4:",IDC_STATIC,14,78,44,8
+    EDITTEXT        IDC_MAP_PROJ4,62,76,296,30,ES_MULTILINE | ES_AUTOVSCROLL | WS_VSCROLL
+    LTEXT           "",IDC_MAP_CS_INFO,62,110,296,16
+    LTEXT           "Map units:",IDC_STATIC,7,139,50,8
+    COMBOBOX        IDC_MAP_UNITS,62,137,110,150,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    GROUPBOX        "Display",IDC_STATIC,7,156,358,50
+    CONTROL         "Reference scale 1:",IDC_MAP_REF_SCALE_ON,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,14,171,76,10
+    EDITTEXT        IDC_MAP_REF_SCALE,92,169,70,14,ES_AUTOHSCROLL
+    PUSHBUTTON      "Current scale",IDC_MAP_REF_SCALE_CURRENT,166,169,60,14
+    LTEXT           "(symbol sizes are true at this scale)",IDC_STATIC,232,171,128,8
+    LTEXT           "Background:",IDC_STATIC,14,189,44,8
+    EDITTEXT        IDC_MAP_BG_COLOR,92,187,50,14,ES_AUTOHSCROLL
+    PUSHBUTTON      "...",IDC_MAP_BG_BTN,146,187,16,14
+    LTEXT           "#RRGGBB, empty - none",IDC_STATIC,166,189,120,8
+    LTEXT           "Full extent:",IDC_STATIC,7,213,50,8
+    LTEXT           "",IDC_MAP_EXTENT,62,213,303,20
+    DEFPUSHBUTTON   "OK",IDOK,201,241,50,14
+    PUSHBUTTON      "Cancel",IDCANCEL,258,241,50,14
+    PUSHBUTTON      "&Apply",IDC_APPLY,315,241,50,14
+END
+
+IDD_PAGE_DATA DIALOG 0, 0, 350, 228
+STYLE DS_SETFONT | DS_CONTROL | WS_CHILD
+FONT 8, "MS Shell Dlg"
+BEGIN
+    LTEXT           "Table:",IDC_STATIC,4,7,60,8
+    EDITTEXT        IDC_DATA_TABLE,68,5,278,12,ES_AUTOHSCROLL | ES_READONLY
+    LTEXT           "Workspace:",IDC_STATIC,4,21,60,8
+    EDITTEXT        IDC_DATA_WORKSPACE,68,19,278,12,ES_AUTOHSCROLL | ES_READONLY
+    LTEXT           "Geometry:",IDC_STATIC,4,35,60,8
+    EDITTEXT        IDC_DATA_GEOMETRY,68,33,90,12,ES_AUTOHSCROLL | ES_READONLY
+    LTEXT           "Extent:",IDC_STATIC,4,49,60,8
+    EDITTEXT        IDC_DATA_EXTENT,68,47,278,12,ES_AUTOHSCROLL | ES_READONLY
+    LTEXT           "Coordinate system:",IDC_STATIC,4,63,62,8
+    EDITTEXT        IDC_DATA_SPATREF,68,61,278,22,ES_MULTILINE | ES_READONLY | ES_AUTOVSCROLL | WS_VSCROLL
+    LTEXT           "OID field:",IDC_STATIC,4,91,60,8
+    COMBOBOX        IDC_DATA_OID_FIELD,68,89,150,120,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    LTEXT           "Shape field:",IDC_STATIC,4,108,60,8
+    COMBOBOX        IDC_DATA_SHAPE_FIELD,68,106,150,120,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    LTEXT           "Fields:",IDC_STATIC,4,124,60,8
+    CONTROL         "",IDC_DATA_FIELDS,"SysListView32",LVS_REPORT | LVS_SINGLESEL | LVS_SHOWSELALWAYS | LVS_NOSORTHEADER | WS_BORDER | WS_TABSTOP,4,134,342,90
+END
+
 IDD_PAGE_ANNOTATION DIALOG 0, 0, 350, 228
 STYLE DS_SETFONT | DS_CONTROL | WS_CHILD
 FONT 8, "MS Shell Dlg"
@@ -440,6 +539,12 @@ STRINGTABLE
 BEGIN
     ID_VIEW_TOOLBAR         "Show or hide the toolbar\nToggle ToolBar"
     ID_VIEW_STATUS_BAR      "Show or hide the status bar\nToggle StatusBar"
+    ID_VIEW_LAYERS          "Show or hide the layers panel\nLayers Panel"
+    ID_LAYER_PROPERTIES     "Properties of the selected layer (right click on a layer)\nLayer Properties"
+    ID_LAYER_ZOOM           "Zoom to the layer selected in the layers panel\nZoom to Layer"
+    ID_LAYER_REMOVE         "Remove the layer selected in the layers panel\nRemove Layer"
+    ID_NEW_GROUP_LAYER      "Add an empty group layer (into the selected group); drag layers into it\nNew Group Layer"
+    ID_MAP_PROPERTIES       "Name, coordinate system, units, reference scale and background of the map\nMap Properties"
 END
 
 STRINGTABLE

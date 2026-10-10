@@ -52,6 +52,45 @@
 #define IDC_PROGRESS_BAR                1176
 #define IDC_PROGRESS_COUNTS             1177
 #define IDC_PROGRESS_TIME               1178
+#define IDD_LAYER_PROPERTIES            109
+#define IDD_PAGE_GENERAL                110
+#define IDC_LAYER_NAME                  1180
+#define IDC_LAYER_SOURCE                1181
+#define IDC_LAYER_VISIBLE               1182
+#define IDC_LAYER_SELECTABLE            1183
+#define IDC_LAYER_MIN_SCALE             1184
+#define IDC_LAYER_MAX_SCALE             1185
+#define IDC_MIN_SCALE_CURRENT           1186
+#define IDC_MAX_SCALE_CURRENT           1187
+#define IDC_CURRENT_SCALE               1188
+#define IDC_APPLY                       1189
+#define IDC_LAYER_TREE                  1190
+#define IDC_SYMBOLOGY_NOTE              1191
+#define IDD_PAGE_DATA                   111
+#define IDC_DATA_TABLE                  1192
+#define IDC_DATA_WORKSPACE              1193
+#define IDC_DATA_GEOMETRY               1194
+#define IDC_DATA_EXTENT                 1195
+#define IDC_DATA_SPATREF                1196
+#define IDC_DATA_OID_FIELD              1197
+#define IDC_DATA_SHAPE_FIELD            1198
+#define IDC_DATA_FIELDS                 1199
+#define IDD_MAP_PROPERTIES              112
+#define IDC_MAP_NAME                    1200
+#define IDC_MAP_CS_PRESET               1201
+#define IDC_MAP_EPSG                    1202
+#define IDC_MAP_EPSG_SET                1203
+#define IDC_MAP_PROJ4                   1204
+#define IDC_MAP_CS_INFO                 1205
+#define IDC_MAP_UNITS                   1206
+#define IDC_MAP_REF_SCALE_ON            1207
+#define IDC_MAP_REF_SCALE               1208
+#define IDC_MAP_REF_SCALE_CURRENT       1209
+#define IDC_MAP_BG_COLOR                1210
+#define IDC_MAP_BG_BTN                  1211
+#define IDC_MAP_EXTENT                  1212
+#define IDC_LAYER_SCALE_SYMBOLS         1213
+#define IDC_LAYER_REF_SCALE_NOTE        1214
 #define IDC_TABS                        1010
 #define IDC_SELECTOR_TYPE               1011
 #define IDC_SYMB_FIELD                  1012
@@ -116,14 +155,20 @@
 #define ID_ADD_RASTER                   32790
 #define ID_ZOOM_TO_LAYER                32791
 #define ID_CONVERT_FROM_OSM             32792
+#define ID_VIEW_LAYERS                  32793
+#define ID_LAYER_PROPERTIES             32794
+#define ID_LAYER_ZOOM                   32795
+#define ID_LAYER_REMOVE                 32796
+#define ID_NEW_GROUP_LAYER              32797
+#define ID_MAP_PROPERTIES               32798
 
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        201
-#define _APS_NEXT_COMMAND_VALUE         32793
-#define _APS_NEXT_CONTROL_VALUE         1179
-#define _APS_NEXT_SYMED_VALUE           109
+#define _APS_NEXT_COMMAND_VALUE         32799
+#define _APS_NEXT_CONTROL_VALUE         1215
+#define _APS_NEXT_SYMED_VALUE           113
 #endif
 #endif

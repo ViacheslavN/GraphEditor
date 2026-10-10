@@ -15,6 +15,10 @@ set(SOURCE_FILES
         layers/Layers.cpp
         layers/LoaderLayers.h
         layers/LoaderLayers.cpp
+        layers/GroupLayer.h
+        layers/GroupLayer.cpp
+        legend/Legend.h
+        legend/Legend.cpp
         renders/FeatureRendererBase.h
         renders/FeatureRenderer.h
         renders/FeatureRenderer.cpp

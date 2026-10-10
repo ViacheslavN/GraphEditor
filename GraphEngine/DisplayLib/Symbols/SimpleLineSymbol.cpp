@@ -1,4 +1,5 @@
 #include "SimpleLineSymbol.h"
+#include "../DisplayUtils.h"
 
 namespace GraphEngine {
     namespace Display {
@@ -25,7 +26,7 @@ namespace GraphEngine {
         }
         void CSimpleLineSymbol::DrawDirectly(IDisplayPtr ptrDisplay, const GPoint* lpPoints, const int *lpPolyCounts, int nCount )
         {
-
+            DrawGeometryEx(ptrDisplay, lpPoints, lpPolyCounts, nCount);
         }
 
 //CSymbol
@@ -34,7 +35,7 @@ namespace GraphEngine {
             IGraphicsPtr pGraphics = ptrDisplay->GetGraphics();
             for(int idx = 0, offset = 0; idx < (int)polyCount; ++idx)
             {
-                pGraphics->DrawLine(m_ptrPen, points + offset, polyCounts[idx]);
+                pGraphics->DrawLine(DrawPen(), points + offset, polyCounts[idx]);
                 offset += polyCounts[idx];
             }
 
@@ -46,10 +47,42 @@ namespace GraphEngine {
                     rect.ExpandRect(points[p]);
 
             // TODO: more accuracy calculation of boudary rect
-            rect.xMin -= m_ptrPen->GetWidth() / 2;
-            rect.yMin -= m_ptrPen->GetWidth() / 2;
-            rect.xMax += m_ptrPen->GetWidth()  / 2;
-            rect.yMax += m_ptrPen->GetWidth()  / 2;
+            const GUnits halfWidth = DrawPen()->GetWidth() / 2;
+            rect.xMin -= halfWidth;
+            rect.yMin -= halfWidth;
+            rect.xMax += halfWidth;
+            rect.yMax += halfWidth;
+        }
+
+        void CSimpleLineSymbol::Prepare(IDisplayPtr ptrDisplay)
+        {
+            m_ptrDevicePen.reset();
+            if(!GetScaleDependent() || !ptrDisplay.get())
+                return;
+
+            IDisplayTransformationPtr ptrTrans = ptrDisplay->GetTransformation();
+            if(!ptrTrans.get() || ptrTrans->GetScale() <= 0. || !ptrTrans->UseReferenceScale())
+                return;
+
+            // the width is in pixels at the reference scale
+            const double dFactor = ptrTrans->GetReferenceScale() / ptrTrans->GetScale();
+            if(CDisplayMath::Equals(dFactor, 1.))
+                return;
+
+            m_ptrDevicePen = std::make_shared<CPen>(*m_ptrPen);
+            m_ptrDevicePen->SetWidth((GUnits)(m_ptrPen->GetWidth() * dFactor));
+            if(!m_ptrPen->GetTemplates().empty())
+            {
+                m_ptrDevicePen->ClearTmplates();
+                for(const auto& dash : m_ptrPen->GetTemplates())
+                    m_ptrDevicePen->AddTemplate((GUnits)(dash.first * dFactor), (GUnits)(dash.second * dFactor));
+            }
+        }
+
+        void CSimpleLineSymbol::Changed()
+        {
+            m_ptrDevicePen.reset();   // made again by Prepare
+            m_bDirty = true;
         }
 
 //ILineSymbol
@@ -60,6 +93,7 @@ namespace GraphEngine {
         void   CSimpleLineSymbol::SetColor(const Color &color)
         {
             m_ptrPen->SetColor(color);
+            Changed();
         }
         double CSimpleLineSymbol::GetWidth() const
         {
@@ -68,6 +102,7 @@ namespace GraphEngine {
         void   CSimpleLineSymbol::SetWidth(double width)
         {
             m_ptrPen->SetWidth(width);
+            Changed();
         }
 
 //ISimpleLineSymbol
@@ -78,7 +113,25 @@ namespace GraphEngine {
         void  CSimpleLineSymbol::SetStyle( ePenType style )
         {
             m_ptrPen->SetPenType(style);
+            Changed();
         }
+        void CSimpleLineSymbol::AddDash(double dDash, double dGap)
+        {
+            m_ptrPen->AddTemplate((GUnits)dDash, (GUnits)dGap);
+            Changed();
+        }
+
+        void CSimpleLineSymbol::ClearDashes()
+        {
+            m_ptrPen->ClearTmplates();
+            Changed();
+        }
+
+        const TPenTemplates& CSimpleLineSymbol::GetDashes() const
+        {
+            return m_ptrPen->GetTemplates();
+        }
+
         eCapType  CSimpleLineSymbol::GetCapType() const
         {
             return m_ptrPen->GetCapType();
@@ -86,6 +139,7 @@ namespace GraphEngine {
         void  CSimpleLineSymbol::SetCapType( eCapType cap )
         {
             m_ptrPen->SetCapType(cap);
+            Changed();
         }
         eJoinType    CSimpleLineSymbol::GetJoinType() const
         {
@@ -93,7 +147,8 @@ namespace GraphEngine {
         }
         void  CSimpleLineSymbol::SetJoinType( eJoinType join )
         {
-            return m_ptrPen->SetJoinType(join);
+            m_ptrPen->SetJoinType(join);
+            Changed();
         }
 
         //ISerialize
@@ -118,6 +173,7 @@ namespace GraphEngine {
             {
                 TBase::Load(pObj);
                 m_ptrPen->Load(pObj, "Pen");
+                Changed();
             }
             catch (std::exception& exc)
             {

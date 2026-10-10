@@ -7,7 +7,9 @@
 namespace GraphEngine {
     namespace Cartography {
 
-        class  CFeatureLayer : public CLayerBase<IFeatureLayer>
+        // the legend of the layer: the groups of the symbol selectors of its feature renderers
+        // (annotation and labels are not in the legend)
+        class  CFeatureLayer : public CLayerBase<IFeatureLayer>, public ILegendInfo
         {
         public:
 
@@ -56,6 +58,10 @@ namespace GraphEngine {
 
             void DrawEx(eDrawPhase phase, Display::IDisplayPtr ptrDisplay, Display::ITrackCancelPtr trackCancel);
 
+            // ILegendInfo
+            virtual int                              GetLegendGroupCount() const;
+            virtual ILegendGroupPtr                  GetLegendGroup(int nIndex) const;
+
             virtual void Save(CommonLib::ISerializeObjPtr pObj) const;
             virtual void Load(CommonLib::ISerializeObjPtr pObj);
 
@@ -64,6 +70,7 @@ namespace GraphEngine {
         private:
             void CalcBB(Display::IDisplayPtr ptrDisplay, CommonLib::bbox& bb);
             std::string GetOIDFieldName() const;
+            std::vector<ILegendGroupPtr> CollectLegendGroups() const;
             GeoDatabase::ISpatialFilterPtr CreateDisplayFilter(Display::IDisplayPtr ptrDisplay, bool& bIntersects);
             IAnnotationRenderPtr PrepareAnnotationRenderer(GeoDatabase::IQueryFilterPtr ptrFilter, Display::IDisplayPtr ptrDisplay, bool checkScale) const;
             ILabelRendererPtr PrepareLabelRenderer(GeoDatabase::IQueryFilterPtr ptrFilter, Display::IDisplayPtr ptrDisplay) const;

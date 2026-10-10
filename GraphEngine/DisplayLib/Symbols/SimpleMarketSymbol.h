@@ -12,6 +12,7 @@ namespace GraphEngine {
 
             CSimpleMarketSymbol();
             virtual  ~CSimpleMarketSymbol();
+            virtual eSimpleMarkerStyle   GetStyle() const;
             virtual void                 SetStyle(eSimpleMarkerStyle style);
             virtual void                 SetOutline(bool bOutline);
             virtual bool                 IsOutline() const;

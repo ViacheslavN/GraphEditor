@@ -54,6 +54,7 @@ public:
 		COMMAND_ID_HANDLER(ID_ROTATE_LEFT, OnRotate)
 		COMMAND_ID_HANDLER(ID_ROTATE_RIGHT, OnRotate)
 		COMMAND_ID_HANDLER(ID_RESET_ROTATION, OnRotate)
+		COMMAND_ID_HANDLER(ID_MAP_PROPERTIES, OnMapProperties)
 	END_MSG_MAP()
 
 	LRESULT OnCreate(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/);
@@ -85,6 +86,7 @@ public:
 	LRESULT OnView3D(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnTilt(WORD /*wNotifyCode*/, WORD wID, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnRotate(WORD /*wNotifyCode*/, WORD wID, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
+	LRESULT OnMapProperties(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 
 	void NewProject();
 	bool ZoomToLayer(int nLayerIndex);
@@ -107,6 +109,24 @@ public:
 
 	// status bar to show the cursor position and the scale
 	void SetStatusBar(HWND hWndStatusBar);
+
+	// ---- layers panel (CLayerTreePane) and layer properties
+
+	TestMapDraw::CMapProject& GetProject() { return m_project; }
+	// the layers / symbols are used by the draw thread: stop it before changing them, then OnLayersChanged
+	void StopDrawing();
+	// a layer is changed (visibility, properties, order): redraws the map, the layers panel rebuilds the tree
+	void OnLayersChanged(bool bRedraw = true);
+	// incremented by OnLayersChanged, the layers panel compares it (changes, which don't change the layer lists)
+	uint64_t GetLayersRevision() const { return m_nLayersRevision; }
+	bool ZoomToLayer(GraphEngine::Cartography::ILayerPtr ptrLayer);
+	// modal properties dialog of the layer, true - the layer was changed
+	bool ShowLayerProperties(GraphEngine::Cartography::ILayerPtr ptrLayer);
+	// modal map properties dialog, true - the map was changed
+	bool ShowMapProperties();
+	// sets the map properties; a new coordinate system: the visible area is kept (projected into it), false - error shown
+	bool ApplyMapParams(const TestMapDraw::SMapParams& params);
+	double GetResolution() const;   // dpi of the screen
 
 private:
 	// the drawer has no callbacks: its state is polled by the draw timer (UI thread)
@@ -141,6 +161,8 @@ private:
 	std::string m_sConvertTable;  // set by the thread, read after WM_CONVERT_FINISHED
 	std::string m_sConvertError;
 	int64_t m_nConverted;
+
+	uint64_t m_nLayersRevision;
 
 	bool m_bLbDown;
 	bool m_bPan;

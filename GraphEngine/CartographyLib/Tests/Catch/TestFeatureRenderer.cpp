@@ -154,13 +154,13 @@ TEST_CASE("Simple symbol selector", "[cartography][selector]")
     CSimpleSymbolSelector selector;
 
     REQUIRE(selector.GetSymbolSelectorID() == SimpleSymbolSelectorID);
-    REQUIRE(selector.GetSymbolCount() == 1);
-    REQUIRE(selector.GetSymbolByIndex(0) == nullptr);
+    REQUIRE(selector.GetLegendGroupCount() == 0);   // no symbol - no legend
 
-    selector.SetSymbolByIndex(0, ptrSymbol);
+    selector.SetSymbol(ptrSymbol);
     REQUIRE(selector.GetSymbol() == ptrSymbol);
     REQUIRE(selector.GetSymbolByFeature(GeoDatabase::IRowPtr()) == ptrSymbol);
-    REQUIRE(selector.GetSymbolByIndex(1) == nullptr);
+    REQUIRE(selector.GetLegendGroupCount() == 1);
+    REQUIRE(selector.GetLegendGroup(0)->GetClass(0)->GetSymbol() == ptrSymbol);
 
     selector.SetupSymbols(Display::IDisplayPtr()); // no display -> nothing
     REQUIRE(ptrSymbol->nPrepare == 0);

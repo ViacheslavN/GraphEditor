@@ -7,6 +7,7 @@
 
 #include "MapView.h"
 #include "aboutdlg.h"
+#include "LayerTreePane.h"
 #include "MainFrm.h"
 
 CAppModule _Module;

@@ -19,7 +19,8 @@ namespace GraphEngine {
             //CSymbol
             virtual void  DrawGeometryEx(IDisplayPtr ptrDisplay, const GPoint* points, const int* polyCounts, int polyCount);
             virtual void  QueryBoundaryRectEx(IDisplayPtr ptrDisplay, const GPoint* points, const int* polyCounts, int polyCount,  GRect &rect) const;
-            virtual void  Prepare(IDisplayPtr ptrDisplay){}
+            // ScaleDependent: the width and the dashes are multiplied by reference scale / scale
+            virtual void  Prepare(IDisplayPtr ptrDisplay);
             //ILineSymbol
             virtual Color  GetColor() const ;
             virtual void   SetColor(const Color &color) ;
@@ -34,6 +35,11 @@ namespace GraphEngine {
             virtual eJoinType            GetJoinType() const ;
             virtual void                SetJoinType( eJoinType join ) ;
 
+            // custom dash pattern in pixels (dash, gap pairs) - replaces the pattern of the style, saved with the symbol
+            void                        AddDash(double dDash, double dGap);
+            void                        ClearDashes();
+            const TPenTemplates&        GetDashes() const;
+
 
 
             //ISerialize
@@ -42,9 +48,12 @@ namespace GraphEngine {
 
         private:
 
+            const PenPtr& DrawPen() const { return m_ptrDevicePen ? m_ptrDevicePen : m_ptrPen; }
+            void Changed();
             void Draw( IGraphicsPtr ptrGraphics, IDisplayTransformationPtr pDT, CommonLib::GisXYPoint *pPt, uint32_t nCnt);
         private:
             PenPtr m_ptrPen;
+            PenPtr m_ptrDevicePen;   // pen with the scaled width / dashes (Prepare), null - m_ptrPen is used
 
 
 

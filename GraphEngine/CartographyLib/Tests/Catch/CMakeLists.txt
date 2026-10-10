@@ -30,6 +30,9 @@ set(SOURCE_FILES
         TestSelectors.cpp
         TestSymbologyModel.cpp
         TestLabeling.cpp
+        TestGroupLayer.cpp
+        TestLegend.cpp
+        TestLayerTree.cpp
         # platform independent part of the TestMapWTLDraw application
         ../TestMapWTLDraw/SymbologyModel.cpp
         ../TestMapWTLDraw/MapProject.cpp

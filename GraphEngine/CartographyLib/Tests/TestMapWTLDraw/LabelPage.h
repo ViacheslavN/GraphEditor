@@ -17,6 +17,8 @@ public:
 	void SetFields(const std::vector<TestMapDraw::SFieldInfo>* pFields);
 	// initial value of the scale field (current map scale), 0 - empty
 	void SetDefaultScale(double dScale) { m_dDefaultScale = dScale; }
+	// current labels of a layer (layer properties), call before the page is created
+	void SetLabels(const TestMapDraw::SLabelParams& labels) { m_labels = labels; }
 	// false - a wrong value (the message is shown); labels off - empty field
 	bool GetLabels(TestMapDraw::SLabelParams& labels);
 
@@ -58,4 +60,5 @@ private:
 	std::vector<TestMapDraw::SFieldInfo> m_vecFields;
 	bool   m_bHasFields;
 	double m_dDefaultScale;
+	TestMapDraw::SLabelParams m_labels;   // initial settings, empty field - labels off
 };

@@ -1,5 +1,6 @@
 #include "TestCommon.h"
 #include "../../../GisGeometry/Envelope.h"
+#include "../../../GisGeometry/SpatialReferenceProj4/SpatialReferenceProj4.h"
 
 using namespace GraphEngine;
 using namespace GraphEngine::GeoDatabase;
@@ -219,6 +220,68 @@ TEST_CASE("SQLite: spatial table is restored when the database is reopened", "[g
     REQUIRE(ReadOids(ptrTable->Search(CreateBBoxFilter(6.5, 6.5, 7.5, 7.5, ptrTable->GetSpatialReference())), "PID") == std::vector<int64_t>{7});
 
     REQUIRE(ptrWorkspace->GetTable("people")->GetDatasetType() == dtTypeTable);
+}
+
+TEST_CASE("SQLite: shapes are given in the output coordinate system of the filter", "[geodatabase][sqlite]")
+{
+    // a table in UTM drawn on a Web Mercator map: the shapes must come in the map coordinates
+    Geometry::ISpatialReferencePtr ptrUtm = std::make_shared<Geometry::CSpatialReferenceProj4>(std::string("+proj=utm +zone=44 +datum=WGS84 +units=m +no_defs"));
+    Geometry::ISpatialReferencePtr ptrMerc = std::make_shared<Geometry::CSpatialReferenceProj4>(
+            std::string("+proj=merc +a=6378137 +b=6378137 +lat_ts=0 +lon_0=0 +x_0=0 +y_0=0 +k=1 +units=m +no_defs"));
+
+    std::string sPath;
+    IDatabaseWorkspacePtr ptrWorkspace = CreateDatabase("project_output.sqlite", sPath);
+    CommonLib::bbox extent;
+    extent.type = CommonLib::bbox_type_normal;
+    extent.xMin = 599000; extent.xMax = 601000;
+    extent.yMin = 6079000; extent.yMax = 6081000;
+    ITablePtr ptrTable = ptrWorkspace->CreateTableWithSpatialIndex("utm", "utm", "", "Geom", "PID", CreatePlacesFields(),
+                                                                  CommonLib::shape_type_point, std::make_shared<Geometry::CEnvelope>(extent, ptrUtm), ptrUtm);
+    {
+        ITransactionPtr ptrTransaction = ptrWorkspace->StartTransaction(ttModify);
+        IInsertCursorPtr ptrInsert = ptrTransaction->CreateInsertCusor(ptrTable);
+        ptrInsert->BindInt64(ptrTable->GetFields()->FindField("PID"), 1);
+        ptrInsert->BindText(ptrTable->GetFields()->FindField("Name"), "p", true);
+        ptrInsert->BindShape(ptrTable->GetFields()->FindField("Geom"), CreatePoint(600000, 6080000), true);
+        ptrInsert->Next();
+        ptrTransaction->Commit();
+    }
+
+    // the expected point in Mercator
+    CommonLib::IGeoShapePtr ptrExpected = CreatePoint(600000, 6080000);
+    REQUIRE(ptrUtm->Project(ptrMerc, ptrExpected));
+    double x = ptrExpected->GetPoints()[0].x, y = ptrExpected->GetPoints()[0].y;
+    REQUIRE(std::fabs(x - 600000) > 1000.);   // really another system
+
+    ISelectCursorPtr ptrCursor = ptrTable->Search(CreateBBoxFilter(x - 100, y - 100, x + 100, y + 100, ptrMerc));
+    int32_t nGeom = ptrCursor->FindFieldByName("Geom");
+    REQUIRE(ptrCursor->Next());
+    CommonLib::IGeoShapePtr ptrShape = ptrCursor->ReadShape(nGeom);
+    REQUIRE(std::fabs(ptrShape->GetPoints()[0].x - x) < 0.01);
+    REQUIRE(std::fabs(ptrShape->GetPoints()[0].y - y) < 0.01);
+    REQUIRE_FALSE(ptrCursor->Next());
+
+    // the same output system - no projection
+    ISelectCursorPtr ptrSame = ptrTable->Search(CreateBBoxFilter(599900, 6079900, 600100, 6080100, ptrUtm));
+    REQUIRE(ptrSame->Next());
+    REQUIRE(ptrSame->ReadShape(nGeom)->GetPoints()[0].x == 600000.);
+}
+
+TEST_CASE("SQLite: empty spatial table has no extent after the database is reopened", "[geodatabase][sqlite]")
+{
+    // an empty table (e.g. OSM boundaries of a small area) must not give the extent (0, 0, 0, 0):
+    // the full extent of a map would be stretched to the origin and the data drawn as a dot
+    std::string sPath;
+    {
+        IDatabaseWorkspacePtr ptrWorkspace = CreateDatabase("empty_extent.sqlite", sPath);
+        Geometry::ISpatialReferencePtr ptrSpatRef = OpenShapeWorkspace(CreatePolygonsShapefile())->GetTable("squares")->GetSpatialReference();
+        ptrWorkspace->CreateTableWithSpatialIndex("empty", "empty", "", "Geom", "PID", CreatePlacesFields(),
+                                                  CommonLib::shape_type_point, std::make_shared<Geometry::CEnvelope>(CommonLib::bbox(), ptrSpatRef), ptrSpatRef);
+    }
+
+    IDatabaseWorkspacePtr ptrWorkspace = CSQLiteWorkspace::Open("test", sPath.c_str(), CommonLib::CGuid::CreateNew());
+    Geometry::IEnvelopePtr ptrExtent = ptrWorkspace->GetTable("empty")->GetExtent();
+    REQUIRE((!ptrExtent.get() || !(ptrExtent->GetBoundingBox().type & CommonLib::bbox_type_normal)));
 }
 
 TEST_CASE("SQLite: workspace save / load, table loader", "[geodatabase][sqlite]")

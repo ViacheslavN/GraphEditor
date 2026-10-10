@@ -1,4 +1,5 @@
 #include "RangeSymbolSelector.h"
+#include "../legend/Legend.h"
 #include <algorithm>
 
 namespace GraphEngine {
@@ -161,6 +162,42 @@ namespace GraphEngine {
         void CRangeSymbolSelector::SetDefaultLabel(const std::string& sLabel) { m_sDefaultLabel = sLabel; }
         bool CRangeSymbolSelector::GetUseDefaultSymbol() const { return m_bUseDefaultSymbol; }
         void CRangeSymbolSelector::SetUseDefaultSymbol(bool bUse) { m_bUseDefaultSymbol = bUse; }
+
+        // ILegendInfo
+
+        int CRangeSymbolSelector::GetLegendGroupCount() const
+        {
+            return 1;
+        }
+
+        ILegendGroupPtr CRangeSymbolSelector::GetLegendGroup(int nIndex) const
+        {
+            if(nIndex != 0)
+                throw CommonLib::CExcBase("RangeSymbolSelector: legend group index out of range: {0}", nIndex);
+
+            std::weak_ptr<CRangeSymbolSelector> wSelf = std::const_pointer_cast<CRangeSymbolSelector>(weak_from_this().lock());
+            CLegendGroupPtr ptrGroup = std::make_shared<CLegendGroup>(m_sField);
+            for(int i = 0; i < (int)m_vecRanges.size(); ++i)
+            {
+                const SRangeEntry& entry = m_vecRanges[i];
+                std::string sLabel = entry.sLabel.empty() ? CLegendUtils::NumberToLabel(entry.dFrom) + " - " + CLegendUtils::NumberToLabel(entry.dTo) : entry.sLabel;
+
+                CLegendClass::TSymbolWriter writer = CLegendUtils::MakeSymbolWriter(wSelf, entry.ptrSymbol,
+                        [i](CRangeSymbolSelector& selector) { return i < selector.GetRangeCount() ? selector.GetSymbol(i) : Display::ISymbolPtr(); },
+                        [i](CRangeSymbolSelector& selector, Display::ISymbolPtr ptrSymbol) { selector.SetSymbol(i, ptrSymbol); });
+                ptrGroup->AddClass(std::make_shared<CLegendClass>(sLabel, entry.ptrSymbol, entry.sDescription, writer));
+            }
+
+            if(m_bUseDefaultSymbol && m_ptrDefaultSymbol.get())
+            {
+                CLegendClass::TSymbolWriter writer = CLegendUtils::MakeSymbolWriter(wSelf, m_ptrDefaultSymbol,
+                        [](CRangeSymbolSelector& selector) { return selector.GetDefaultSymbol(); },
+                        [](CRangeSymbolSelector& selector, Display::ISymbolPtr ptrSymbol) { selector.SetDefaultSymbol(ptrSymbol); });
+                ptrGroup->AddClass(std::make_shared<CLegendClass>(m_sDefaultLabel.empty() ? std::string("<all other values>") : m_sDefaultLabel,
+                                                                  m_ptrDefaultSymbol, std::string(), writer));
+            }
+            return ptrGroup;
+        }
 
         // ISerialize
 

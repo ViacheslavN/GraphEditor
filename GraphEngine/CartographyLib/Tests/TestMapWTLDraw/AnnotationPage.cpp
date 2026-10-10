@@ -44,17 +44,33 @@ LRESULT CAnnotationPage::OnInitDialog(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /
 	m_comboField = GetDlgItem(IDC_ANNO_FIELD);
 	m_editScale = GetDlgItem(IDC_ANNO_SCALE);
 
-	m_checkAnno.SetCheck(BST_UNCHECKED);
-	if(m_dDefaultScale > 0.)
+	m_checkAnno.SetCheck(m_anno.sField.empty() ? BST_UNCHECKED : BST_CHECKED);
+	double dScale = m_anno.sField.empty() ? m_dDefaultScale : m_anno.dMinimumScale;
+	if(dScale > 0.)
 	{
 		wchar_t szScale[64];
-		swprintf(szScale, 64, L"%.0f", m_dDefaultScale);
+		swprintf(szScale, 64, L"%.0f", dScale);
 		m_editScale.SetWindowText(szScale);
 	}
 
 	FillFields();
 	UpdateControls();
 	return FALSE;   // child page: don't take the focus from the dialog
+}
+
+void CAnnotationPage::SetAnnotation(const TestMapDraw::SAnnotationParams& anno)
+{
+	m_anno = anno;
+	if(!IsWindow())
+		return;
+
+	m_checkAnno.SetCheck(m_anno.sField.empty() ? BST_UNCHECKED : BST_CHECKED);
+	wchar_t szScale[64] = {0};
+	if(m_anno.dMinimumScale > 0.)
+		swprintf(szScale, 64, L"%.0f", m_anno.dMinimumScale);
+	m_editScale.SetWindowText(szScale);
+	FillFields();
+	UpdateControls();
 }
 
 void CAnnotationPage::SetFields(const std::vector<TestMapDraw::SFieldInfo>* pFields)
@@ -77,6 +93,11 @@ void CAnnotationPage::FillFields()
 		m_comboField.AddString(Utf8ToWide(m_vecFields[i].sName).c_str());
 		if(nSelect < 0 && m_vecFields[i].bText)
 			nSelect = (int)i;   // the first text field by default
+	}
+	for(size_t i = 0; i < m_vecFields.size(); ++i)
+	{
+		if(!m_anno.sField.empty() && m_vecFields[i].sName == m_anno.sField)
+			nSelect = (int)i;   // the field of the layer
 	}
 
 	if(nSelect < 0 && !m_vecFields.empty())

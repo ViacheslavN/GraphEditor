@@ -58,7 +58,8 @@ namespace GraphEngine {
         {
             UndefineLayerID,
             FeatureLayerID,
-            RasterLayerID
+            RasterLayerID,
+            GroupLayerID
 
         };
 
@@ -189,6 +190,9 @@ namespace GraphEngine {
         typedef std::shared_ptr< class IFeatureRenderer> IFeatureRendererPtr;
         typedef std::shared_ptr< class ISimpleSymbolSelector> ISimpleSymbolSelectorPtr;
         typedef std::shared_ptr< class ILegendInfo> ILegendInfoPtr;
+        typedef std::shared_ptr< class ILegendGroup> ILegendGroupPtr;
+        typedef std::shared_ptr< class ILegendClass> ILegendClassPtr;
+        typedef std::shared_ptr< class IGroupLayer> IGroupLayerPtr;
         typedef std::shared_ptr< class IUniqueValueSymbolSelector> IUniqueValueSymbolSelectorPtr;
         typedef std::shared_ptr< class IRangeSymbolSelector> IRangeSymbolSelectorPtr;
         typedef std::shared_ptr<class IFeatureLayer> IFeatureLayerPtr;
@@ -331,6 +335,20 @@ namespace GraphEngine {
 
         };
 
+        // Layer with child layers (ported from UniGIS GisDev IGroupLayer): the children are drawn in their order
+        // (the first child at the bottom), visibility and the scale range of the group apply to all of them,
+        // the extent is the union of the child extents. Expanded is a UI state (layer tree), it is saved with the group.
+        class IGroupLayer : public ILayer
+        {
+        public:
+            IGroupLayer(){}
+            virtual ~IGroupLayer(){}
+
+            virtual ILayersPtr  GetChildren() const = 0;
+            virtual bool        GetExpanded() const = 0;
+            virtual void        SetExpanded(bool flag) = 0;
+        };
+
 
         class  ILayers
         {
@@ -461,6 +479,10 @@ namespace GraphEngine {
             virtual ISymbolSelectorPtr	   GetSymbolSelector() const = 0;
             virtual void				   SetSymbolSelector(ISymbolSelectorPtr ptrAssigner) = 0;
             virtual void                   DrawFeature(Display::IDisplayPtr ptrDisplay, GeoDatabase::IRowPtr ptrRow, Display::ISymbolPtr ptrCustomSymbol = Display::ISymbolPtr()) = 0;
+            // the symbols of the renderer are in the legend of the layer (false - e.g. the casing of roads,
+            // drawn by its own renderer under the road fill)
+            virtual bool                   GetShowInLegend() const = 0;
+            virtual void                   SetShowInLegend(bool bShow) = 0;
         };
 
 
@@ -614,14 +636,48 @@ namespace GraphEngine {
             virtual void                   SetUseDefaultSymbol(bool bUse) = 0;
         };
 
+        // Legend (ported from UniGIS GisDev ILegendInfo / ILegendGroup / ILegendClass).
+        // An object which draws with symbols (symbol selector, feature layer) describes them as groups of classes,
+        // a class is a symbol with a label (a row of a map legend / of the layer tree).
+        // The groups are made on request from the current state of the object (a snapshot, take them again
+        // after the object is changed). ILegendClass::SetSymbol also sets the symbol to the object, which made
+        // the class, while it exists; stop drawing the map before it, the symbols are used by the draw thread.
+        // Display::CSymbolPreview draws a class symbol into an image.
+        class ILegendClass
+        {
+        public:
+            ILegendClass(){}
+            virtual ~ILegendClass(){}
+            virtual const std::string&     GetLabel() const = 0;
+            virtual void                   SetLabel(const std::string& sLabel) = 0;
+            virtual const std::string&     GetDescription() const = 0;
+            virtual void                   SetDescription(const std::string& sDescription) = 0;
+            virtual Display::ISymbolPtr    GetSymbol() const = 0;
+            virtual void                   SetSymbol(Display::ISymbolPtr ptrSymbol) = 0;
+        };
+
+        class ILegendGroup
+        {
+        public:
+            ILegendGroup(){}
+            virtual ~ILegendGroup(){}
+            virtual const std::string&     GetHeading() const = 0;     // field name(s) of a classification, may be empty
+            virtual void                   SetHeading(const std::string& sHeading) = 0;
+            virtual bool                   GetVisible() const = 0;
+            virtual void                   SetVisible(bool bVisible) = 0;
+            virtual int                    GetClassCount() const = 0;
+            virtual ILegendClassPtr        GetClass(int nIndex) const = 0;
+            virtual int                    AddClass(ILegendClassPtr ptrClass) = 0;   // returns the index
+            virtual void                   ClearClasses() = 0;
+        };
+
         class ILegendInfo
         {
         public:
             ILegendInfo(){}
             virtual ~ILegendInfo(){}
-            virtual int                    GetSymbolCount() const = 0;
-            virtual Display::ISymbolPtr    GetSymbolByIndex(int index) const = 0;
-            virtual void                   SetSymbolByIndex(int index, Display::ISymbolPtr ptrSymbol) = 0;
+            virtual int                    GetLegendGroupCount() const = 0;
+            virtual ILegendGroupPtr        GetLegendGroup(int nIndex) const = 0;
         };
 
         // Map drawer: draws the map in a background thread into an off-screen graphics,

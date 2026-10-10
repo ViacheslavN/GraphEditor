@@ -15,6 +15,9 @@ namespace GraphEngine {
 
             // creates the feature layer of the table (styled by the OSM layer name), the label renderer if the layer has names
             static Cartography::IFeatureLayerPtr CreateLayer(const IOSMLayer& osmLayer, GeoDatabase::ITablePtr ptrTable);
+
+            // map background of the Carto style (@land-color #f2efe9)
+            static Display::IFillSymbolPtr CreateBackground();
         };
     }
 }

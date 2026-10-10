@@ -49,6 +49,7 @@ namespace GraphEngine {
             CommonLib::database::IStatmentPtr m_ptrStatment;
             mutable CommonLib::IGeoShapePtr  m_ptrCacheShape;
             std::string m_sShapeFieldName;
+            Geometry::ISpatialReferencePtr m_ptrSpatRefSource;   // of the table: shapes are projected to the output one of the filter
 
 
         };

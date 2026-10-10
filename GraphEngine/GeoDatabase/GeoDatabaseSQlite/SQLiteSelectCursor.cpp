@@ -43,7 +43,7 @@ namespace GraphEngine {
         }
 
         CSQLiteSelectCursor::CSQLiteSelectCursor(const std::string& sTableName, const std::string& sOIDName, const std::string& sSpatialIndex, const std::string& sShapeFieldName, IFieldsPtr  ptrSourceFields, IQueryFilterPtr ptrFilter, Geometry::ISpatialReferencePtr ptrSpatRefSource, CommonLib::database::IDatabasePtr ptrDatabase ):
-                TBase(IFieldsPtr(), ptrFilter, ptrSpatRefSource), m_sShapeFieldName(sShapeFieldName)
+                TBase(IFieldsPtr(), ptrFilter, ptrSpatRefSource), m_sShapeFieldName(sShapeFieldName), m_ptrSpatRefSource(ptrSpatRefSource)
         {
             try
             {
@@ -295,6 +295,10 @@ namespace GraphEngine {
 
             m_ptrCacheShape->Import(pBuf, size);
 
+            // the table and the output (map) coordinate systems differ: the shape is given in the output one,
+            // as the shapefile cursor does (the spatial index is queried with the extent projected to the table)
+            if(m_bNeedTransform && m_ptrSpatRefSource.get() && m_ptrFilter.get() && m_ptrCacheShape->GetPointCnt() > 0)
+                m_ptrSpatRefSource->Project(m_ptrFilter->GetOutputSpatialReference(), m_ptrCacheShape);
 
             return m_ptrCacheShape;
 

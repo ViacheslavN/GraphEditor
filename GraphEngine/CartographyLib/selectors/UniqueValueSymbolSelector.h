@@ -5,8 +5,9 @@
 namespace GraphEngine {
     namespace Cartography {
 
-        // symbol by the unique values of one or several fields (ported from UniGIS UniqueValueSymbolAssigner, without ILegendInfo)
-        class CUniqueValueSymbolSelector : public IUniqueValueSymbolSelector
+        // symbol by the unique values of one or several fields (ported from UniGIS UniqueValueSymbolAssigner)
+        class CUniqueValueSymbolSelector : public IUniqueValueSymbolSelector, public ILegendInfo,
+                                           public std::enable_shared_from_this<CUniqueValueSymbolSelector>
         {
         public:
             CUniqueValueSymbolSelector();
@@ -54,6 +55,10 @@ namespace GraphEngine {
             virtual void                   SetDefaultLabel(const std::string& sLabel);
             virtual bool                   GetUseDefaultSymbol() const;
             virtual void                   SetUseDefaultSymbol(bool bUse);
+
+            // ILegendInfo: one group (heading - the fields), a class per value, the default symbol is the last class
+            virtual int                    GetLegendGroupCount() const;
+            virtual ILegendGroupPtr        GetLegendGroup(int nIndex) const;
 
             // ISerialize
             virtual void Save(CommonLib::ISerializeObjPtr pObj) const;

@@ -826,6 +826,8 @@ namespace GraphEngine {
                 m_ptrMap->SetSpatialReference(m_projection.CreateSpatialReference());
                 m_ptrMap->SetMapUnits(m_projection.GetUnits());
             }
+            if(!m_ptrMap->GetBackgroundSymbol().get())
+                m_ptrMap->SetBackgroundSymbol(COSMMapStyle::CreateBackground());
 
             Cartography::IFeatureLayerPtr ptrLayer = COSMMapStyle::CreateLayer(osmLayer, ptrTable);
             int nRank = COSMMapStyle::LayerRank(osmLayer.GetName());

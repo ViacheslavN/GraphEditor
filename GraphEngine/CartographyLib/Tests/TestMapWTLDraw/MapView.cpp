@@ -10,6 +10,8 @@
 #include "AddSQLiteDlg.h"
 #include "ConvertOSMDlg.h"
 #include "OSMProgressDlg.h"
+#include "LayerPropertiesDlg.h"
+#include "MapPropertiesDlg.h"
 #ifdef HAVE_OSM_CONVERTOR
 #include "../../Map.h"
 #include "../../../GeoDatabase/GeoDatabaseSQlite/SQLiteWorkspace.h"
@@ -69,6 +71,7 @@ CMapView::CMapView() :
 	m_bConverting(false),
 	m_bConvertCancel(false),
 	m_nConverted(0),
+	m_nLayersRevision(0),
 	m_bLbDown(false),
 	m_bPan(false)
 {
@@ -93,6 +96,119 @@ BOOL CMapView::PreTranslateMessage(MSG* pMsg)
 void CMapView::SetStatusBar(HWND hWndStatusBar)
 {
 	m_hWndStatusBar = hWndStatusBar;
+}
+
+void CMapView::StopDrawing()
+{
+	m_ptrDrawer->StopDraw(true);
+}
+
+void CMapView::OnLayersChanged(bool bRedraw)
+{
+	++m_nLayersRevision;
+	if(bRedraw)
+		Redraw();
+}
+
+double CMapView::GetResolution() const
+{
+	return m_ptrDrawer->GetResolution();
+}
+
+bool CMapView::ZoomToLayer(Cartography::ILayerPtr ptrLayer)
+{
+	try
+	{
+		CommonLib::bbox bb;
+		if(!m_project.GetLayerExtent(ptrLayer, bb))
+		{
+			::MessageBox(m_hWnd, L"The layer has no extent in the map coordinate system.", L"Zoom to layer", MB_OK | MB_ICONINFORMATION);
+			return false;
+		}
+
+		m_ptrDrawer->ZoomIn(bb);
+		UpdateStatus(nullptr);
+		return true;
+	}
+	catch (std::exception& exc)
+	{
+		ShowError(exc, L"Zoom to layer");
+		return false;
+	}
+}
+
+bool CMapView::ShowMapProperties()
+{
+	CMapPropertiesDlg dlg(this);
+	dlg.DoModal(GetTopLevelParent());
+	if(!dlg.IsChanged())
+		return false;
+
+	OnLayersChanged(false);   // the dialog has redrawn the map on every Apply; the layers panel shows the new name
+	return true;
+}
+
+LRESULT CMapView::OnMapProperties(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/)
+{
+	ShowMapProperties();
+	return 0;
+}
+
+bool CMapView::ApplyMapParams(const TestMapDraw::SMapParams& params)
+{
+	try
+	{
+		StopDrawing();
+
+		// the visible area in the old coordinate system
+		Cartography::IMapPtr ptrMap = m_project.GetMap();
+		Geometry::ISpatialReferencePtr ptrOldSpatRef = ptrMap->GetSpatialReference();
+		std::string sOldProj4 = ptrOldSpatRef.get() ? ptrOldSpatRef->GetProjectionString() : std::string();
+		CommonLib::bbox visible;
+		Display::IDisplayTransformationPtr ptrTrans = m_ptrDrawer->GetCalcTransformation();
+		if(ptrTrans.get() && m_project.HasDataLayers())
+			visible = ptrTrans->GetFittedBounds();
+
+		m_project.ApplyMapParams(params);
+
+		Geometry::ISpatialReferencePtr ptrNewSpatRef = ptrMap->GetSpatialReference();
+		std::string sNewProj4 = ptrNewSpatRef.get() ? ptrNewSpatRef->GetProjectionString() : std::string();
+		// a new transformation (coordinate system, units are taken by the drawer from the map),
+		// then the same area projected into the new system
+		m_ptrDrawer->SetMap(ptrMap);
+		bool bProjected = (visible.type & CommonLib::bbox_type_normal) &&
+		                  (sNewProj4 == sOldProj4 || (ptrOldSpatRef.get() && ptrNewSpatRef.get() && ptrOldSpatRef->Project(ptrNewSpatRef, visible)));
+		if(bProjected && std::isfinite(visible.xMin) && std::isfinite(visible.yMin) && std::isfinite(visible.xMax) && std::isfinite(visible.yMax) &&
+		   visible.xMax > visible.xMin && visible.yMax > visible.yMin)
+			m_ptrDrawer->ZoomIn(visible);
+		else
+			m_ptrDrawer->ZoomToFullExtent();
+
+		OnLayersChanged(true);
+		return true;
+	}
+	catch (std::exception& exc)
+	{
+		ShowError(exc, L"Map Properties");
+		Redraw();
+		return false;
+	}
+}
+
+bool CMapView::ShowLayerProperties(Cartography::ILayerPtr ptrLayer)
+{
+	if(!ptrLayer.get())
+		return false;
+
+	// the pages read the layer table (unique values, ranges): not while the map is drawn
+	StopDrawing();
+	CLayerPropertiesDlg dlg(this, ptrLayer);
+	dlg.DoModal(GetTopLevelParent());
+	if(!dlg.IsChanged())
+		return false;
+
+	OnLayersChanged(false);   // the dialog has redrawn the map on every Apply
+	return true;
 }
 
 LRESULT CMapView::OnCreate(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/)
@@ -520,24 +636,10 @@ LRESULT CMapView::OnZoomToLayer(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndC
 
 bool CMapView::ZoomToLayer(int nLayerIndex)
 {
-	try
-	{
-		CommonLib::bbox bb;
-		if(!m_project.GetLayerExtent(nLayerIndex, bb))
-		{
-			::MessageBox(m_hWnd, L"The layer has no extent in the map coordinate system.", L"Zoom to layer", MB_OK | MB_ICONINFORMATION);
-			return false;
-		}
-
-		m_ptrDrawer->ZoomIn(bb);
-		UpdateStatus(nullptr);
-		return true;
-	}
-	catch (std::exception& exc)
-	{
-		ShowError(exc, L"Zoom to layer");
+	Cartography::ILayersPtr ptrLayers = m_project.GetMap()->GetLayers();
+	if(nLayerIndex < 0 || nLayerIndex >= ptrLayers->GetLayerCount())
 		return false;
-	}
+	return ZoomToLayer(ptrLayers->GetLayer(nLayerIndex));
 }
 
 LRESULT CMapView::OnZoomIn(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/)
@@ -682,7 +784,7 @@ void CMapView::OnLayersAdded(bool bFirstLayers)
 
 double CMapView::GetCurrentScale() const
 {
-	if(m_project.GetMap()->GetLayers()->GetLayerCount() == 0)
+	if(!m_project.HasDataLayers())
 		return 0.;
 
 	Display::IDisplayTransformationPtr ptrTrans = m_ptrDrawer->GetCalcTransformation();
@@ -694,7 +796,7 @@ bool CMapView::AddShapeFile(const wchar_t *pszFile, const TestMapDraw::SLayerPar
 	try
 	{
 		m_ptrDrawer->StopDraw(true);
-		bool bFirstLayer = m_project.GetMap()->GetLayers()->GetLayerCount() == 0;
+		bool bFirstLayer = !m_project.HasDataLayers();
 		m_project.AddShapefile(ToFilePath(pszFile), params);
 		OnLayersAdded(bFirstLayer);
 		return true;
@@ -711,7 +813,7 @@ bool CMapView::AddSQLiteDatabase(const wchar_t *pszFile, const std::string& sTab
 	try
 	{
 		m_ptrDrawer->StopDraw(true);
-		bool bFirstLayer = m_project.GetMap()->GetLayers()->GetLayerCount() == 0;
+		bool bFirstLayer = !m_project.HasDataLayers();
 		m_project.AddSQLiteDatabase(ToUtf8(pszFile), sTableName, params);
 		OnLayersAdded(bFirstLayer);
 		return true;
@@ -738,7 +840,7 @@ bool CMapView::AddRaster(const wchar_t *pszFile)
 	try
 	{
 		m_ptrDrawer->StopDraw(true);
-		bool bFirstLayer = m_project.GetMap()->GetLayers()->GetLayerCount() == 0;
+		bool bFirstLayer = !m_project.HasDataLayers();
 		m_project.AddRaster(ToUtf8(pszFile)); // the TIFF reader opens UTF-8 paths (TIFFOpenW)
 		OnLayersAdded(bFirstLayer);
 		return true;
@@ -869,7 +971,7 @@ LRESULT CMapView::OnConvertFromOSM(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hW
 		if(ptrNewMap.get())
 		{
 			m_ptrDrawer->StopDraw(true);
-			bool bFirstLayers = m_project.GetMap()->GetLayers()->GetLayerCount() == 0;
+			bool bFirstLayers = !m_project.HasDataLayers();
 			nLayers = m_project.AddConvertedLayers(ptrDb, ptrNewMap);
 			if(nLayers > 0)
 				OnLayersAdded(bFirstLayers);

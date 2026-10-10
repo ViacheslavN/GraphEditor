@@ -7,6 +7,7 @@
 
 #include "aboutdlg.h"
 #include "MapView.h"
+#include "LayerTreePane.h"
 #include "MainFrm.h"
 
 namespace
@@ -24,6 +25,10 @@ BOOL CMainFrame::PreTranslateMessage(MSG* pMsg)
 
 BOOL CMainFrame::OnIdle()
 {
+	// no events from the map: the layers panel compares the map state on idle
+	m_layerTree.CheckMap();
+	UISetCheck(ID_VIEW_LAYERS, m_splitter.GetSinglePaneMode() == SPLIT_PANE_NONE ? 1 : 0);
+
 	bool b3D = m_view.Is3DMode();
 	UISetCheck(ID_VIEW_3D, b3D ? 1 : 0);
 	UIEnable(ID_TILT_UP, b3D);
@@ -51,8 +56,21 @@ LRESULT CMainFrame::OnCreate(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/
 
 	CreateSimpleStatusBar();
 
-	m_hWndClient = m_view.Create(m_hWnd, rcDefault, NULL, WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS | WS_CLIPCHILDREN, WS_EX_CLIENTEDGE);
+	m_hWndClient = m_splitter.Create(m_hWnd, rcDefault, NULL, WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS | WS_CLIPCHILDREN);
+	m_splitter.SetSplitterExtendedStyle(0);   // the layers panel keeps its width when the window is resized
+
+	m_layerTree.SetMapView(&m_view);
+	m_layerTree.Create(m_splitter, rcDefault, NULL, WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS | WS_CLIPCHILDREN);
+	m_view.Create(m_splitter, rcDefault, NULL, WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS | WS_CLIPCHILDREN, WS_EX_CLIENTEDGE);
 	m_view.SetStatusBar(m_hWndStatusBar);
+	m_splitter.SetSplitterPanes(m_layerTree, m_view);
+
+	UpdateLayout();
+	HDC hDC = GetDC();
+	int nDpi = ::GetDeviceCaps(hDC, LOGPIXELSX);
+	ReleaseDC(hDC);
+	m_splitter.SetSplitterPos(::MulDiv(240, nDpi, 96));
+	m_layerTree.CheckMap();
 
 	UIAddToolBar(hWndToolBar);
 	UISetCheck(ID_VIEW_TOOLBAR, 1);
@@ -158,6 +176,14 @@ LRESULT CMainFrame::OnViewStatusBar(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*h
 	::ShowWindow(m_hWndStatusBar, bVisible ? SW_SHOWNOACTIVATE : SW_HIDE);
 	UISetCheck(ID_VIEW_STATUS_BAR, bVisible);
 	UpdateLayout();
+	return 0;
+}
+
+LRESULT CMainFrame::OnViewLayers(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/)
+{
+	bool bShow = m_splitter.GetSinglePaneMode() != SPLIT_PANE_NONE;
+	m_splitter.SetSinglePaneMode(bShow ? SPLIT_PANE_NONE : SPLIT_PANE_RIGHT);
+	UISetCheck(ID_VIEW_LAYERS, bShow ? 1 : 0);
 	return 0;
 }
 

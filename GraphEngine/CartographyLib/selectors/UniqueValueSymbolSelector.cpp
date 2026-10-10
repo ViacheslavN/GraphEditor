@@ -1,4 +1,5 @@
 #include "UniqueValueSymbolSelector.h"
+#include "../legend/Legend.h"
 
 namespace GraphEngine {
     namespace Cartography {
@@ -236,6 +237,54 @@ namespace GraphEngine {
         void CUniqueValueSymbolSelector::SetDefaultLabel(const std::string& sLabel) { m_sDefaultLabel = sLabel; }
         bool CUniqueValueSymbolSelector::GetUseDefaultSymbol() const { return m_bUseDefaultSymbol; }
         void CUniqueValueSymbolSelector::SetUseDefaultSymbol(bool bUse) { m_bUseDefaultSymbol = bUse; }
+
+        // ILegendInfo
+
+        int CUniqueValueSymbolSelector::GetLegendGroupCount() const
+        {
+            return 1;
+        }
+
+        ILegendGroupPtr CUniqueValueSymbolSelector::GetLegendGroup(int nIndex) const
+        {
+            if(nIndex != 0)
+                throw CommonLib::CExcBase("UniqueValueSymbolSelector: legend group index out of range: {0}", nIndex);
+
+            std::string sHeading = m_sHeadingLabel;
+            if(sHeading.empty())
+            {
+                for(size_t i = 0; i < m_vecFields.size(); ++i)
+                    sHeading += (i ? ", " : "") + m_vecFields[i];
+            }
+
+            std::weak_ptr<CUniqueValueSymbolSelector> wSelf = std::const_pointer_cast<CUniqueValueSymbolSelector>(weak_from_this().lock());
+            CLegendGroupPtr ptrGroup = std::make_shared<CLegendGroup>(sHeading);
+            for(int i = 0; i < (int)m_vecValues.size(); ++i)
+            {
+                const SValueEntry& entry = m_vecValues[i];
+                std::string sLabel = entry.sLabel;
+                if(sLabel.empty())
+                {
+                    for(size_t f = 0; f < entry.vecValues.size(); ++f)
+                        sLabel += (f ? ", " : "") + CLegendUtils::ValueToLabel(entry.vecValues[f]);
+                }
+
+                CLegendClass::TSymbolWriter writer = CLegendUtils::MakeSymbolWriter(wSelf, entry.ptrSymbol,
+                        [i](CUniqueValueSymbolSelector& selector) { return i < selector.GetValueCount() ? selector.GetSymbol(i) : Display::ISymbolPtr(); },
+                        [i](CUniqueValueSymbolSelector& selector, Display::ISymbolPtr ptrSymbol) { selector.SetSymbol(i, ptrSymbol); });
+                ptrGroup->AddClass(std::make_shared<CLegendClass>(sLabel, entry.ptrSymbol, entry.sDescription, writer));
+            }
+
+            if(m_bUseDefaultSymbol && m_ptrDefaultSymbol.get())
+            {
+                CLegendClass::TSymbolWriter writer = CLegendUtils::MakeSymbolWriter(wSelf, m_ptrDefaultSymbol,
+                        [](CUniqueValueSymbolSelector& selector) { return selector.GetDefaultSymbol(); },
+                        [](CUniqueValueSymbolSelector& selector, Display::ISymbolPtr ptrSymbol) { selector.SetDefaultSymbol(ptrSymbol); });
+                ptrGroup->AddClass(std::make_shared<CLegendClass>(m_sDefaultLabel.empty() ? std::string("<all other values>") : m_sDefaultLabel,
+                                                                  m_ptrDefaultSymbol, std::string(), writer));
+            }
+            return ptrGroup;
+        }
 
         // ISerialize
 

@@ -4,8 +4,9 @@
 namespace GraphEngine {
     namespace Cartography {
 
-        // symbol by the range of a numeric field value (ported from UniGIS RangeSymbolAssigner, without ILegendInfo)
-        class CRangeSymbolSelector : public IRangeSymbolSelector
+        // symbol by the range of a numeric field value (ported from UniGIS RangeSymbolAssigner)
+        class CRangeSymbolSelector : public IRangeSymbolSelector, public ILegendInfo,
+                                     public std::enable_shared_from_this<CRangeSymbolSelector>
         {
         public:
             CRangeSymbolSelector();
@@ -48,6 +49,10 @@ namespace GraphEngine {
             virtual void                   SetDefaultLabel(const std::string& sLabel);
             virtual bool                   GetUseDefaultSymbol() const;
             virtual void                   SetUseDefaultSymbol(bool bUse);
+
+            // ILegendInfo: one group (heading - the field), a class per range, the default symbol is the last class
+            virtual int                    GetLegendGroupCount() const;
+            virtual ILegendGroupPtr        GetLegendGroup(int nIndex) const;
 
             // ISerialize
             virtual void Save(CommonLib::ISerializeObjPtr pObj) const;

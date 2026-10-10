@@ -17,6 +17,8 @@ public:
 	void SetFields(const std::vector<TestMapDraw::SFieldInfo>* pFields);
 	// initial value of the scale field (current map scale), 0 - empty
 	void SetDefaultScale(double dScale) { m_dDefaultScale = dScale; }
+	// current annotation of a layer (layer properties), call before the page is created or after SetFields
+	void SetAnnotation(const TestMapDraw::SAnnotationParams& anno);
 	// false - a wrong value (the message is shown); annotation off - empty field
 	bool GetAnnotation(TestMapDraw::SAnnotationParams& anno);
 
@@ -40,4 +42,5 @@ private:
 	std::vector<TestMapDraw::SFieldInfo> m_vecFields;
 	bool   m_bHasFields;
 	double m_dDefaultScale;
+	TestMapDraw::SAnnotationParams m_anno;   // initial annotation, empty field - off
 };

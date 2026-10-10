@@ -20,6 +20,11 @@ namespace GraphEngine {
 
         }
 
+        eSimpleMarkerStyle CSimpleMarketSymbol::GetStyle() const
+        {
+            return m_style;
+        }
+
         void  CSimpleMarketSymbol::SetStyle(eSimpleMarkerStyle style)
         {
             m_style = style;

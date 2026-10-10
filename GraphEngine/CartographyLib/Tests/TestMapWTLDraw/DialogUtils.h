@@ -5,6 +5,8 @@
 #pragma once
 
 #include <string>
+#include <cwchar>
+#include <cstdlib>
 #include "../../../CommonLib/str/StringEncoding.h"
 
 namespace DialogUtils
@@ -57,5 +59,35 @@ namespace DialogUtils
 	inline std::wstring ExceptionText(const std::exception& exc)
 	{
 		return Utf8ToWide(exc.what());
+	}
+
+	// scale denominator from "1:50000" or "50000" (spaces allowed), 0 - empty (no limit), -1 - invalid
+	inline double ParseScaleText(const std::wstring& sText)
+	{
+		std::wstring s = Trim(sText, L" \t");
+		if(s.size() > 2 && s.compare(0, 2, L"1:") == 0)
+			s = s.substr(2);
+		std::wstring sDigits;
+		for(size_t i = 0; i < s.size(); ++i)
+			if(s[i] != L' ')
+				sDigits += (s[i] == L',' ? L'.' : s[i]);
+		if(sDigits.empty())
+			return 0.;
+
+		wchar_t* pszEnd = nullptr;
+		double dScale = wcstod(sDigits.c_str(), &pszEnd);
+		if(pszEnd == sDigits.c_str() || *pszEnd != 0 || dScale < 0.)
+			return -1.;
+		return dScale;
+	}
+
+	// "50000", empty for 0
+	inline std::wstring FormatScale(double dScale)
+	{
+		if(dScale <= 0.)
+			return std::wstring();
+		wchar_t sz[64];
+		swprintf(sz, 64, L"%.0f", dScale);
+		return sz;
 	}
 }

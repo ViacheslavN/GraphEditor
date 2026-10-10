@@ -12,9 +12,34 @@ namespace GraphEngine {
 
         }
 
+        std::vector<ILayersPtr> CLayers::GetGroupChildren() const
+        {
+            std::vector<ILayersPtr> vecChildren;
+            std::lock_guard lock(m_mutex);
+            for(size_t i = 0; i < m_vecLayers.size(); ++i)
+            {
+                const IGroupLayer* pGroup = dynamic_cast<const IGroupLayer*>(m_vecLayers[i].get());
+                if(pGroup && pGroup->GetChildren().get())
+                    vecChildren.push_back(pGroup->GetChildren());
+            }
+            return vecChildren;
+        }
+
+        uint64_t CLayers::GetChildrenCounter(const ILayerPtr& ptrLayer)
+        {
+            const IGroupLayer* pGroup = dynamic_cast<const IGroupLayer*>(ptrLayer.get());
+            return pGroup && pGroup->GetChildren().get() ? pGroup->GetChildren()->GetChangeCounter() : 0;
+        }
+
         uint64_t CLayers::GetChangeCounter() const
         {
-            return m_nChangeCounter;
+            // own changes + the changes of the group children; when a group leaves the list its counter is added
+            // to the own counter (RemoveLayer, RemoveAllLayers), so the sum never goes back to an older value
+            uint64_t nCounter = m_nChangeCounter;
+            std::vector<ILayersPtr> vecChildren = GetGroupChildren();
+            for(size_t i = 0; i < vecChildren.size(); ++i)
+                nCounter += vecChildren[i]->GetChangeCounter();
+            return nCounter;
         }
 
         int CLayers::GetLayerCount() const
@@ -34,11 +59,22 @@ namespace GraphEngine {
 
         ILayerPtr CLayers::GetLayerById(CommonLib::CGuid layerId) const
         {
-            std::lock_guard lock(m_mutex);
+            {
+                std::lock_guard lock(m_mutex);
 
-            auto it = m_layersById.find(layerId);
-            if(it != m_layersById.end())
-                return it->second;
+                auto it = m_layersById.find(layerId);
+                if(it != m_layersById.end())
+                    return it->second;
+            }
+
+            // the children of the groups are searched without the lock of this list
+            std::vector<ILayersPtr> vecChildren = GetGroupChildren();
+            for(size_t i = 0; i < vecChildren.size(); ++i)
+            {
+                ILayerPtr ptrLayer = vecChildren[i]->GetLayerById(layerId);
+                if(ptrLayer.get())
+                    return ptrLayer;
+            }
 
             return  ILayerPtr();
         }
@@ -81,9 +117,9 @@ namespace GraphEngine {
             if(it == m_layersById.end())
                 throw CommonLib::CExcBase("Layers: failed to remove layer, layer with id: {0}, name: {1} dosen't exisit", layerId.ToAstr(false), ptrLayerToRemove->GetName());
 
+            m_nChangeCounter += 1 + GetChildrenCounter(it->second);
             m_layersById.erase(it);
             m_vecLayers.erase(std::remove_if(m_vecLayers.begin(), m_vecLayers.end(), [&layerId](const ILayerPtr& ptrLayer){return layerId == ptrLayer->GetLayerId();}), m_vecLayers.end());
-            ++m_nChangeCounter;
         }
 
         void CLayers::RemoveAllLayers()
@@ -92,9 +128,13 @@ namespace GraphEngine {
             if(m_vecLayers.empty())
                 return;
 
+            uint64_t nRemoved = 1;
+            for(size_t i = 0; i < m_vecLayers.size(); ++i)
+                nRemoved += GetChildrenCounter(m_vecLayers[i]);
+
             m_layersById.clear();
             m_vecLayers.clear();
-            ++m_nChangeCounter;
+            m_nChangeCounter += nRemoved;
         }
 
         void CLayers::MoveLayer(ILayerPtr ptrLayer, int index)

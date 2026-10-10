@@ -97,14 +97,16 @@ LRESULT CLabelPage::OnInitDialog(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lPar
 	m_comboDuplicates = GetDlgItem(IDC_LABEL_DUPLICATES);
 	m_editDuplicateDistance = GetDlgItem(IDC_LABEL_DUP_DISTANCE);
 
-	TestMapDraw::SLabelParams defaults;
+	// the defaults or the labels of the layer (SetLabels)
+	const TestMapDraw::SLabelParams& defaults = m_labels;
 	const Cartography::SLabelingOptions& options = defaults.options;
 
-	m_checkLabels.SetCheck(BST_UNCHECKED);
-	if(m_dDefaultScale > 0.)
+	m_checkLabels.SetCheck(defaults.sField.empty() ? BST_UNCHECKED : BST_CHECKED);
+	double dScale = defaults.sField.empty() ? m_dDefaultScale : defaults.dMinimumScale;
+	if(dScale > 0.)
 	{
 		wchar_t szScale[64];
-		swprintf(szScale, 64, L"%.0f", m_dDefaultScale);
+		swprintf(szScale, 64, L"%.0f", dScale);
 		m_editScale.SetWindowText(szScale);
 	}
 
@@ -120,9 +122,20 @@ LRESULT CLabelPage::OnInitDialog(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lPar
 
 	m_editPriority.SetWindowText(FormatNumber(options.m_nPriority).c_str());
 
+	// the preset with the priorities of the layer, other priorities - one more item which keeps them
+	int nPreset = -1;
 	for(int i = 0; i < PointPresetCount; ++i)
+	{
 		m_comboPointPosition.AddString(PointPresets[i].pszName);
-	m_comboPointPosition.SetCurSel(0);
+		if(nPreset < 0 && std::equal(options.m_pointPriorities, options.m_pointPriorities + Cartography::PointLabelPositionCount, PointPresets[i].priorities))
+			nPreset = i;
+	}
+	if(nPreset < 0)
+	{
+		m_comboPointPosition.AddString(L"Current positions");
+		nPreset = PointPresetCount;
+	}
+	m_comboPointPosition.SetCurSel(nPreset);
 	m_editOffset.SetWindowText(FormatNumber(options.m_dOffset).c_str());
 
 	m_comboLineOrientation.AddString(L"Horizontal");
@@ -174,6 +187,11 @@ void CLabelPage::FillFields()
 		m_comboField.AddString(Utf8ToWide(m_vecFields[i].sName).c_str());
 		if(nSelect < 0 && m_vecFields[i].bText)
 			nSelect = (int)i;   // the first text field by default
+	}
+	for(size_t i = 0; i < m_vecFields.size(); ++i)
+	{
+		if(!m_labels.sField.empty() && m_vecFields[i].sName == m_labels.sField)
+			nSelect = (int)i;   // the field of the layer
 	}
 
 	if(nSelect < 0 && !m_vecFields.empty())
@@ -296,10 +314,12 @@ bool CLabelPage::GetLabels(TestMapDraw::SLabelParams& labels)
 	options.m_dDuplicateDistance = dDistance;
 
 	int nPreset = m_comboPointPosition.GetCurSel();
-	if(nPreset >= 0 && nPreset < PointPresetCount)
+	for(int i = 0; i < Cartography::PointLabelPositionCount; ++i)
 	{
-		for(int i = 0; i < Cartography::PointLabelPositionCount; ++i)
-			options.m_pointPriorities[i] = PointPresets[nPreset].priorities[i];
+		// "Current positions" (not a preset) - the priorities of the layer
+		options.m_pointPriorities[i] = (nPreset >= 0 && nPreset < PointPresetCount) ? PointPresets[nPreset].priorities[i]
+		                                                                           : m_labels.options.m_pointPriorities[i];
 	}
+	options.m_dMaxCurvedCharAngle = m_labels.options.m_dMaxCurvedCharAngle;   // not on the page
 	return true;
 }

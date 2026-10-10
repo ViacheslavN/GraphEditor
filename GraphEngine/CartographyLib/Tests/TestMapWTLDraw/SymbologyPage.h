@@ -22,9 +22,14 @@ public:
 
 	// table of the layer, nullptr - no table yet (the page is disabled); baseColor - color of the default symbol
 	void SetSource(const TestMapDraw::STableInfo* pTable, const GraphEngine::Display::Color& baseColor, TUniqueQuery uniqueQuery, TRangeQuery rangeQuery);
+	// symbology of a layer (layer properties), after SetSource
+	void SetSymbology(const TestMapDraw::SSymbology& symbology);
 	// false - the symbology isn't complete or a symbol has a wrong value (the message is shown)
 	bool GetSymbology(TestMapDraw::SSymbology& symbology);
 	bool HasSource() const { return m_bHasSource; }
+	// the user has changed the symbology since SetSource / SetSymbology
+	bool IsModified() const { return m_bModified; }
+	void ResetModified() { m_bModified = false; }
 
 	BEGIN_MSG_MAP(CSymbologyPage)
 		MESSAGE_HANDLER(WM_INITDIALOG, OnInitDialog)
@@ -76,5 +81,6 @@ private:
 	TRangeQuery  m_rangeQuery;
 	bool m_bHasSource;
 	bool m_bUpdating;
+	bool m_bModified;
 	int  m_nEditRow;   // row of the symbol in the editor, -1 - the simple symbol
 };

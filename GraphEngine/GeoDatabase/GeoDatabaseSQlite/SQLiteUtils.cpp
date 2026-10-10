@@ -1,4 +1,5 @@
 #include "SQLiteUtils.h"
+#include <limits>
 #include "../../CommonLib/str/str.h"
 #include "../Fields.h"
 #include "../Field.h"
@@ -197,10 +198,13 @@ namespace GraphEngine {
                 ptrStatment->BindText(4, info.sOIDField, true);
                 ptrStatment->BindText(5, info.sSpatialIndex, true);
                 ptrStatment->BindInt64(6, (int64_t)info.shapeType);
-                ptrStatment->BindDouble(7, info.extent.xMin);
-                ptrStatment->BindDouble(8, info.extent.yMin);
-                ptrStatment->BindDouble(9, info.extent.xMax);
-                ptrStatment->BindDouble(10, info.extent.yMax);
+                // no extent (an empty table): NULL (SQLite stores NaN as NULL), ReadSpatialTableInfo gives a null bbox
+                bool bExtent = (info.extent.type & CommonLib::bbox_type_normal) != 0;
+                const double dNull = std::numeric_limits<double>::quiet_NaN();
+                ptrStatment->BindDouble(7, bExtent ? info.extent.xMin : dNull);
+                ptrStatment->BindDouble(8, bExtent ? info.extent.yMin : dNull);
+                ptrStatment->BindDouble(9, bExtent ? info.extent.xMax : dNull);
+                ptrStatment->BindDouble(10, bExtent ? info.extent.yMax : dNull);
                 ptrStatment->BindText(11, info.sSpatialReference, true);
                 ptrStatment->Next();
             }
@@ -230,11 +234,27 @@ namespace GraphEngine {
                 info.sOIDField = ptrStatment->ReadText(3);
                 info.sSpatialIndex = ptrStatment->ReadText(4);
                 info.shapeType = (CommonLib::eShapeType)ptrStatment->ReadInt64(5);
-                info.extent.type = CommonLib::bbox_type_normal;
-                info.extent.xMin = ptrStatment->ReadDouble(6);
-                info.extent.yMin = ptrStatment->ReadDouble(7);
-                info.extent.xMax = ptrStatment->ReadDouble(8);
-                info.extent.yMax = ptrStatment->ReadDouble(9);
+                info.extent = CommonLib::bbox();
+                bool bNullExtent = ptrStatment->ColumnIsNull(6) || ptrStatment->ColumnIsNull(7) ||
+                                   ptrStatment->ColumnIsNull(8) || ptrStatment->ColumnIsNull(9);
+                if(!bNullExtent)
+                {
+                    double xMin = ptrStatment->ReadDouble(6);
+                    double yMin = ptrStatment->ReadDouble(7);
+                    double xMax = ptrStatment->ReadDouble(8);
+                    double yMax = ptrStatment->ReadDouble(9);
+                    // an empty table written before the NULL extent: 0, 0, 0, 0 - not a point at the origin
+                    // (it would stretch the full extent of the map to (0, 0))
+                    bool bEmpty = xMin == 0. && yMin == 0. && xMax == 0. && yMax == 0.;
+                    if(!bEmpty && xMin <= xMax && yMin <= yMax)
+                    {
+                        info.extent.type = CommonLib::bbox_type_normal;
+                        info.extent.xMin = xMin;
+                        info.extent.yMin = yMin;
+                        info.extent.xMax = xMax;
+                        info.extent.yMax = yMax;
+                    }
+                }
                 info.sSpatialReference = ptrStatment->ReadText(10);
                 return true;
             }
