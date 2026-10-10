@@ -36,6 +36,7 @@ set(SOURCE_FILES
         OSMFlatNodeStore.cpp
         OSMTempFile.h
         OSMTempFile.cpp
+        OSMProgressThrottle.h
         OSMWayStore.h
         OSMWayStore.cpp
         OSMGeometry.h

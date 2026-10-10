@@ -1,5 +1,6 @@
 #include "OSMConvertor.h"
 #include "OSMReader.h"
+#include "OSMProgressThrottle.h"
 #include "OSMConvertSession.h"
 #include "OSMGeometry.h"
 #include "../../../GisGeometry/Envelope.h"
@@ -99,18 +100,20 @@ namespace GraphEngine {
                     return Step();
                 }
 
-                // .pbf: a block is processed, reported at most 5 times a second
+                // .pbf: a block is processed, sent once per second and at the end
                 virtual bool OnProgress(uint64_t nBytesRead, uint64_t nBytesTotal)
                 {
                     m_progress.nBytesRead = nBytesRead;
                     m_progress.nBytesTotal = nBytesTotal;
-                    auto now = std::chrono::steady_clock::now();
-                    if(nBytesRead < nBytesTotal && now - m_lastReport < std::chrono::milliseconds(200))
-                        return true;
-                    m_lastReport = now;
+                    if(nBytesRead >= nBytesTotal || m_throttle.IsTime())
+                        Send();
+                    return !m_ptrCancel.get() || m_ptrCancel->Continue();
+                }
+
+                void Send()
+                {
                     if(m_ptrProgress.get())
                         m_ptrProgress->UpdateStatusInfo(m_progress);
-                    return !m_ptrCancel.get() || m_ptrCancel->Continue();
                 }
 
                 void Finish()
@@ -164,9 +167,9 @@ namespace GraphEngine {
                 {
                     if(++m_nObjects % ProgressStep)
                         return true;
-
-                    if(m_ptrProgress.get())
-                        m_ptrProgress->UpdateStatusInfo(m_progress);
+                    // the cancel is checked every ProgressStep objects, the progress is sent once per second
+                    if(m_throttle.IsTime())
+                        Send();
                     return !m_ptrCancel.get() || m_ptrCancel->Continue();
                 }
 
@@ -185,7 +188,7 @@ namespace GraphEngine {
                 bool                     m_bSorted = true;
                 int                      m_nLastType = 0;
                 int64_t                  m_nLastId = (std::numeric_limits<int64_t>::min)();
-                std::chrono::steady_clock::time_point m_lastReport;
+                COSMProgressThrottle     m_throttle;
             };
         }
 

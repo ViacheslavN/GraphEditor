@@ -3,6 +3,7 @@
 #include "OSMTableWriter.h"
 #include "OSMWayStore.h"
 #include "OSMTempFile.h"
+#include "OSMProgressThrottle.h"
 #include "OSMMapStyle.h"
 #include "OSMConvertor.h"
 #include <algorithm>
@@ -224,29 +225,36 @@ namespace GraphEngine {
                         vecLayers(schema.Layers().size())
                 {}
 
+                // every ProgressStep objects: the cancel is checked, the progress is sent once per second
                 bool Step()
                 {
                     if(++nObjects % ProgressStep)
                         return true;
-                    progress.nFeatures = nFeatures;
-                    if(ptrProgress.get())
-                        ptrProgress->UpdateStatusInfo(progress);
+                    if(throttle.IsTime())
+                        Send();
                     return !ptrCancel.get() || ptrCancel->Continue();
                 }
 
-                // a block of the file is processed (.pbf); reported at most 5 times a second
+                // a block of the file is processed (.pbf); sent once per second and at the end of the pass
                 bool ReadProgress(uint64_t nBytesRead, uint64_t nBytesTotal)
                 {
                     progress.nBytesRead = nBytesRead;
                     progress.nBytesTotal = nBytesTotal;
-                    auto now = std::chrono::steady_clock::now();
-                    if(nBytesRead < nBytesTotal && now - lastReport < std::chrono::milliseconds(200))
-                        return true;
-                    lastReport = now;
+                    if(nBytesRead >= nBytesTotal)
+                    {
+                        throttle.Reset();
+                        Send();
+                    }
+                    else if(throttle.IsTime())
+                        Send();
+                    return !ptrCancel.get() || ptrCancel->Continue();
+                }
+
+                void Send()
+                {
                     progress.nFeatures = nFeatures;
                     if(ptrProgress.get())
                         ptrProgress->UpdateStatusInfo(progress);
-                    return !ptrCancel.get() || ptrCancel->Continue();
                 }
 
                 // the start of a pass over the file
@@ -271,9 +279,8 @@ namespace GraphEngine {
                 {
                     progress.stage = stage;
                     progress.sMessage = sMessage;
-                    progress.nFeatures = nFeatures;
-                    if(ptrProgress.get())
-                        ptrProgress->UpdateStatusInfo(progress);
+                    throttle.Reset();
+                    Send();
                 }
 
                 void CheckCancel() const
@@ -363,7 +370,7 @@ namespace GraphEngine {
                 uint64_t                    nMultipolygons = 0;
                 COSMIdSet                   memberWays;
                 std::unique_ptr<COSMWayStore> ptrWays;
-                std::chrono::steady_clock::time_point lastReport;
+                COSMProgressThrottle        throttle;
             };
 
             // pass 1: nodes (coordinates, points) and relations (routes, restrictions, multipolygons)
@@ -828,8 +835,8 @@ namespace GraphEngine {
                     m_ptrNodes->Finish([&run](uint64_t nNodes)
                                        {
                                            run.progress.nNodes = nNodes;
-                                           if(run.ptrProgress.get())
-                                               run.ptrProgress->UpdateStatusInfo(run.progress);
+                                           if(run.throttle.IsTime())
+                                               run.Send();
                                            return !run.ptrCancel.get() || run.ptrCancel->Continue();
                                        });
                     run.CheckCancel();
