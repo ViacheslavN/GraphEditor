@@ -24,7 +24,8 @@ namespace GraphEngine {
         {
             UndefineFeatureRendererID,
             SimpleFeatureRendererID,
-            AnnotationRendererID
+            AnnotationRendererID,
+            LabelRendererID
         };
 
         enum eRasterRendererID
@@ -61,42 +62,116 @@ namespace GraphEngine {
 
         };
 
+        // how a label is placed (ported from UniGIS labeling)
         enum eLabelStrategy
         {
-            LabelStrategyAlone   = 0,
-            LabelStrategySimple  = 1,
-            LabelStrategyComplex = 2
+            LabelStrategyAlone   = 0,   // the first position, without the conflict check (the label still blocks the others)
+            LabelStrategySimple  = 1,   // only the first position, skipped when it overlaps a placed label
+            LabelStrategyComplex = 2    // all the positions of the placement are tried
         };
 
         enum eLineLabelOrientation
         {
             LineLabelOrientationHorizontal    = 0,
-            LineLabelOrientationParallel      = 1,
-            LineLabelOrientationCurved        = 2,
+            LineLabelOrientationParallel      = 1,  // straight text along the line
+            LineLabelOrientationCurved        = 2,  // every character follows the line
             LineLabelOrientationPerpendicular = 3
+        };
+
+        enum eLineLabelPosition
+        {
+            LineLabelPositionOnLine     = 0,
+            LineLabelPositionAbove      = 1,
+            LineLabelPositionBelow      = 2,
+            LineLabelPositionAboveBelow = 3   // above, then below
         };
 
         enum ePolygonLabelPlacement
         {
             PolygonLabelPlacementHorizontal = 0,
-            PolygonLabelPlacementStraight   = 1,
-            PolygonLabelPlacementMixed      = 2
-          };
+            PolygonLabelPlacementStraight   = 1,  // along the main axis of the polygon
+            PolygonLabelPlacementMixed      = 2   // along the main axis, then horizontal
+        };
 
         enum eDuplicateStrategy
         {
             DuplicateStrategyAllow    = 0,
-            DuplicateStrategyRemove   = 1,
-            DuplicateStrategyDistance = 2
+            DuplicateStrategyRemove   = 1,  // one label for the same text
+            DuplicateStrategyDistance = 2   // labels with the same text not closer than DuplicateDistance
         };
 
+        // positions of a point label (index in SLabelingOptions::m_pointPriorities)
+        enum ePointLabelPosition
+        {
+            PointLabelLeftTop      = 0,
+            PointLabelCenterTop    = 1,
+            PointLabelRightTop     = 2,
+            PointLabelRightCenter  = 3,
+            PointLabelRightBottom  = 4,
+            PointLabelCenterBottom = 5,
+            PointLabelLeftBottom   = 6,
+            PointLabelLeftCenter   = 7,
+            PointLabelCenterCenter = 8,
+            PointLabelPositionCount = 9
+        };
 
+        // label settings of a layer, sizes are in mm (symbol units)
+        struct SLabelingOptions
+        {
+            eLabelStrategy          m_strategy;
+            eLineLabelOrientation   m_lineOrientation;
+            eLineLabelPosition      m_linePosition;
+            ePolygonLabelPlacement  m_polygonPlacement;
+            eDuplicateStrategy      m_duplicateStrategy;
+            int                     m_pointPriorities[PointLabelPositionCount]; // 1 - the best, 0 - not used
+            bool                    m_bPolygonAllowOutside;  // the label may cross the border when it doesn't fit into the polygon
+            int                     m_nPriority;             // 0 - the highest, labels with a smaller value are placed first
+            double                  m_dOffset;               // gap between the feature and the label
+            double                  m_dDuplicateDistance;
+            double                  m_dMaxCurvedCharAngle;   // degrees, max angle between the neighbour characters of a curved label
 
-        struct SLabelingOptions{
-            eLabelStrategy mStrategy;
-            eLineLabelOrientation mOrientation;
-            ePolygonLabelPlacement mPlacement;
-            eDuplicateStrategy mDuplicateStrategy;
+            SLabelingOptions() : m_strategy(LabelStrategyComplex), m_lineOrientation(LineLabelOrientationParallel),
+                                 m_linePosition(LineLabelPositionOnLine), m_polygonPlacement(PolygonLabelPlacementHorizontal),
+                                 m_duplicateStrategy(DuplicateStrategyAllow), m_bPolygonAllowOutside(false), m_nPriority(0),
+                                 m_dOffset(1.0), m_dDuplicateDistance(40.0), m_dMaxCurvedCharAngle(30.0)
+            {
+                // right top is the best (cartographic convention), the center isn't used
+                static const int defPriorities[PointLabelPositionCount] = {2, 3, 1, 2, 3, 3, 3, 3, 0};
+                for(int i = 0; i < PointLabelPositionCount; ++i)
+                    m_pointPriorities[i] = defPriorities[i];
+            }
+
+            void Save(CommonLib::ISerializeObjPtr pObj) const
+            {
+                pObj->AddPropertyInt32("Strategy", m_strategy);
+                pObj->AddPropertyInt32("LineOrientation", m_lineOrientation);
+                pObj->AddPropertyInt32("LinePosition", m_linePosition);
+                pObj->AddPropertyInt32("PolygonPlacement", m_polygonPlacement);
+                pObj->AddPropertyInt32("DuplicateStrategy", m_duplicateStrategy);
+                for(int i = 0; i < PointLabelPositionCount; ++i)
+                    pObj->AddPropertyInt32("PointPriority" + std::to_string(i), m_pointPriorities[i]);
+                pObj->AddPropertyBool("PolygonAllowOutside", m_bPolygonAllowOutside);
+                pObj->AddPropertyInt32("Priority", m_nPriority);
+                pObj->AddPropertyDouble("Offset", m_dOffset);
+                pObj->AddPropertyDouble("DuplicateDistance", m_dDuplicateDistance);
+                pObj->AddPropertyDouble("MaxCurvedCharAngle", m_dMaxCurvedCharAngle);
+            }
+
+            void Load(CommonLib::ISerializeObjPtr pObj)
+            {
+                m_strategy = (eLabelStrategy)pObj->GetPropertyInt32("Strategy", m_strategy);
+                m_lineOrientation = (eLineLabelOrientation)pObj->GetPropertyInt32("LineOrientation", m_lineOrientation);
+                m_linePosition = (eLineLabelPosition)pObj->GetPropertyInt32("LinePosition", m_linePosition);
+                m_polygonPlacement = (ePolygonLabelPlacement)pObj->GetPropertyInt32("PolygonPlacement", m_polygonPlacement);
+                m_duplicateStrategy = (eDuplicateStrategy)pObj->GetPropertyInt32("DuplicateStrategy", m_duplicateStrategy);
+                for(int i = 0; i < PointLabelPositionCount; ++i)
+                    m_pointPriorities[i] = pObj->GetPropertyInt32("PointPriority" + std::to_string(i), m_pointPriorities[i]);
+                m_bPolygonAllowOutside = pObj->GetPropertyBool("PolygonAllowOutside", m_bPolygonAllowOutside);
+                m_nPriority = pObj->GetPropertyInt32("Priority", m_nPriority);
+                m_dOffset = pObj->GetPropertyDouble("Offset", m_dOffset);
+                m_dDuplicateDistance = pObj->GetPropertyDouble("DuplicateDistance", m_dDuplicateDistance);
+                m_dMaxCurvedCharAngle = pObj->GetPropertyDouble("MaxCurvedCharAngle", m_dMaxCurvedCharAngle);
+            }
         };
 
 
@@ -104,7 +179,7 @@ namespace GraphEngine {
         typedef std::shared_ptr< class IMap> IMapPtr;
         typedef std::shared_ptr< class ISelection> ISelectionPtr;
         typedef std::shared_ptr< class ILayers> ILayersPtr;
-        typedef std::shared_ptr< class ILabelEngine> ILabelEnginePtr;
+        typedef std::shared_ptr< class ILabelDrawer> ILabelDrawerPtr;
         typedef std::shared_ptr< class IBookmarks> IBookmarksPtr;
         typedef std::shared_ptr< class ILayers> ILayersPtr;
         typedef std::shared_ptr< class IElement> IElementPtr;
@@ -120,7 +195,7 @@ namespace GraphEngine {
         typedef std::shared_ptr<class IRasterLayer> IRasterLayerPtr;
         typedef std::shared_ptr<class IRasterRenderer> IRasterRendererPtr;
         typedef std::shared_ptr<class IAnnotationRender> IAnnotationRenderPtr;
-        typedef std::shared_ptr<class ILabelRender> ILabelRenderPtr;
+        typedef std::shared_ptr<class ILabelRenderer> ILabelRendererPtr;
 
 
 
@@ -141,8 +216,8 @@ namespace GraphEngine {
             virtual void                              SetSpatialReference(Geometry::ISpatialReferencePtr ptrSpatRef) = 0;
             virtual void                              Draw(Display::IDisplayPtr ptrDisplay, Display::ITrackCancelPtr trackCancel) = 0;
             virtual void                              PartialDraw( eDrawPhase phase, Display::IDisplayPtr ptrDisplay, Display::ITrackCancelPtr  ptrTrackCancel) = 0;
-            virtual ILabelEnginePtr                   GetLabelEngine() const = 0;
-            virtual void                              SetLabelEngine(ILabelEnginePtr ptrEngine) = 0;
+            virtual ILabelDrawerPtr                   GetLabelDrawer() const = 0;
+            virtual void                              SetLabelDrawer(ILabelDrawerPtr ptrLabelDrawer) = 0;
             virtual  CommonLib::Units		          GetMapUnits() const = 0;
             virtual void                              SetMapUnits( CommonLib::Units units ) = 0;
             virtual IGraphicsContainerPtr             GetGraphicsContainer() const = 0;
@@ -195,6 +270,9 @@ namespace GraphEngine {
             virtual bool                      IsActiveOnScale(double scale) const = 0;
             virtual uint32_t				  GetCheckCancelStep() const = 0;
             virtual void					  SetCheckCancelStep(uint32_t nCount) = 0;
+            // set by the map for the time of drawing with DrawPhaseLabeling, the layer adds its labels to it
+            virtual ILabelDrawerPtr           GetLabelDrawer() const = 0;
+            virtual void                      SetLabelDrawer(ILabelDrawerPtr ptrLabelDrawer) = 0;
 
         };
 
@@ -228,10 +306,16 @@ namespace GraphEngine {
             virtual void                             SetAnnoFieldName(const std::string& filedName)  = 0;
             virtual IAnnotationRenderPtr			 GetAnnotationRenderer() const = 0;
             virtual void							 SetAnnotationRenderer(IAnnotationRenderPtr ptrRenderer) = 0;
+            // labels: drawn when the layer has the label field and the label renderer,
+            // placed without conflicts by the label drawer of the map (IMap::GetLabelDrawer)
+            virtual bool                             HasLabelField() const = 0;
             virtual const std::string&               GetLabelFieldName() const = 0;
             virtual void                             SetLabelFieldName(const std::string& labelName)  = 0;
-            virtual ILabelEnginePtr                  GetLabelEngine() const = 0;
-            virtual void                             SetLabelEngine(ILabelEnginePtr ptrEngine) = 0;
+            virtual ILabelRendererPtr                GetLabelRenderer() const = 0;
+            virtual void                             SetLabelRenderer(ILabelRendererPtr ptrRenderer) = 0;
+            virtual const SLabelingOptions&          GetLabelingOptions() const = 0;
+            virtual void                             SetLabelingOptions(const SLabelingOptions& options) = 0;
+
 
         };
 
@@ -405,17 +489,40 @@ namespace GraphEngine {
         };
 
 
-        class ILabelEngine :  public CommonLib::ISerialize {
-            public:
-            ILabelEngine(){}
-            virtual ~ILabelEngine(){}
+        // Label renderer of a feature layer: takes the label text from the label field and the text symbol
+        // from the symbol selector, the label is added to the label drawer, which places it without conflicts.
+        // DrawFeature draws the label at once at the first position (no conflict check).
+        class ILabelRenderer : public IFeatureRenderer
+        {
+        public:
+            ILabelRenderer(){}
+            virtual ~ILabelRenderer(){}
 
-            void           BeginLabeling(Display::IDisplayPtr ptrDisplay);
-            void           Clear();
-            void           AddLabel(const std::string& text,  CommonLib::IGeoShapePtr ptrShape,
-                                Display::ITextSymbolPtr ptrSymbol,  int classIndex, SLabelingOptions options);
+            using IFeatureRenderer::PrepareFilter;
+            virtual void  PrepareFilter(GeoDatabase::ITablePtr ptrTable, GeoDatabase::IQueryFilterPtr ptrFilter, const std::string& labelFieldName) const = 0;
+            virtual void  AddLabel(ILabelDrawerPtr ptrLabelDrawer, GeoDatabase::IRowPtr ptrRow, const SLabelingOptions& options) = 0;
+            // labels with the same priority: the bigger class index is placed first
+            virtual int   GetClassIndex() const = 0;
+            virtual void  SetClassIndex(int nIndex) = 0;
+        };
+
+        // Collects the labels of all layers while the map is drawn and places them without overlapping:
+        //   BeginLabeling -> AddLabel (layers) -> DrawLabels -> EndLabeling
+        // Positions are calculated in device coordinates, so it works with any transformation (rotation, 3D).
+        class ILabelDrawer :  public CommonLib::ISerialize {
+            public:
+            ILabelDrawer(){}
+            virtual ~ILabelDrawer(){}
+
+            virtual void           BeginLabeling(Display::IDisplayPtr ptrDisplay) = 0;
+            virtual void           Clear() = 0;
+            virtual void           AddLabel(const std::wstring& text,  CommonLib::IGeoShapePtr ptrShape,
+                                Display::ITextSymbolPtr ptrSymbol,  int classIndex, const SLabelingOptions& options) = 0;
             virtual void           DrawLabels(Display::ITrackCancelPtr ptrTrackCancel) = 0;
             virtual void           EndLabeling() = 0;
+            // statistics of the last labeling, kept after EndLabeling
+            virtual uint32_t       GetLabelCount() const = 0;        // labels added
+            virtual uint32_t       GetPlacedLabelCount() const = 0;  // labels placed and drawn
 
         };
 

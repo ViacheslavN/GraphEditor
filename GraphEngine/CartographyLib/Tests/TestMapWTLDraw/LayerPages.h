@@ -1,4 +1,4 @@
-// LayerPages.h : tab control with the Symbology and Annotation pages, shared by the Add layer dialogs
+// LayerPages.h : tab control with the Symbology, Annotation and Labels pages, shared by the Add layer dialogs
 //
 /////////////////////////////////////////////////////////////////////////////
 
@@ -6,11 +6,12 @@
 
 #include "SymbologyPage.h"
 #include "AnnotationPage.h"
+#include "LabelPage.h"
 
 class CLayerPages
 {
 public:
-	enum { PageSymbology = 0, PageAnnotation = 1, PageCount = 2 };
+	enum { PageSymbology = 0, PageAnnotation = 1, PageLabels = 2, PageCount = 3 };
 
 	CLayerPages();
 
@@ -23,7 +24,7 @@ public:
 	// table of the new layer, nullptr - no table (the pages are disabled)
 	void SetSource(const TestMapDraw::STableInfo* pTable, const TestMapDraw::SDataSource& source);
 	void SetLayerIndex(int nIndex) { m_nLayerIndex = nIndex; }
-	void SetDefaultScale(double dScale) { m_annotation.SetDefaultScale(dScale); }
+	void SetDefaultScale(double dScale) { m_annotation.SetDefaultScale(dScale); m_labels.SetDefaultScale(dScale); }
 
 	// false - a wrong value, the page with it is shown (and the message)
 	bool GetLayerParams(TestMapDraw::SLayerParams& params);
@@ -32,5 +33,6 @@ private:
 	CTabCtrl        m_tabs;
 	CSymbologyPage  m_symbology;
 	CAnnotationPage m_annotation;
+	CLabelPage      m_labels;
 	int             m_nLayerIndex;
 };

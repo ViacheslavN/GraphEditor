@@ -765,6 +765,10 @@ namespace GraphEngine {
 			 fullFontName += pFont->GetFace();
 			 fullFontName += ".ttf";
 			 return fullFontName;
+#else
+            // other systems (Linux): <face>.ttf next to the application, there was no return here (undefined behaviour)
+            fullFontName = pFont->GetFace() + ".ttf";
+            return fullFontName;
 #endif
         }
 
@@ -907,9 +911,15 @@ namespace GraphEngine {
             double x = xNew;
             double y = yNew;
             bool drawContour = true;
-            bool halo = pFont->GetHaloSize() != 0.0;
+            // drawFlags: the halo and the text can be drawn separately (f.e. curved labels: the halos of all
+            // characters first, otherwise the halo of a character covers the previous one)
+            if((drawFlags & TextDrawAll) == 0)
+                drawFlags = TextDrawAll;   // 0 (the default of CTextSymbol, old projects) - everything
+            bool drawText = (drawFlags & TextDrawTextOnly) != 0;
+            bool boldContour = drawText && (pFont->GetStyle() & FontStyleBold) && customDecoration;
+            bool halo = pFont->GetHaloSize() != 0.0 && (drawFlags & TextDrawHaloOnly) != 0;
 
-            if(halo || ((pFont->GetStyle() & FontStyleBold) && customDecoration))
+            if(halo || boldContour)
             {
                 while(drawContour)
                 {
@@ -962,14 +972,14 @@ namespace GraphEngine {
 
                     agg::render_scanlines(this->m_rasterizer, this->m_scanline, this->m_renderer);
 
-                    if(!halo || !((pFont->GetStyle() & FontStyleBold) && customDecoration))
+                    if(!halo || !boldContour)
                         drawContour = false;
                     else
                         halo = false;
                 }
             }
 
-            if(!((pFont->GetStyle() & FontStyleBold) && customDecoration))
+            if(drawText && !((pFont->GetStyle() & FontStyleBold) && customDecoration))
             {
 
                 this->m_rasterizer.reset();

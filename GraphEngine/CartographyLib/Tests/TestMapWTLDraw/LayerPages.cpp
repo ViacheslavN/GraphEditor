@@ -19,9 +19,11 @@ void CLayerPages::Create(HWND hDialog, int nTabId)
 	m_tabs = ::GetDlgItem(hDialog, nTabId);
 	m_tabs.InsertItem(PageSymbology, L"Symbology");
 	m_tabs.InsertItem(PageAnnotation, L"Annotation");
+	m_tabs.InsertItem(PageLabels, L"Labels");
 
 	m_symbology.Create(hDialog);
 	m_annotation.Create(hDialog);
+	m_labels.Create(hDialog);
 
 	// the pages are children of the dialog (not of the tab control) placed over the display area of the tabs,
 	// right after the tab control in the tab order
@@ -31,7 +33,7 @@ void CLayerPages::Create(HWND hDialog, int nTabId)
 	m_tabs.AdjustRect(FALSE, &rc);
 
 	HWND hInsertAfter = m_tabs;
-	HWND pages[PageCount] = {m_symbology, m_annotation};
+	HWND pages[PageCount] = {m_symbology, m_annotation, m_labels};
 	for(int i = 0; i < PageCount; ++i)
 	{
 		::SetWindowPos(pages[i], hInsertAfter, rc.left, rc.top, rc.right - rc.left, rc.bottom - rc.top, SWP_NOACTIVATE);
@@ -47,6 +49,7 @@ void CLayerPages::SelectPage(int nPage)
 		m_tabs.SetCurSel(nPage);
 	m_symbology.ShowWindow(nPage == PageSymbology ? SW_SHOW : SW_HIDE);
 	m_annotation.ShowWindow(nPage == PageAnnotation ? SW_SHOW : SW_HIDE);
+	m_labels.ShowWindow(nPage == PageLabels ? SW_SHOW : SW_HIDE);
 }
 
 void CLayerPages::OnTabChanged()
@@ -68,6 +71,7 @@ void CLayerPages::SetSource(const STableInfo* pTable, const SDataSource& source)
 
 	m_symbology.SetSource(pTable, CMapProject::GetLayerColor(m_nLayerIndex), uniqueQuery, rangeQuery);
 	m_annotation.SetFields(pTable ? &pTable->vecFields : nullptr);
+	m_labels.SetFields(pTable ? &pTable->vecFields : nullptr);
 }
 
 bool CLayerPages::GetLayerParams(SLayerParams& params)
@@ -88,6 +92,12 @@ bool CLayerPages::GetLayerParams(SLayerParams& params)
 	if(!m_annotation.GetAnnotation(params.annotation))
 	{
 		SelectPage(PageAnnotation);
+		return false;
+	}
+
+	if(!m_labels.GetLabels(params.labels))
+	{
+		SelectPage(PageLabels);
 		return false;
 	}
 	return true;

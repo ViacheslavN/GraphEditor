@@ -1,4 +1,4 @@
-// AddShapeFileDlg.h : "Add Shape File" dialog - shape file path, symbology and annotation tabs
+// AddShapeFileDlg.h : "Add Shape File" dialog - shape file path, symbology, annotation and labels tabs
 //
 /////////////////////////////////////////////////////////////////////////////
 

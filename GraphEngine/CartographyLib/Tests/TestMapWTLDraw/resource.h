@@ -15,6 +15,24 @@
 #define IDD_PAGE_SYMBOLOGY              103
 #define IDD_PAGE_ANNOTATION             104
 #define IDD_SYMBOL_EDITOR               105
+#define IDD_PAGE_LABELS                 106
+#define IDC_ENABLE_LABELS               1140
+#define IDC_LABEL_FIELD                 1141
+#define IDC_LABEL_SCALE                 1142
+#define IDC_LABEL_FONT_SIZE             1143
+#define IDC_LABEL_COLOR                 1144
+#define IDC_LABEL_COLOR_BTN             1145
+#define IDC_LABEL_HALO                  1146
+#define IDC_LABEL_STRATEGY              1147
+#define IDC_LABEL_PRIORITY              1148
+#define IDC_LABEL_POINT_POS             1149
+#define IDC_LABEL_OFFSET                1150
+#define IDC_LABEL_LINE_ORIENT           1151
+#define IDC_LABEL_LINE_POS              1152
+#define IDC_LABEL_POLY_PLACEMENT        1153
+#define IDC_LABEL_POLY_OUTSIDE          1154
+#define IDC_LABEL_DUPLICATES            1155
+#define IDC_LABEL_DUP_DISTANCE          1156
 #define IDC_TABS                        1010
 #define IDC_SELECTOR_TYPE               1011
 #define IDC_SYMB_FIELD                  1012
@@ -85,7 +103,7 @@
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        201
 #define _APS_NEXT_COMMAND_VALUE         32792
-#define _APS_NEXT_CONTROL_VALUE         1140
-#define _APS_NEXT_SYMED_VALUE           106
+#define _APS_NEXT_CONTROL_VALUE         1157
+#define _APS_NEXT_SYMED_VALUE           107
 #endif
 #endif

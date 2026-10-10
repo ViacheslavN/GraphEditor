@@ -46,6 +46,13 @@ namespace GraphEngine {
             virtual void                             SetAnnoFieldName(const std::string& filedName);
             virtual IAnnotationRenderPtr			 GetAnnotationRenderer() const;
             virtual void							 SetAnnotationRenderer(IAnnotationRenderPtr ptrRenderer);
+            virtual bool                             HasLabelField() const;
+            virtual const std::string&               GetLabelFieldName() const;
+            virtual void                             SetLabelFieldName(const std::string& labelName);
+            virtual ILabelRendererPtr                GetLabelRenderer() const;
+            virtual void                             SetLabelRenderer(ILabelRendererPtr ptrRenderer);
+            virtual const SLabelingOptions&          GetLabelingOptions() const;
+            virtual void                             SetLabelingOptions(const SLabelingOptions& options);
 
             void DrawEx(eDrawPhase phase, Display::IDisplayPtr ptrDisplay, Display::ITrackCancelPtr trackCancel);
 
@@ -59,7 +66,9 @@ namespace GraphEngine {
             std::string GetOIDFieldName() const;
             GeoDatabase::ISpatialFilterPtr CreateDisplayFilter(Display::IDisplayPtr ptrDisplay, bool& bIntersects);
             IAnnotationRenderPtr PrepareAnnotationRenderer(GeoDatabase::IQueryFilterPtr ptrFilter, Display::IDisplayPtr ptrDisplay, bool checkScale) const;
+            ILabelRendererPtr PrepareLabelRenderer(GeoDatabase::IQueryFilterPtr ptrFilter, Display::IDisplayPtr ptrDisplay) const;
             void DrawRows(GeoDatabase::ISelectCursorPtr ptrCursor, const std::vector<IFeatureRendererPtr>& vecRenderers, IAnnotationRenderPtr ptrAnnoRenderer,
+                          ILabelRendererPtr ptrLabelRenderer, ILabelDrawerPtr ptrLabelDrawer,
                           Display::IDisplayPtr ptrDisplay, Display::ITrackCancelPtr ptrTrackCancel, const std::unordered_set<int64_t>* pOids, Display::ISymbolPtr ptrCustomSymbol) const;
         private:
             typedef std::vector<IFeatureRendererPtr> TFeatureRenderer;
@@ -79,6 +88,10 @@ namespace GraphEngine {
 
             std::vector<GeoDatabase::IJoinPtr> m_vecJoins;
             IAnnotationRenderPtr m_ptrAnnotationRenderer;
+
+            std::string          m_sLabelField;
+            ILabelRendererPtr    m_ptrLabelRenderer;
+            SLabelingOptions     m_labelingOptions;
 
         };
 

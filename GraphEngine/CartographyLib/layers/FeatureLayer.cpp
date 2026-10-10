@@ -94,7 +94,27 @@ namespace GraphEngine {
             return m_ptrAnnotationRenderer;
         }
 
+        ILabelRendererPtr CFeatureLayer::PrepareLabelRenderer(GeoDatabase::IQueryFilterPtr ptrFilter, Display::IDisplayPtr ptrDisplay) const
+        {
+            // labels are enabled when the layer has the label field and the label renderer
+            if(!HasLabelField() || !m_ptrLabelRenderer.get())
+                return ILabelRendererPtr();
+
+            double scale = ptrDisplay->GetTransformation()->GetScale();
+            double maxScale = m_ptrLabelRenderer->GetMaximumScale();
+            double minScale = m_ptrLabelRenderer->GetMinimumScale();
+            if((maxScale != 0.0 && scale < maxScale) || (minScale != 0.0 && scale > minScale))
+                return ILabelRendererPtr();
+
+            if(!m_ptrLabelRenderer->CanRender(m_ptrTable, ptrDisplay))
+                return ILabelRendererPtr();
+
+            m_ptrLabelRenderer->PrepareFilter(m_ptrTable, ptrFilter, m_sLabelField);
+            return m_ptrLabelRenderer;
+        }
+
         void CFeatureLayer::DrawRows(GeoDatabase::ISelectCursorPtr ptrCursor, const std::vector<IFeatureRendererPtr>& vecRenderers, IAnnotationRenderPtr ptrAnnoRenderer,
+                                     ILabelRendererPtr ptrLabelRenderer, ILabelDrawerPtr ptrLabelDrawer,
                                      Display::IDisplayPtr ptrDisplay, Display::ITrackCancelPtr ptrTrackCancel, const std::unordered_set<int64_t>* pOids, Display::ISymbolPtr ptrCustomSymbol) const
         {
             int32_t nOidIndex = -1;
@@ -142,6 +162,10 @@ namespace GraphEngine {
                     // annotation is drawn right after its feature
                     if (ptrAnnoRenderer.get())
                         ptrAnnoRenderer->DrawFeature(ptrDisplay, ptrRow);
+
+                    // labels are only collected, the label drawer places and draws them after all layers
+                    if (ptrLabelRenderer.get())
+                        ptrLabelRenderer->AddLabel(ptrLabelDrawer, ptrRow, m_labelingOptions);
 
                 }
 
@@ -203,7 +227,7 @@ namespace GraphEngine {
                     return;
 
                 std::unordered_set<int64_t> oids(vecOids.begin(), vecOids.end());
-                DrawRows(ptrCursor, vecRenderers, ptrAnnoRenderer, ptrDisplay, ptrTrackCancel, &oids, ptrCustomSymbol);
+                DrawRows(ptrCursor, vecRenderers, ptrAnnoRenderer, ILabelRendererPtr(), ILabelDrawerPtr(), ptrDisplay, ptrTrackCancel, &oids, ptrCustomSymbol);
             }
             catch (std::exception& exc)
             {
@@ -215,7 +239,11 @@ namespace GraphEngine {
         {
             try
             {
-                if (!IsValid() || !(phase & DrawPhaseGeography))
+                // geography and labels are drawn by one pass over the features:
+                // the features are drawn, their labels are given to the label drawer of the map
+                bool bGeography = (phase & DrawPhaseGeography) != 0;
+                ILabelDrawerPtr ptrLabelDrawer = (phase & DrawPhaseLabeling) ? m_pLabelDrawer : ILabelDrawerPtr();
+                if (!IsValid() || (!bGeography && !ptrLabelDrawer.get()))
                     return;
 
                 bool bIntersects = false;
@@ -225,7 +253,7 @@ namespace GraphEngine {
 
                 std::vector<IFeatureRendererPtr> vecRenderers;
                 double scale = ptrDisplay->GetTransformation()->GetScale();
-                for (size_t i = 0, sz = m_vecRenderers.size(); i < sz; ++i)
+                for (size_t i = 0, sz = m_vecRenderers.size(); i < sz && bGeography; ++i)
                 {
                     IFeatureRendererPtr ptrRender = m_vecRenderers[i];
                     double maxScale = ptrRender->GetMaximumScale();
@@ -240,16 +268,22 @@ namespace GraphEngine {
                     vecRenderers.push_back(ptrRender);
                 }
 
-                if (vecRenderers.empty())
-                    return;
+                IAnnotationRenderPtr ptrAnnoRenderer;
+                if (bGeography && !vecRenderers.empty())
+                    ptrAnnoRenderer = PrepareAnnotationRenderer(ptrFilter, ptrDisplay, true);
 
-                IAnnotationRenderPtr ptrAnnoRenderer = PrepareAnnotationRenderer(ptrFilter, ptrDisplay, true);
+                ILabelRendererPtr ptrLabelRenderer;
+                if (ptrLabelDrawer.get())
+                    ptrLabelRenderer = PrepareLabelRenderer(ptrFilter, ptrDisplay);
+
+                if (vecRenderers.empty() && !ptrLabelRenderer.get())
+                    return;
 
                 GeoDatabase::ISelectCursorPtr ptrCursor = m_ptrTable->Search(ptrFilter);
                 if (!ptrCursor.get())
                     return;
 
-                DrawRows(ptrCursor, vecRenderers, ptrAnnoRenderer, ptrDisplay, ptrTrackCancel, nullptr, Display::ISymbolPtr());
+                DrawRows(ptrCursor, vecRenderers, ptrAnnoRenderer, ptrLabelRenderer, ptrLabelDrawer, ptrDisplay, ptrTrackCancel, nullptr, Display::ISymbolPtr());
             }
             catch (std::exception& exc)
             {
@@ -293,7 +327,7 @@ namespace GraphEngine {
 
         eDrawPhase CFeatureLayer::GetSupportedDrawPhases() const
         {
-            return DrawPhaseGeography;
+            return (eDrawPhase)(DrawPhaseGeography | DrawPhaseLabeling);
         }
 
         bool CFeatureLayer::IsActiveOnScale(double scale) const
@@ -429,6 +463,41 @@ namespace GraphEngine {
             m_sAnnotateField = filedName;
         }
 
+        bool CFeatureLayer::HasLabelField() const
+        {
+            return !m_sLabelField.empty();
+        }
+
+        const std::string& CFeatureLayer::GetLabelFieldName() const
+        {
+            return m_sLabelField;
+        }
+
+        void CFeatureLayer::SetLabelFieldName(const std::string& labelName)
+        {
+            m_sLabelField = labelName;
+        }
+
+        ILabelRendererPtr CFeatureLayer::GetLabelRenderer() const
+        {
+            return m_ptrLabelRenderer;
+        }
+
+        void CFeatureLayer::SetLabelRenderer(ILabelRendererPtr ptrRenderer)
+        {
+            m_ptrLabelRenderer = ptrRenderer;
+        }
+
+        const SLabelingOptions& CFeatureLayer::GetLabelingOptions() const
+        {
+            return m_labelingOptions;
+        }
+
+        void CFeatureLayer::SetLabelingOptions(const SLabelingOptions& options)
+        {
+            m_labelingOptions = options;
+        }
+
         void  CFeatureLayer::SelectFeatures(const CommonLib::bbox& extent, ISelectionPtr ptrSelection,  Geometry::ISpatialReferencePtr ptrOutSpatRef)
         {
             try
@@ -489,6 +558,7 @@ namespace GraphEngine {
                 pObj->AddPropertyDouble("DrawingWidth", m_dDrawingWidth);
                 pObj->AddPropertyBool("DrawingWidthScaleDependent", m_bDrawingWidthScaleDependent);
                 pObj->AddPropertyString("AnnotateField", m_sAnnotateField);
+                pObj->AddPropertyString("LabelField", m_sLabelField);
                 CommonLib::ISerializeObjPtr ptrRenders = pObj->CreateChildNode("Renderers");
 
                 for (size_t i = 0, sz = m_vecRenderers.size(); i < sz; ++i)
@@ -502,6 +572,15 @@ namespace GraphEngine {
                     CommonLib::ISerializeObjPtr ptrAnnoNode = pObj->CreateChildNode("AnnotationRenderer");
                     m_ptrAnnotationRenderer->Save(ptrAnnoNode);
                 }
+
+                if(m_ptrLabelRenderer.get())
+                {
+                    CommonLib::ISerializeObjPtr ptrLabelNode = pObj->CreateChildNode("LabelRenderer");
+                    m_ptrLabelRenderer->Save(ptrLabelNode);
+                }
+
+                CommonLib::ISerializeObjPtr ptrLabelingOptionsNode = pObj->CreateChildNode("LabelingOptions");
+                m_labelingOptions.Save(ptrLabelingOptionsNode);
 
                 if(m_ptrTable.get())
                 {
@@ -531,6 +610,7 @@ namespace GraphEngine {
                 m_dDrawingWidth = pObj->GetPropertyDouble("DrawingWidth", m_dDrawingWidth);
                 m_bDrawingWidthScaleDependent = pObj->GetPropertyBool("DrawingWidthScaleDependent", m_bDrawingWidthScaleDependent);
                 m_sAnnotateField = pObj->GetPropertyString("AnnotateField", m_sAnnotateField);
+                m_sLabelField = pObj->GetPropertyString("LabelField", m_sLabelField);
                 m_vecRenderers.clear();
                 if(pObj->IsChildExists("Renderers"))
                 {
@@ -551,6 +631,18 @@ namespace GraphEngine {
                     if(!m_ptrAnnotationRenderer.get())
                         throw CommonLib::CExcBase("AnnotationRenderer node doesn't contain an annotation renderer");
                 }
+
+                m_ptrLabelRenderer.reset();
+                if(pObj->IsChildExists("LabelRenderer"))
+                {
+                    m_ptrLabelRenderer = std::dynamic_pointer_cast<ILabelRenderer>(CLoaderRenderers::LoadRenderer(pObj->GetChild("LabelRenderer")));
+                    if(!m_ptrLabelRenderer.get())
+                        throw CommonLib::CExcBase("LabelRenderer node doesn't contain a label renderer");
+                }
+
+                m_labelingOptions = SLabelingOptions();
+                if(pObj->IsChildExists("LabelingOptions"))
+                    m_labelingOptions.Load(pObj->GetChild("LabelingOptions"));
 
                 if(pObj->IsChildExists("Table"))
                 {

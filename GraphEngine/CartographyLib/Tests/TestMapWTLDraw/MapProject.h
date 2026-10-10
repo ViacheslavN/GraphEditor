@@ -21,6 +21,17 @@ namespace TestMapDraw
         double      dMinimumScale = 0.;  // drawn only when the map scale denominator <= this value, 0 - on all scales
     };
 
+    // labels of a layer: placed by the label drawer of the map without overlapping
+    struct SLabelParams
+    {
+        std::string sField;                 // label field, empty - no labels
+        double      dMinimumScale = 0.;     // drawn only when the map scale denominator <= this value, 0 - on all scales
+        double      dFontSize = 3.;         // mm
+        GraphEngine::Display::Color color = GraphEngine::Display::Color(0, 0, 0, 255);
+        double      dHaloSize = 0.3;        // mm, 0 - no halo
+        GraphEngine::Cartography::SLabelingOptions options;
+    };
+
     struct STableInfo
     {
         std::string             sName;
@@ -32,6 +43,7 @@ namespace TestMapDraw
     struct SLayerParams
     {
         SAnnotationParams           annotation;
+        SLabelParams                labels;
         std::shared_ptr<SSymbology> ptrSymbology;   // null - default symbol
     };
 

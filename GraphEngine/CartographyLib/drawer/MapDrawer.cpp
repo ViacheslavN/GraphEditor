@@ -9,7 +9,7 @@ namespace GraphEngine {
 
         namespace
         {
-            const eDrawPhase MapTaskPhases = (eDrawPhase)((int)DrawPhaseGeography | (int)DrawPhaseSelection);
+            const eDrawPhase MapTaskPhases = (eDrawPhase)((int)DrawPhaseGeography | (int)DrawPhaseSelection | (int)DrawPhaseLabeling);
         }
 
         CMapDrawer::CMapDrawer(double dpi) :

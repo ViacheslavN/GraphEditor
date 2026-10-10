@@ -6,6 +6,7 @@
 #include "../GisGeometry/SpatialReferenceProj4/SpatialReferenceProj4.h"
 #include "layers/LoaderLayers.h"
 #include "selection/Selection.h"
+#include "Labeling/LabelDrawer.h"
 
 namespace GraphEngine {
     namespace Cartography {
@@ -26,6 +27,7 @@ namespace GraphEngine {
         {
             m_ptrLayers  = std::make_shared<CLayers>();
             m_ptrSelection = std::make_shared<CSelection>(m_ptrLayers);
+            m_ptrLabelDrawer = std::make_shared<CLabelDrawer>();
         }
 
         CMap::~CMap()
@@ -159,6 +161,47 @@ namespace GraphEngine {
             m_ptrSpatialRef = spatRef;
         }
 
+        namespace
+        {
+            // gives the label drawer to the layers for the time of drawing and takes it back
+            // (also when the drawing throws), so the layers don't keep the drawer and its display
+            class CLabelDrawerScope
+            {
+            public:
+                CLabelDrawerScope(ILabelDrawerPtr ptrLabelDrawer, ILayersPtr ptrLayers, Display::IDisplayPtr ptrDisplay) :
+                        m_ptrLabelDrawer(ptrLabelDrawer)
+                {
+                    if(!m_ptrLabelDrawer.get())
+                        return;
+
+                    m_ptrLabelDrawer->BeginLabeling(ptrDisplay);
+                    for(int i = 0, sz = ptrLayers->GetLayerCount(); i < sz; ++i)
+                    {
+                        ILayerPtr ptrLayer = ptrLayers->GetLayer(i);
+                        if(ptrLayer.get())
+                        {
+                            ptrLayer->SetLabelDrawer(m_ptrLabelDrawer);
+                            m_vecLayers.push_back(ptrLayer);
+                        }
+                    }
+                }
+
+                ~CLabelDrawerScope()
+                {
+                    if(!m_ptrLabelDrawer.get())
+                        return;
+
+                    for(size_t i = 0; i < m_vecLayers.size(); ++i)
+                        m_vecLayers[i]->SetLabelDrawer(ILabelDrawerPtr());
+                    m_ptrLabelDrawer->EndLabeling();
+                }
+
+            private:
+                ILabelDrawerPtr m_ptrLabelDrawer;
+                std::vector<ILayerPtr> m_vecLayers;
+            };
+        }
+
         void  CMap::Draw(Display::IDisplayPtr ptrDisplay, Display::ITrackCancelPtr ptrTrackCancel) {
             PartialDraw(DrawPhaseAll, ptrDisplay, ptrTrackCancel);
 
@@ -185,15 +228,13 @@ namespace GraphEngine {
                     ptrTrans->SetReferenceScale(ptrTrans->GetScale());
 
                 int layerCount = m_ptrLayers->GetLayerCount();
-                int classIndex = 0;
-                if ( phase & DrawPhaseLabeling )
-                {
-                    if (m_ptrLabelEngine) {
-                        m_ptrLabelEngine->BeginLabeling(ptrDisplay);
-                    }
-                }
 
-                eDrawPhase phaseMask = (eDrawPhase)(phase & (DrawPhaseGeography | DrawPhaseAnnotation));
+                // labeling: the layers give their labels to the label drawer while they are drawn (one pass over the features),
+                // the labels are placed and drawn after the layers
+                ILabelDrawerPtr ptrLabelDrawer = (phase & DrawPhaseLabeling) ? m_ptrLabelDrawer : ILabelDrawerPtr();
+                CLabelDrawerScope labelScope(ptrLabelDrawer, m_ptrLayers, ptrDisplay);
+
+                eDrawPhase phaseMask = (eDrawPhase)(phase & (DrawPhaseGeography | DrawPhaseAnnotation | (ptrLabelDrawer.get() ? DrawPhaseLabeling : DrawPhaseNone)));
 
                 if ( phaseMask & DrawPhaseGeography )
                 {
@@ -229,6 +270,10 @@ namespace GraphEngine {
                         m_ptrSelection->Draw(ptrDisplay, ptrTrackCancel);
                 }
 
+                // labels are above the features and the selection
+                if (ptrLabelDrawer.get() && ptrTrackCancel->Continue())
+                    ptrLabelDrawer->DrawLabels(ptrTrackCancel);
+
                 if ( phase & DrawPhaseGraphics )
                 {
                     for(int i = 0; i < layerCount; i++)
@@ -254,13 +299,6 @@ namespace GraphEngine {
 
                 }
 
-                if ( phase & DrawPhaseLabeling )
-                {
-                    if (m_ptrLabelEngine) {
-                        m_ptrLabelEngine->EndLabeling();
-                    }
-                }
-
                 if(m_ptrForegroundSymbol.get())
                 {
                     m_ptrForegroundSymbol->Prepare(ptrDisplay);
@@ -277,14 +315,14 @@ namespace GraphEngine {
 
         }
 
-        ILabelEnginePtr  CMap::GetLabelEngine() const
+        ILabelDrawerPtr  CMap::GetLabelDrawer() const
         {
-            return m_ptrLabelEngine;
+            return m_ptrLabelDrawer;
         }
 
-        void   CMap::SetLabelEngine(ILabelEnginePtr pEngine)
+        void   CMap::SetLabelDrawer(ILabelDrawerPtr ptrLabelDrawer)
         {
-            m_ptrLabelEngine = pEngine;
+            m_ptrLabelDrawer = ptrLabelDrawer;
         }
 
         CommonLib::Units	CMap::GetMapUnits() const
@@ -511,6 +549,12 @@ namespace GraphEngine {
                     m_ptrForegroundSymbol->Save(pFgSymbolNode);
                 }
 
+                if(m_ptrLabelDrawer.get())
+                {
+                    CommonLib::ISerializeObjPtr pLabelDrawerNode = pMapNode->CreateChildNode("LabelDrawer");
+                    m_ptrLabelDrawer->Save(pLabelDrawerNode);
+                }
+
                 CommonLib::ISerializeObjPtr pLayersNode = pMapNode->CreateChildNode("Layers");
                 for (int i = 0, sz = m_ptrLayers->GetLayerCount(); i < sz; ++i)
                 {
@@ -562,6 +606,13 @@ namespace GraphEngine {
                 {
                     CommonLib::ISerializeObjPtr pFgSymbolNode = pMapNode->GetChild("ForegroundSymbol");
                     m_ptrForegroundSymbol = std::static_pointer_cast<Display::IFillSymbol>(Display::CSymbolsLoader::LoadSymbol(pFgSymbolNode));
+                }
+
+                if(pMapNode->IsChildExists("LabelDrawer"))
+                {
+                    if(!m_ptrLabelDrawer.get())
+                        m_ptrLabelDrawer = std::make_shared<CLabelDrawer>();
+                    m_ptrLabelDrawer->Load(pMapNode->GetChild("LabelDrawer"));
                 }
 
                 if(pMapNode->IsChildExists("Layers"))

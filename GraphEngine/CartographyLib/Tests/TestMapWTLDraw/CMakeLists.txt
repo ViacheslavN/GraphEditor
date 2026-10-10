@@ -32,6 +32,8 @@ set(SOURCE_FILES
         SymbologyPage.cpp
         AnnotationPage.h
         AnnotationPage.cpp
+        LabelPage.h
+        LabelPage.cpp
         LayerPages.h
         LayerPages.cpp
         TestMapDraw.rc

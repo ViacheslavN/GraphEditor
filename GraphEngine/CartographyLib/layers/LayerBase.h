@@ -95,6 +95,13 @@ namespace GraphEngine {
                 m_nCheckCancelStep = nCount;
             }
 
+            virtual ILabelDrawerPtr    GetLabelDrawer() const {
+                    return m_pLabelDrawer;
+            }
+            virtual void  SetLabelDrawer(ILabelDrawerPtr ptrLabelDrawer) {
+                m_pLabelDrawer = ptrLabelDrawer;
+            }
+
             virtual void Save(CommonLib::ISerializeObjPtr pObj) const
             {
                 pObj->AddPropertyInt32U("LayerTypeID", GetLayerTypeID());
@@ -128,6 +135,7 @@ namespace GraphEngine {
             uint32_t						  m_nLayerSymbolID;
             uint32_t						  m_nCheckCancelStep;
             CommonLib::CGuid                  m_guid;
+            ILabelDrawerPtr                  m_pLabelDrawer;
         };
     }
 }

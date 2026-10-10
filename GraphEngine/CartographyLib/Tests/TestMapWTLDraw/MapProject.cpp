@@ -4,6 +4,7 @@
 #include "../../layers/RasterLayer.h"
 #include "../../renders/FeatureRenderer.h"
 #include "../../renders/AnnotationRenderer.h"
+#include "../../renders/LabelRenderer.h"
 #include "../../selectors/SimpleSymbolSelector.h"
 #include "../../../GeoDatabase/GeoDatabaseShape/ShapefileWorkspace.h"
 #include "../../../GeoDatabase/GeoDatabaseSQlite/SQLiteWorkspace.h"
@@ -346,6 +347,23 @@ namespace TestMapDraw
         ptrLayer->SetVisible(true);
         ptrLayer->SetSelectable(true);
 
+        const SLabelParams& labels = params.labels;
+        if(!labels.sField.empty())
+        {
+            // labels: the field value with a text symbol (with a halo), the label drawer of the map places them without overlapping
+            std::shared_ptr<Display::CTextSymbol> ptrTextSymbol = std::make_shared<Display::CTextSymbol>();
+            ptrTextSymbol->SetSize(labels.dFontSize);   // mm
+            ptrTextSymbol->SetColor(labels.color);
+            ptrTextSymbol->GetFont()->SetHaloSize(labels.dHaloSize);   // mm
+            ptrTextSymbol->GetFont()->SetBgColor(Display::Color(255, 255, 255, 255));
+            std::shared_ptr<Cartography::CLabelRenderer> ptrLabelRenderer = std::make_shared<Cartography::CLabelRenderer>(std::make_shared<Cartography::CSimpleSymbolSelector>(ptrTextSymbol));
+            ptrLabelRenderer->SetMinimumScale(labels.dMinimumScale > 0. ? labels.dMinimumScale : 0.); // layer skips it when scale > minimum scale
+            ptrLabelRenderer->SetClassIndex(nLayerCount);   // the same priority: labels of the upper layers are placed first
+            ptrLayer->SetLabelRenderer(ptrLabelRenderer);
+            ptrLayer->SetLabelFieldName(labels.sField);
+            ptrLayer->SetLabelingOptions(labels.options);
+        }
+
         if(!anno.sField.empty())
         {
             // annotation: the field value is drawn with a simple text symbol
@@ -526,6 +544,8 @@ namespace TestMapDraw
                 SLayerParams tableParams;
                 if(!params.annotation.sField.empty() && ptrFields->FieldExists(params.annotation.sField))
                     tableParams.annotation = params.annotation;
+                if(!params.labels.sField.empty() && ptrFields->FieldExists(params.labels.sField))
+                    tableParams.labels = params.labels;
 
                 // symbology is made for one table: its field and its geometry type
                 const SSymbology* pSymbology = params.ptrSymbology.get();

@@ -21,8 +21,8 @@ namespace GraphEngine {
             virtual void                              SetSpatialReference(Geometry::ISpatialReferencePtr  spatRef);
             virtual void                              Draw(Display::IDisplayPtr ptrDisplay, Display::ITrackCancelPtr ptrTrackCancel);
             virtual void                              PartialDraw( eDrawPhase phase, Display::IDisplayPtr ptrDisplay, Display::ITrackCancelPtr ptrTrackCancel);
-            virtual ILabelEnginePtr                   GetLabelEngine() const;
-            virtual void                              SetLabelEngine(ILabelEnginePtr engine);
+            virtual ILabelDrawerPtr                   GetLabelDrawer() const;
+            virtual void                              SetLabelDrawer(ILabelDrawerPtr ptrLabelDrawer);
             virtual  CommonLib::Units		          GetMapUnits() const;
             virtual void                              SetMapUnits( CommonLib::Units units );
             virtual IGraphicsContainerPtr             GetGraphicsContainer() const;
@@ -80,7 +80,7 @@ namespace GraphEngine {
 
             Display::IFillSymbolPtr     m_ptrBackgroundSymbol;
             Display::IFillSymbolPtr		m_ptrForegroundSymbol;
-            ILabelEnginePtr				m_ptrLabelEngine;
+            ILabelDrawerPtr				m_ptrLabelDrawer;
             IGraphicsContainerPtr		m_ptrGraphicsContainer;
             IBookmarksPtr				m_ptrBookmarks;
             CommonLib::IPropertySetPtr	m_ptrPropertySet;

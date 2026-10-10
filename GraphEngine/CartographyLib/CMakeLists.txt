@@ -20,6 +20,8 @@ set(SOURCE_FILES
         renders/FeatureRenderer.cpp
         renders/AnnotationRenderer.h
         renders/AnnotationRenderer.cpp
+        renders/LabelRenderer.h
+        renders/LabelRenderer.cpp
         renders/RenderersLoader.h
         renders/RenderersLoader.cpp
         renders/Raster/RasterPixelUtils.h
@@ -51,6 +53,17 @@ set(SOURCE_FILES
         drawer/MapTask.cpp
         drawer/MapDrawer.h
         drawer/MapDrawer.cpp
+        Labeling/Geom/LabelGeometry.h
+        Labeling/Geom/LabelGeometry.cpp
+        Labeling/LabelTypes.h
+        Labeling/LabelStyle.h
+        Labeling/LabelStyle.cpp
+        Labeling/LabelStrategy.h
+        Labeling/LabelStrategy.cpp
+        Labeling/LabelCollisionGrid.h
+        Labeling/LabelCollisionGrid.cpp
+        Labeling/LabelDrawer.h
+        Labeling/LabelDrawer.cpp
 )
 
 

@@ -1,4 +1,4 @@
-// AddSQLiteDlg.h : "Add SQLite Database" dialog - database path, table, symbology and annotation tabs
+// AddSQLiteDlg.h : "Add SQLite Database" dialog - database path, table, symbology, annotation and labels tabs
 //
 /////////////////////////////////////////////////////////////////////////////
 
