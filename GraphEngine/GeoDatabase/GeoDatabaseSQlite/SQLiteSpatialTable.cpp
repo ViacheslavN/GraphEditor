@@ -34,6 +34,26 @@ namespace GraphEngine {
                 m_pFields->GetField(nIndex)->SetType(dtGeometry);
         }
 
+        void CSQLiteSpatialTable::SetExtent(Geometry::IEnvelopePtr ptrEnvelope)
+        {
+            TBase::SetExtent(ptrEnvelope);
+            if(!ptrEnvelope.get())
+                return;
+
+            try
+            {
+                CSQLiteUtils::SSpatialTableInfo info;
+                if(!CSQLiteUtils::ReadSpatialTableInfo(GetDatasetName(), info, m_ptrDatabase))
+                    return;
+                info.extent = ptrEnvelope->GetBoundingBox();
+                CSQLiteUtils::WriteSpatialTableInfo(info, m_ptrDatabase);
+            }
+            catch (std::exception& exc)
+            {
+                CommonLib::CExcBase::RegenExc("Failed to set the extent of the table {0}", GetDatasetName(), exc);
+            }
+        }
+
         void CSQLiteSpatialTable::Save(CommonLib::ISerializeObjPtr pObj) const
         {
             // workspace id + dataset name: CDatasetLoader::LoadTable reopens the table through its workspace

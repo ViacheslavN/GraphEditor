@@ -57,6 +57,6 @@ if(WIN32)
 endif()
 add_subdirectory(ThirdParty)
 add_subdirectory(GraphEnginejni)   # GraphEnginejni.dll / libGraphEnginejni.so
-
+add_subdirectory(Convertors)
 
 set(ignoreMe "${CMAKE_TOOLCHAIN_FILE}")

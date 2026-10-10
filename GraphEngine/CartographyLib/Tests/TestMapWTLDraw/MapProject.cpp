@@ -511,6 +511,28 @@ namespace TestMapDraw
         }
     }
 
+    int CMapProject::AddConvertedLayers(GeoDatabase::IWorkspacePtr ptrWorkspace, Cartography::IMapPtr ptrSourceMap)
+    {
+        if(!ptrWorkspace.get() || !ptrSourceMap.get())
+            return 0;
+
+        Cartography::ILayersPtr ptrSourceLayers = ptrSourceMap->GetLayers();
+        std::vector<Cartography::ILayerPtr> vecLayers;
+        for(int i = 0; i < ptrSourceLayers->GetLayerCount(); ++i)
+            vecLayers.push_back(ptrSourceLayers->GetLayer(i));
+        if(vecLayers.empty())
+            return 0;
+        ptrSourceLayers->RemoveAllLayers();
+
+        GeoDatabase::CWorkspaceHolder::AddWorkspace(ptrWorkspace);
+        m_vecWorkspaces.push_back(ptrWorkspace);
+
+        // the source map keeps the drawing order (the bottom layer first)
+        for(size_t i = 0; i < vecLayers.size(); ++i)
+            AddLayer(vecLayers[i], ptrSourceMap->GetSpatialReference());
+        return (int)vecLayers.size();
+    }
+
     int CMapProject::AddSQLiteDatabase(const std::string& sDatabasePath, const std::string& sTableName, const SLayerParams& params)
     {
         try

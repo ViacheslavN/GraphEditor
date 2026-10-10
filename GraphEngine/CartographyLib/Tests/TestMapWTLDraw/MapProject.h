@@ -82,6 +82,9 @@ namespace TestMapDraw
         // adds the spatial tables of an SQLite database as layers (sTableName empty - all of them), returns the number of added layers
         // annotation and symbology are set only for the tables which have their fields
         int AddSQLiteDatabase(const std::string& sDatabasePath, const std::string& sTableName = std::string(), const SLayerParams& params = SLayerParams());
+        // the layers made by a converter (OSM ...) in a separate map: moved into the project map (on the top),
+        // the workspace of their tables is registered for the project save / load; returns the number of layers
+        int AddConvertedLayers(GraphEngine::GeoDatabase::IWorkspacePtr ptrWorkspace, GraphEngine::Cartography::IMapPtr ptrSourceMap);
         // spatial tables of an SQLite database with their attribute fields (UTF-8 path)
         static std::vector<STableInfo> GetSQLiteTables(const std::string& sDatabasePath);
 

@@ -33,6 +33,25 @@
 #define IDC_LABEL_POLY_OUTSIDE          1154
 #define IDC_LABEL_DUPLICATES            1155
 #define IDC_LABEL_DUP_DISTANCE          1156
+#define IDD_CONVERT_OSM                 107
+#define IDD_OSM_PROGRESS                108
+#define IDC_OSM_PATH                    1160
+#define IDC_OSM_BROWSE                  1161
+#define IDC_OSM_READ                    1162
+#define IDC_OSM_INFO                    1163
+#define IDC_OSM_DATASETS                1164
+#define IDC_OSM_SELECT_ALL              1165
+#define IDC_OSM_CLEAR_ALL               1166
+#define IDC_OSM_OUTPUT                  1167
+#define IDC_OSM_OUTPUT_BROWSE           1168
+#define IDC_OSM_WEB_MERCATOR            1169
+#define IDC_OSM_LANGUAGE                1170
+#define IDC_OSM_NODE_CACHE              1171
+#define IDC_OSM_ADD_TO_MAP              1172
+#define IDC_PROGRESS_STAGE              1175
+#define IDC_PROGRESS_BAR                1176
+#define IDC_PROGRESS_COUNTS             1177
+#define IDC_PROGRESS_TIME               1178
 #define IDC_TABS                        1010
 #define IDC_SELECTOR_TYPE               1011
 #define IDC_SYMB_FIELD                  1012
@@ -96,14 +115,15 @@
 #define ID_RESET_ROTATION               32789
 #define ID_ADD_RASTER                   32790
 #define ID_ZOOM_TO_LAYER                32791
+#define ID_CONVERT_FROM_OSM             32792
 
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        201
-#define _APS_NEXT_COMMAND_VALUE         32792
-#define _APS_NEXT_CONTROL_VALUE         1157
-#define _APS_NEXT_SYMED_VALUE           107
+#define _APS_NEXT_COMMAND_VALUE         32793
+#define _APS_NEXT_CONTROL_VALUE         1179
+#define _APS_NEXT_SYMED_VALUE           109
 #endif
 #endif

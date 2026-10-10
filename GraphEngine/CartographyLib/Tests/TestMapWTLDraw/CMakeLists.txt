@@ -36,6 +36,10 @@ set(SOURCE_FILES
         LabelPage.cpp
         LayerPages.h
         LayerPages.cpp
+        ConvertOSMDlg.h
+        ConvertOSMDlg.cpp
+        OSMProgressDlg.h
+        OSMProgressDlg.cpp
         TestMapDraw.rc
 )
 
@@ -45,5 +49,10 @@ target_compile_definitions(${BIN_NAME} PRIVATE _WINDOWS)
 target_link_libraries(${BIN_NAME} PRIVATE CartographyLib)
 target_link_libraries(${BIN_NAME} PRIVATE FreeType)
 target_link_libraries(${BIN_NAME} PRIVATE Jpeg)
+
+# OSM converter (Conversions menu): only when OSMConvertorLib is built (expat found); it is defined later
+# (Convertors is added after CartographyLib), so generator expressions are used
+target_link_libraries(${BIN_NAME} PRIVATE $<TARGET_NAME_IF_EXISTS:OSMConvertorLib>)
+target_compile_definitions(${BIN_NAME} PRIVATE $<$<TARGET_EXISTS:OSMConvertorLib>:HAVE_OSM_CONVERTOR>)
 
 target_include_directories(${BIN_NAME} PRIVATE ../../../ThirdParty/WTL)

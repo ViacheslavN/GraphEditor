@@ -8,6 +8,13 @@
 #include "MapView.h"
 #include "AddShapeFileDlg.h"
 #include "AddSQLiteDlg.h"
+#include "ConvertOSMDlg.h"
+#include "OSMProgressDlg.h"
+#ifdef HAVE_OSM_CONVERTOR
+#include "../../Map.h"
+#include "../../../GeoDatabase/GeoDatabaseSQlite/SQLiteWorkspace.h"
+#include "../../../Convertors/OSM/OSMConvertorLib/OSMConvertor.h"
+#endif
 #include "../../../CommonLib/str/StringEncoding.h"
 
 #include <cmath>
@@ -789,6 +796,97 @@ LRESULT CMapView::OnConvertShapeToSQLite(WORD /*wNotifyCode*/, WORD /*wID*/, HWN
 
 	StartConvertToSQLite(shapeDlg.m_szFileName, dbDlg.m_szFileName);
 	return 0;
+}
+
+LRESULT CMapView::OnConvertFromOSM(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/)
+{
+	const wchar_t* pszCaption = L"Convert from OpenStreetMap";
+#ifndef HAVE_OSM_CONVERTOR
+	::MessageBox(m_hWnd, L"The OSM converter isn't built (expat was not found by CMake).", pszCaption, MB_OK | MB_ICONINFORMATION);
+	return 0;
+#else
+	if(m_bConverting)
+	{
+		::MessageBox(m_hWnd, L"A conversion is already running.", pszCaption, MB_OK | MB_ICONINFORMATION);
+		return 0;
+	}
+
+	// the file, its layers / tables, the output
+	CConvertOSMDlg dlg;
+	if(dlg.DoModal(m_hWnd) != IDOK)
+		return 0;
+
+	Convertors::IOSMMapPtr ptrOSMMap = dlg.GetOSMMap();
+	Convertors::SOSMConvertSettings settings = dlg.GetSettings();
+	std::wstring sOutput = dlg.GetOutputPath();
+	std::string sOutputUtf8 = ToUtf8(sOutput.c_str());   // SQLite opens files with UTF-8 names
+
+	std::wstring sName = sOutput.substr(sOutput.find_last_of(L"\\/") + 1);
+	size_t nDot = sName.find_last_of(L'.');
+	if(nDot != std::wstring::npos && nDot > 0)
+		sName.resize(nDot);
+	std::string sNameUtf8 = ToUtf8(sName.c_str());
+
+	// the converter adds the layers to a separate map (it works in another thread than the drawer),
+	// they are moved into the project map when it is done
+	GeoDatabase::IDatabaseWorkspacePtr ptrDb;
+	Cartography::IMapPtr ptrNewMap = dlg.GetAddToMap() ? std::make_shared<Cartography::CMap>() : Cartography::IMapPtr();
+
+	COSMProgressDlg progressDlg(L"Converting OpenStreetMap",
+		[&](Convertors::IProgressUpdaterPtr ptrProgress, Display::ITrackCancelPtr ptrCancel)
+		{
+			ptrDb = GeoDatabase::CSQLiteWorkspace::Create(sNameUtf8.c_str(), sOutputUtf8.c_str(), CommonLib::CGuid::CreateNew());
+			Convertors::COSMConvertor convertor(settings);
+			convertor.Convert(ptrOSMMap, ptrNewMap, ptrDb, ptrProgress, ptrCancel);
+		},
+		ptrOSMMap->GetNodeCount(), ptrOSMMap->GetWayCount(), ptrOSMMap->GetRelationCount());
+
+	m_bConverting = true;
+	INT_PTR nResult = progressDlg.DoModal(m_hWnd);
+	m_bConverting = false;
+
+	if(nResult != IDOK)
+	{
+		// the conversion is rolled back, the new database is not needed
+		ptrNewMap.reset();
+		ptrDb.reset();
+		for(const wchar_t* pszSuffix : {L"", L"-wal", L"-shm", L"-journal"})
+			::DeleteFileW((sOutput + pszSuffix).c_str());
+
+		if(nResult == IDCANCEL)
+			::MessageBox(m_hWnd, L"The conversion is canceled.", pszCaption, MB_OK | MB_ICONINFORMATION);
+		else
+		{
+			std::wstring sMsg = L"The conversion failed:\n" + progressDlg.GetError();
+			::MessageBox(m_hWnd, sMsg.c_str(), pszCaption, MB_OK | MB_ICONERROR);
+		}
+		return 0;
+	}
+
+	int nLayers = 0;
+	try
+	{
+		if(ptrNewMap.get())
+		{
+			m_ptrDrawer->StopDraw(true);
+			bool bFirstLayers = m_project.GetMap()->GetLayers()->GetLayerCount() == 0;
+			nLayers = m_project.AddConvertedLayers(ptrDb, ptrNewMap);
+			if(nLayers > 0)
+				OnLayersAdded(bFirstLayers);
+		}
+	}
+	catch (std::exception& exc)
+	{
+		ShowError(exc, pszCaption);
+	}
+
+	int nSeconds = (int)progressDlg.GetElapsedSeconds();
+	wchar_t szText[1024];
+	swprintf(szText, 1024, L"The OSM data are converted into\n%s\nin %d min %d s, %d layers are added to the map.",
+		sOutput.c_str(), nSeconds / 60, nSeconds % 60, nLayers);
+	::MessageBox(m_hWnd, szText, pszCaption, MB_OK | MB_ICONINFORMATION);
+	return 0;
+#endif
 }
 
 bool CMapView::StartConvertToSQLite(const wchar_t *pszShapeFile, const wchar_t *pszDatabase)

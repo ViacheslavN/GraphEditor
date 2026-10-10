@@ -23,6 +23,8 @@ namespace GraphEngine {
             virtual  ~CSQLiteSpatialTable();
 
             virtual void SetShapeFieldName(const std::string& fieldName);
+            // the extent is also written to GE_SPATIAL_TABLES (f.e. after the rows are inserted)
+            virtual void SetExtent(Geometry::IEnvelopePtr ptrEnvelope);
 
             virtual void Save(CommonLib::ISerializeObjPtr pObj) const ;
             virtual void Load(CommonLib::ISerializeObjPtr pObj);

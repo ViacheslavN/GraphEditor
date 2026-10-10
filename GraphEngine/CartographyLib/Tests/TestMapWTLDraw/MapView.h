@@ -45,6 +45,7 @@ public:
 		COMMAND_ID_HANDLER(ID_ADD_SQLITE_DB, OnAddSQLiteDb)
 		COMMAND_ID_HANDLER(ID_ADD_RASTER, OnAddRaster)
 		COMMAND_ID_HANDLER(ID_CONVERT_SHAPE_TO_SQLITE, OnConvertShapeToSQLite)
+		COMMAND_ID_HANDLER(ID_CONVERT_FROM_OSM, OnConvertFromOSM)
 		COMMAND_ID_HANDLER(ID_REMOVE_ALL_LAYERS, OnRemoveAllLayers)
 		COMMAND_ID_HANDLER(ID_CLEAR_SELECTION, OnClearSelection)
 		COMMAND_ID_HANDLER(ID_VIEW_3D, OnView3D)
@@ -78,6 +79,7 @@ public:
 	LRESULT OnAddSQLiteDb(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnAddRaster(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnConvertShapeToSQLite(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
+	LRESULT OnConvertFromOSM(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnRemoveAllLayers(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnClearSelection(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnView3D(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
