@@ -175,6 +175,11 @@ namespace GraphEngine
             return m_geoInfo.bGeoreferenced;
         }
 
+        bool CRasterDataset::GetNoDataValue(double& dValue) const
+        {
+            return m_ptrReader->GetNoDataValue(dValue);
+        }
+
         const SRasterGeoInfo& CRasterDataset::GetGeoInfo() const
         {
             return m_geoInfo;

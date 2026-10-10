@@ -41,6 +41,27 @@ namespace GraphEngine {
             double GetStdDevCount() const;
             void   SetStdDevCount(double count);
 
+            // the image adjustments, applied after the stretch in this order (as in QGIS):
+            // brightness, contrast: -100 .. 100, 0 - unchanged;
+            // gamma: 0.1 .. 10, 1 - unchanged, > 1 lighter (output = input ^ (1 / gamma));
+            // saturation: -100 (grayscale) .. 100 (double), 0 - unchanged
+            int    GetBrightness() const;
+            void   SetBrightness(int value);
+            int    GetContrast() const;
+            void   SetContrast(int value);
+            double GetGamma() const;
+            void   SetGamma(double gamma);
+            int    GetSaturation() const;
+            void   SetSaturation(int value);
+
+            static constexpr double kMinGamma = 0.1;
+            static constexpr double kMaxGamma = 10.;
+
+            // the percentiles for RasterStretchTypePercentClip (default 2 and 98)
+            double GetClipLowPercent() const;
+            double GetClipHighPercent() const;
+            void   SetClipPercents(double low, double high);
+
             // NoData: pixels whose displayed bands all have these values (one value per raster band) are transparent
             const std::vector<double>& GetBackgroundValues() const;
             void SetBackgroundValues(const std::vector<double>& values);
@@ -50,6 +71,14 @@ namespace GraphEngine {
             // statistics used by the stretch; calculated on the first draw when not set
             CRasterStatisticsPtr GetStatistics() const;
             void SetStatistics(CRasterStatisticsPtr ptrStats);
+
+            // the values stretched to the ends of the color range for the band by the stretch type and the statistics
+            // (the legend), false - the statistics aren't calculated yet (before the first drawing) or not needed (bytes as they are)
+            bool GetStretchRange(int band, double& dMin, double& dMax) const;
+
+            // the settings which don't depend on the kind of the renderer (transparency, stretch, NoData, adjustments,
+            // statistics of the same dataset): switching RGB <-> stretch keeps them
+            void CopyCommonSettings(const CRasterRendererBase& other);
 
             // ISerialize (common part)
             virtual void Save(CommonLib::ISerializeObjPtr pObj) const;
@@ -70,6 +99,9 @@ namespace GraphEngine {
             uint8_t StretchToByte(double value, int band) const;
             bool IsBackground(const uint8_t* pPixel, const std::vector<int>& bands, GeoDatabase::eRasterPixelType pixelType, int sampleSize) const;
             bool IsStatisticsNeeded(GeoDatabase::eRasterPixelType pixelType) const;
+            // the brightness / contrast / gamma table and the saturation for Draw, false - nothing to adjust
+            bool PrepareAdjustments();
+            void ApplyAdjustments(uint8_t* pBGRA, size_t count) const;
             void PrepareStretch(GeoDatabase::IRasterDatasetPtr ptrRaster, Display::ITrackCancelPtr ptrTrackCancel);
 
         protected:
@@ -84,6 +116,14 @@ namespace GraphEngine {
             int m_nTransparency;
             eRasterStretchType m_stretchType;
             double m_dStdDevCount;
+            int m_nBrightness;
+            int m_nContrast;
+            double m_dGamma;
+            int m_nSaturation;
+            uint8_t m_toneLut[256];         // valid during Draw
+            bool m_bAdjust;
+            double m_dClipLow;
+            double m_dClipHigh;
             std::vector<double> m_vecBackgroundValues;
             bool m_bDisplayBackground;
             CRasterStatisticsPtr m_ptrStats;

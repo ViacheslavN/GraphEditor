@@ -40,6 +40,8 @@ set(SOURCE_FILES
         LayerGeneralPage.cpp
         LayerDataPage.h
         LayerDataPage.cpp
+        RasterDisplayPage.h
+        RasterDisplayPage.cpp
         MapPropertiesDlg.h
         MapPropertiesDlg.cpp
         LayerPropertiesDlg.h

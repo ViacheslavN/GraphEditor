@@ -29,12 +29,6 @@ namespace GraphEngine {
             void SetAlphaBandIndex(int band);
             void SetBandIndices(int red, int green, int blue, int alpha = -1);
 
-            // -100 .. 100, 0 - unchanged
-            int  GetBrightness() const;
-            void SetBrightness(int value);
-            int  GetContrast() const;
-            void SetContrast(int value);
-
             // ISerialize
             virtual void Save(CommonLib::ISerializeObjPtr pObj) const;
             virtual void Load(CommonLib::ISerializeObjPtr pObj);
@@ -52,13 +46,10 @@ namespace GraphEngine {
             int m_nGreen;
             int m_nBlue;
             int m_nAlpha;
-            int m_nBrightness;
-            int m_nContrast;
 
             // valid during Draw
             std::vector<int> m_vecDrawBands;
             std::vector<std::vector<uint8_t> > m_vecByteLut;  // per band for byte rasters
-            uint8_t m_toneLut[256];                            // brightness / contrast
             bool m_bByteRaster;
         };
 

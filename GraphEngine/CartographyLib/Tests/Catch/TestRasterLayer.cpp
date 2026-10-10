@@ -1,6 +1,7 @@
 #include "TestCommon.h"
 #include "../../drawer/MapDrawer.h"
 #include "../../layers/RasterLayer.h"
+#include "../../legend/Legend.h"
 #include "../../renders/Raster/RasterRGBRenderer.h"
 #include "../../renders/Raster/RasterStretchRenderer.h"
 #include "../../../GeoDatabase/GeoDatabaseRaster/RasterWorkspace.h"
@@ -319,4 +320,159 @@ TEST_CASE("Raster layer: save / load", "[cartography][raster][serialize]")
     REQUIRE(ptrStretch->GetInvert());
     REQUIRE(ptrStretch->GetToColor() == Display::Color(200, 100, 50));
     REQUIRE(ptrStretch->GetFromColor() == Display::Color(10, 20, 30));
+}
+
+TEST_CASE("Raster layer: percent clip stretch (2 - 98 %) is the default for more than 8 bits", "[cartography][raster][drawer]")
+{
+    GradientTiff();
+    std::shared_ptr<CRasterLayer> ptrLayer = std::make_shared<CRasterLayer>(OpenRasterWorkspace()->OpenRasterDataset("gradient16.tif"));
+    ptrLayer->SetVisible(true);
+    CRasterStretchRendererPtr ptrRenderer = std::dynamic_pointer_cast<CRasterStretchRenderer>(ptrLayer->GetRenderer());
+    REQUIRE(ptrRenderer != nullptr);
+    REQUIRE(ptrRenderer->GetStretchType() == RasterStretchTypePercentClip);
+    REQUIRE(ptrRenderer->GetClipLowPercent() == 2.);
+    REQUIRE(ptrRenderer->GetClipHighPercent() == 98.);
+
+    CMapDrawer drawer;
+    drawer.SetMap(CreateRasterMap(ptrLayer));
+    drawer.SetSize(400, 100, true);
+    REQUIRE(WaitDrawn(drawer, 1));
+    REQUIRE(drawer.GetLastError().empty());
+
+    // 200 columns 1000, 1010 ... 2990 of 50 pixels: 2 % - the 4th column, 98 % - the 196th one
+    CRasterStatisticsPtr ptrStats = ptrRenderer->GetStatistics();
+    REQUIRE(ptrStats->HasHistogram());
+    REQUIRE(ptrStats->GetPercentile(0, 0.) == 1000.);
+    REQUIRE(ptrStats->GetPercentile(0, 2.) == 1030.);
+    REQUIRE(ptrStats->GetPercentile(0, 50.) == 1990.);
+    REQUIRE(ptrStats->GetPercentile(0, 98.) == 2950.);
+    REQUIRE(ptrStats->GetPercentile(0, 100.) == 2990.);
+
+    // the values below / above are clipped to the ends of the ramp (black - white)
+    REQUIRE(NearRGB(PixelAt(drawer, 1.5, 25), 0, 0, 0));
+    REQUIRE(NearRGB(PixelAt(drawer, 198.5, 25), 255, 255, 255));
+    Display::Color middle = PixelAt(drawer, 100.5, 25);
+    REQUIRE(std::abs(middle.GetR() - 128) <= 4);
+
+    // the statistics loaded from a project have no histogram: they are calculated again for the clip
+    CRasterStatisticsPtr ptrLoaded = std::make_shared<CRasterStatistics>();
+    ptrLoaded->SetBandStats(0, ptrStats->GetBandStats(0));
+    CRasterStatistics::SBandStats noHistogram = ptrStats->GetBandStats(0);
+    noHistogram.histogram.clear();
+    ptrLoaded->SetBandStats(0, noHistogram);
+    REQUIRE_FALSE(ptrLoaded->HasHistogram());
+    ptrRenderer->SetStatistics(ptrLoaded);
+    drawer.SetSize(401, 100, true);
+    REQUIRE(WaitDrawn(drawer, 2));
+    REQUIRE(ptrRenderer->GetStatistics()->HasHistogram());
+}
+
+TEST_CASE("Raster layer: brightness, contrast, gamma, saturation and switching the renderer", "[cartography][raster][drawer]")
+{
+    QuadrantsTiff();
+    std::shared_ptr<CRasterLayer> ptrLayer = CreateQuadrantsLayer();
+    CRasterRGBRendererPtr ptrRGB = std::dynamic_pointer_cast<CRasterRGBRenderer>(ptrLayer->GetRenderer());
+    REQUIRE(ptrRGB != nullptr);
+    REQUIRE(ptrRGB->GetGamma() == 1.);
+
+    CMapDrawer drawer;
+    drawer.SetMap(CreateRasterMap(ptrLayer));
+    drawer.SetSize(300, 200, true);
+    REQUIRE(WaitDrawn(drawer, 1));
+    CheckQuadrants(drawer);
+
+    // saturation -100: gray, red -> 0.299 * 255
+    ptrRGB->SetSaturation(-100);
+    drawer.SetSize(301, 200, true);
+    REQUIRE(WaitDrawn(drawer, 2));
+    REQUIRE(drawer.GetLastError().empty());
+    REQUIRE(NearRGB(PixelAt(drawer, 25, 75), 76, 76, 76));
+    REQUIRE(NearRGB(PixelAt(drawer, 75, 75), 150, 150, 150));
+
+    // brightness +50 on black: 127.5; gamma 2 lightens it: 255 * (128 / 255) ^ 0.5 = 181
+    ptrRGB->SetSaturation(0);
+    ptrRGB->SetBrightness(50);
+    drawer.SetSize(302, 200, true);
+    REQUIRE(WaitDrawn(drawer, 3));
+    REQUIRE(NearRGB(PixelAt(drawer, 75, 25), 128, 128, 128));
+    ptrRGB->SetGamma(2.);
+    drawer.SetSize(303, 200, true);
+    REQUIRE(WaitDrawn(drawer, 4));
+    REQUIRE(NearRGB(PixelAt(drawer, 75, 25), 181, 181, 181));
+    REQUIRE_THROWS(ptrRGB->SetGamma(0.));
+    ptrRGB->SetGamma(100.);
+    REQUIRE(ptrRGB->GetGamma() == CRasterRendererBase::kMaxGamma);
+    ptrRGB->SetGamma(2.);
+
+    // to the stretch renderer: the adjustments go with it, the band is the first one (red: 255 / 0 / 0 / 0)
+    IRasterRendererPtr ptrStretch = CRasterLayer::CreateRenderer(RasterStretchRendererID, ptrLayer->GetRasterDataset(), ptrRGB);
+    CRasterStretchRendererPtr pStretch = std::dynamic_pointer_cast<CRasterStretchRenderer>(ptrStretch);
+    REQUIRE(pStretch != nullptr);
+    REQUIRE(pStretch->GetBrightness() == 50);
+    REQUIRE(pStretch->GetGamma() == 2.);
+    REQUIRE(pStretch->GetStretchType() == ptrRGB->GetStretchType());
+    pStretch->SetBrightness(0);
+    pStretch->SetGamma(1.);
+    ptrLayer->SetRenderer(ptrStretch);
+    drawer.SetSize(304, 200, true);
+    REQUIRE(WaitDrawn(drawer, 5));
+    REQUIRE(drawer.GetLastError().empty());
+    REQUIRE(NearRGB(PixelAt(drawer, 25, 75), 255, 255, 255));   // red 255 -> white of the ramp
+    REQUIRE(NearRGB(PixelAt(drawer, 75, 75), 0, 0, 0));         // green quadrant, red 0 -> black
+
+    // and back, the save / load of the adjustments
+    IRasterRendererPtr ptrBack = CRasterLayer::CreateRenderer(RasterRGBRendererID, ptrLayer->GetRasterDataset(), ptrStretch);
+    REQUIRE(ptrBack->GetRasterRendererID() == RasterRGBRendererID);
+    REQUIRE_THROWS(CRasterLayer::CreateRenderer(UndefineRasterRendererID, ptrLayer->GetRasterDataset()));
+
+    CRasterRGBRenderer saved;
+    saved.SetBrightness(-20);
+    saved.SetContrast(30);
+    saved.SetGamma(0.5);
+    saved.SetSaturation(40);
+    CommonLib::ISerializeObjPtr ptrObj = CreateSerializeRoot();
+    saved.Save(ptrObj);
+    CRasterRGBRenderer loaded;
+    loaded.Load(ptrObj);
+    REQUIRE(loaded.GetBrightness() == -20);
+    REQUIRE(loaded.GetContrast() == 30);
+    REQUIRE(loaded.GetGamma() == 0.5);
+    REQUIRE(loaded.GetSaturation() == 40);
+}
+
+TEST_CASE("Raster layer: legend of the bands", "[cartography][raster][legend]")
+{
+    QuadrantsTiff();
+    GradientTiff();
+    std::shared_ptr<CRasterLayer> ptrRGB = CreateQuadrantsLayer();
+    std::vector<ILegendGroupPtr> groups = CLegendUtils::GetLayerLegend(ptrRGB);
+    REQUIRE(groups.size() == 1);
+    REQUIRE(groups[0]->GetClassCount() == 3);
+    REQUIRE(groups[0]->GetClass(0)->GetLabel() == "Red: Band 1");
+    REQUIRE(groups[0]->GetClass(1)->GetLabel() == "Green: Band 2");
+    REQUIRE(groups[0]->GetClass(2)->GetLabel() == "Blue: Band 3");
+    REQUIRE(groups[0]->GetClass(0)->GetSymbol() != nullptr);
+
+    std::dynamic_pointer_cast<CRasterRGBRenderer>(ptrRGB->GetRenderer())->SetBandIndices(2, 2, 2);
+    groups = CLegendUtils::GetLayerLegend(ptrRGB);
+    REQUIRE(groups[0]->GetClassCount() == 1);
+    REQUIRE(groups[0]->GetClass(0)->GetLabel() == "Gray: Band 3");
+
+    // stretch: the band, the values of the ramp ends after the statistics are calculated (the first drawing)
+    std::shared_ptr<CRasterLayer> ptrLayer = std::make_shared<CRasterLayer>(OpenRasterWorkspace()->OpenRasterDataset("gradient16.tif"));
+    ptrLayer->SetVisible(true);
+    groups = CLegendUtils::GetLayerLegend(ptrLayer);
+    REQUIRE(groups.size() == 1);
+    REQUIRE(groups[0]->GetHeading() == "Band 1");
+    REQUIRE(groups[0]->GetClassCount() == 2);
+    REQUIRE(groups[0]->GetClass(0)->GetLabel() == "High");
+    REQUIRE(groups[0]->GetClass(1)->GetLabel() == "Low");
+
+    CMapDrawer drawer;
+    drawer.SetMap(CreateRasterMap(ptrLayer));
+    drawer.SetSize(400, 100, true);
+    REQUIRE(WaitDrawn(drawer, 1));
+    groups = CLegendUtils::GetLayerLegend(ptrLayer);
+    REQUIRE(groups[0]->GetClass(0)->GetLabel() == "2950");
+    REQUIRE(groups[0]->GetClass(1)->GetLabel() == "1030");
 }

@@ -49,6 +49,7 @@ namespace GraphEngine {
                         std::string  spatialInsertSQL = "INSERT INTO  " + pTable->GetSpatialIndexName() + "(feature_id, minX, maxX, minY, maxY)" +
                                                         " VALUES (?, ?, ?, ?, ?)";
                         m_ptrStmtSpatial = m_ptrDatabase->PrepareQuery(spatialInsertSQL.c_str());
+                        m_sSpatialIndexName = pTable->GetSpatialIndexName();
                         m_bbox.type = CommonLib::bbox_type::bbox_type_invalid;
                     }
                 }
@@ -77,6 +78,13 @@ namespace GraphEngine {
                 else
                      nRowId = m_ptrDatabase->GetLastInsertRowID();
 
+                if(m_ptrRTreeBuilder.get())
+                {
+                    m_ptrRTreeBuilder->Add(nRowId, m_bbox);
+                    m_bbox.type = CommonLib::bbox_type::bbox_type_invalid;
+                    return;
+                }
+
                 m_ptrStmtSpatial->BindInt64(1, nRowId);
                 m_ptrStmtSpatial->BindDouble(2, m_bbox.xMin);
                 m_ptrStmtSpatial->BindDouble(3, m_bbox.xMax);
@@ -98,6 +106,27 @@ namespace GraphEngine {
         CSQLiteInsertCursor::~CSQLiteInsertCursor()
         {
 
+        }
+
+        void CSQLiteInsertCursor::SetBulkSpatialIndex(const std::string& sTempDirUtf8, uint64_t nMemoryBytes)
+        {
+            if(m_ptrStmtSpatial.get() && !m_ptrRTreeBuilder.get())
+                m_ptrRTreeBuilder.reset(new CSQLiteRTreeBuilder(sTempDirUtf8, nMemoryBytes));
+        }
+
+        void CSQLiteInsertCursor::Finish()
+        {
+            if(!m_ptrRTreeBuilder.get())
+                return;
+            try
+            {
+                m_ptrRTreeBuilder->Build(m_ptrDatabase, m_sSpatialIndexName);
+            }
+            catch (std::exception& exc)
+            {
+                CommonLib::CExcBase::RegenExc("CSQLiteInsertCursor: failed to build the spatial index", exc);
+                throw;
+            }
         }
 
         std::string CSQLiteInsertCursor::GetInsertSql(IFieldsPtr ptrFields, const std::string& tableName)

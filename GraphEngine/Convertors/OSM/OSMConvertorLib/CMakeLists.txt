@@ -26,10 +26,16 @@ set(SOURCE_FILES
         OSMSchema.cpp
         OSMReader.h
         OSMReader.cpp
+        OSMPbfReader.h
+        OSMPbfReader.cpp
         OSMConvertor.h
         OSMConvertor.cpp
         OSMNodeStore.h
         OSMNodeStore.cpp
+        OSMFlatNodeStore.h
+        OSMFlatNodeStore.cpp
+        OSMTempFile.h
+        OSMTempFile.cpp
         OSMWayStore.h
         OSMWayStore.cpp
         OSMGeometry.h

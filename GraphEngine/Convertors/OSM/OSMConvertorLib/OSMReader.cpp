@@ -1,4 +1,7 @@
 #include "OSMReader.h"
+#include "OSMPbfReader.h"
+#include "OSMMap.h"
+#include "../../../CommonLib/str/StringEncoding.h"
 #include <exception>
 
 namespace GraphEngine {
@@ -60,10 +63,19 @@ namespace GraphEngine {
             }
         }
 
-        bool COSMReader::Read(const std::string& sPath, IOSMReadHandler& handler, int nObjects)
+        bool COSMReader::Read(const std::string& sPath, IOSMReadHandler& handler, int nObjects, int nThreads)
         {
+            if(COSMMap::FormatByPath(sPath) == OSMFormatPBF)
+                return COSMPbfReader::Read(sPath, handler, nObjects, nThreads);
+
+            // readosm opens the file with fopen: the ANSI name on Windows
+#ifdef _WIN32
+            std::string sFilePath = CommonLib::StringEncoding::str_w2a_safe(CommonLib::StringEncoding::str_utf82w_safe(sPath));
+#else
+            const std::string& sFilePath = sPath;
+#endif
             CHandleGuard guard;
-            int nRet = readosm_open(sPath.c_str(), &guard.m_pHandle);
+            int nRet = readosm_open(sFilePath.c_str(), &guard.m_pHandle);
             if(nRet != READOSM_OK)
                 throw CommonLib::CExcBase("Failed to open OSM file {0}: {1}", sPath, ErrorText(nRet));
 

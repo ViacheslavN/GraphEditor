@@ -76,6 +76,7 @@
 #define IDC_DATA_SHAPE_FIELD            1198
 #define IDC_DATA_FIELDS                 1199
 #define IDD_MAP_PROPERTIES              112
+#define IDD_PAGE_RASTER                 113
 #define IDC_MAP_NAME                    1200
 #define IDC_MAP_CS_PRESET               1201
 #define IDC_MAP_EPSG                    1202
@@ -99,6 +100,37 @@
 #define IDC_OSM_SCALE_MANUAL            1220
 #define IDC_OSM_SCALE_VALUE             1221
 #define IDC_OSM_SCALE_INFO              1222
+#define IDC_OSM_NODE_STORE              1223
+#define IDC_OSM_NODE_STORE_INFO         1224
+#define IDC_PROGRESS_DATA               1225
+#define IDC_RASTER_RENDERER             1226
+#define IDC_RASTER_RED                  1227
+#define IDC_RASTER_GREEN                1228
+#define IDC_RASTER_BLUE                 1229
+#define IDC_RASTER_BAND                 1230
+#define IDC_RASTER_FROM_COLOR           1231
+#define IDC_RASTER_FROM_BTN             1232
+#define IDC_RASTER_TO_COLOR             1233
+#define IDC_RASTER_TO_BTN               1234
+#define IDC_RASTER_INVERT               1235
+#define IDC_RASTER_STRETCH              1236
+#define IDC_RASTER_CLIP_LOW             1237
+#define IDC_RASTER_CLIP_HIGH            1238
+#define IDC_RASTER_STDDEV               1239
+#define IDC_RASTER_BRIGHTNESS           1240
+#define IDC_RASTER_BRIGHTNESS_VAL       1241
+#define IDC_RASTER_CONTRAST             1242
+#define IDC_RASTER_CONTRAST_VAL         1243
+#define IDC_RASTER_SATURATION           1244
+#define IDC_RASTER_SATURATION_VAL       1245
+#define IDC_RASTER_GAMMA                1246
+#define IDC_RASTER_GAMMA_VAL            1247
+#define IDC_RASTER_TRANSPARENCY         1248
+#define IDC_RASTER_TRANSPARENCY_VAL     1249
+#define IDC_RASTER_NODATA_ON            1250
+#define IDC_RASTER_NODATA               1251
+#define IDC_RASTER_INFO                 1252
+#define IDC_RASTER_RESET                1253
 #define IDC_TABS                        1010
 #define IDC_SELECTOR_TYPE               1011
 #define IDC_SYMB_FIELD                  1012
@@ -176,7 +208,7 @@
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        201
 #define _APS_NEXT_COMMAND_VALUE         32799
-#define _APS_NEXT_CONTROL_VALUE         1223
-#define _APS_NEXT_SYMED_VALUE           113
+#define _APS_NEXT_CONTROL_VALUE         1254
+#define _APS_NEXT_SYMED_VALUE           114
 #endif
 #endif

@@ -2,6 +2,8 @@
 
 #include "../GeoDatabase.h"
 #include "../../CommonLib/sqlitelib/Database.h"
+#include "SQLiteRTreeBuilder.h"
+#include <memory>
 
 
 namespace GraphEngine {
@@ -40,6 +42,9 @@ namespace GraphEngine {
             virtual void BindShape(int32_t col, CommonLib::IGeoShapePtr ptrShape, bool copy);
             virtual void BindGuid(int32_t col, const CommonLib::CGuid& guid);
 
+            virtual void SetBulkSpatialIndex(const std::string& sTempDirUtf8, uint64_t nMemoryBytes);
+            virtual void Finish();
+
         private:
             std::string GetInsertSql(IFieldsPtr ptrFields, const std::string& tableName);
             void InserToSpatiallIndex();
@@ -55,6 +60,8 @@ namespace GraphEngine {
             int m_nOIDFieldIndex;
             CommonLib::bbox m_bbox;
             int64_t  m_nOID;
+            std::string m_sSpatialIndexName;
+            std::unique_ptr<CSQLiteRTreeBuilder> m_ptrRTreeBuilder;   // bulk loading
         };
 
     }

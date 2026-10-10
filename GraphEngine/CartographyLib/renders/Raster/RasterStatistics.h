@@ -19,6 +19,8 @@ namespace GraphEngine {
                 double dMean = 0.;
                 double dStdDev = 0.;
                 uint64_t nCount = 0;
+                // the histogram of the samples: bins of the same width from dMin to dMax (not saved, calculated again)
+                std::vector<uint64_t> histogram;
             };
 
             CRasterStatistics();
@@ -31,6 +33,12 @@ namespace GraphEngine {
             bool IsCalculated() const;
             int GetBandCount() const;
             const SBandStats& GetBandStats(int band) const;
+            // the histograms are calculated (Calculate, not Load)
+            bool HasHistogram() const;
+            // the value below which percent (0..100) of the samples of the band are, by the histogram
+            double GetPercentile(int band, double percent) const;
+
+            static const size_t kHistogramBins = 4096;
             void SetBandStats(int band, const SBandStats& stats);
             void Clear();
 

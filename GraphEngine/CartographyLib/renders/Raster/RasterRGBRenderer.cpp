@@ -12,12 +12,8 @@ namespace GraphEngine {
             , m_nGreen(1)
             , m_nBlue(2)
             , m_nAlpha(-1)
-            , m_nBrightness(0)
-            , m_nContrast(0)
             , m_bByteRaster(true)
         {
-            for(int i = 0; i < 256; ++i)
-                m_toneLut[i] = (uint8_t)i;
         }
 
         CRasterRGBRenderer::~CRasterRGBRenderer()
@@ -31,6 +27,9 @@ namespace GraphEngine {
                 return;
 
             const int bands = ptrDataset->GetBandCount();
+            // more than 8 bits (satellite reflectance ...): the 2 - 98 % stretch, as QGIS does; bytes are shown as they are
+            if(ptrDataset->GetPixelType() != GeoDatabase::RasterPixelTypeUChar)
+                SetStretchType(RasterStretchTypePercentClip);
             if(bands >= 3)
                 SetBandIndices(0, 1, 2, bands == 4 && ptrDataset->GetPixelType() == GeoDatabase::RasterPixelTypeUChar ? 3 : -1);
             else
@@ -94,30 +93,6 @@ namespace GraphEngine {
             m_nAlpha = alpha;
         }
 
-        int CRasterRGBRenderer::GetBrightness() const
-        {
-            std::lock_guard<std::recursive_mutex> lock(m_mutex);
-            return m_nBrightness;
-        }
-
-        void CRasterRGBRenderer::SetBrightness(int value)
-        {
-            std::lock_guard<std::recursive_mutex> lock(m_mutex);
-            m_nBrightness = std::clamp(value, -100, 100);
-        }
-
-        int CRasterRGBRenderer::GetContrast() const
-        {
-            std::lock_guard<std::recursive_mutex> lock(m_mutex);
-            return m_nContrast;
-        }
-
-        void CRasterRGBRenderer::SetContrast(int value)
-        {
-            std::lock_guard<std::recursive_mutex> lock(m_mutex);
-            m_nContrast = std::clamp(value, -100, 100);
-        }
-
         std::vector<int> CRasterRGBRenderer::GetDisplayBands(int /*bandCount*/) const
         {
             std::vector<int> bands;
@@ -155,14 +130,6 @@ namespace GraphEngine {
                 }
             }
 
-            // brightness / contrast
-            const double contrast = 1. + m_nContrast / 100.;          // 0 .. 2
-            const double brightness = m_nBrightness * 255. / 100.;    // -255 .. 255
-            for(int v = 0; v < 256; ++v)
-            {
-                double res = (v - 127.5) * contrast + 127.5 + brightness;
-                m_toneLut[v] = (uint8_t)std::clamp(std::lround(res), 0L, 255L);
-            }
         }
 
         uint8_t CRasterRGBRenderer::ChannelValue(const uint8_t* pPixel, int band, GeoDatabase::eRasterPixelType pixelType, int sampleSize) const
@@ -202,9 +169,9 @@ namespace GraphEngine {
                     }
                 }
 
-                pBGRA[2] = red >= 0 ? m_toneLut[ChannelValue(pSrc, red, pixelType, sampleSize)] : 0;
-                pBGRA[1] = green >= 0 ? m_toneLut[ChannelValue(pSrc, green, pixelType, sampleSize)] : 0;
-                pBGRA[0] = blue >= 0 ? m_toneLut[ChannelValue(pSrc, blue, pixelType, sampleSize)] : 0;
+                pBGRA[2] = red >= 0 ? ChannelValue(pSrc, red, pixelType, sampleSize) : 0;
+                pBGRA[1] = green >= 0 ? ChannelValue(pSrc, green, pixelType, sampleSize) : 0;
+                pBGRA[0] = blue >= 0 ? ChannelValue(pSrc, blue, pixelType, sampleSize) : 0;
                 if(alpha >= 0)
                     pBGRA[3] = m_bByteRaster ? pSrc[alpha] : ChannelValue(pSrc, alpha, pixelType, sampleSize);
                 else
@@ -220,8 +187,6 @@ namespace GraphEngine {
             pObj->AddPropertyInt32("GreenBand", m_nGreen);
             pObj->AddPropertyInt32("BlueBand", m_nBlue);
             pObj->AddPropertyInt32("AlphaBand", m_nAlpha);
-            pObj->AddPropertyInt32("Brightness", m_nBrightness);
-            pObj->AddPropertyInt32("Contrast", m_nContrast);
         }
 
         void CRasterRGBRenderer::Load(CommonLib::ISerializeObjPtr pObj)
@@ -232,8 +197,6 @@ namespace GraphEngine {
             m_nGreen = pObj->GetPropertyInt32("GreenBand", m_nGreen);
             m_nBlue = pObj->GetPropertyInt32("BlueBand", m_nBlue);
             m_nAlpha = pObj->GetPropertyInt32("AlphaBand", m_nAlpha);
-            m_nBrightness = std::clamp((int)pObj->GetPropertyInt32("Brightness", m_nBrightness), -100, 100);
-            m_nContrast = std::clamp((int)pObj->GetPropertyInt32("Contrast", m_nContrast), -100, 100);
         }
     }
 }

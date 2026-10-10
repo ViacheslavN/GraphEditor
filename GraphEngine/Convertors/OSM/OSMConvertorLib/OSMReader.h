@@ -14,9 +14,12 @@ namespace GraphEngine {
             virtual bool OnNode(const readosm_node& node) = 0;
             virtual bool OnWay(const readosm_way& way) = 0;
             virtual bool OnRelation(const readosm_relation& relation) = 0;
+            // .pbf: after every block, nBytesRead of nBytesTotal (the file or the blocks with the requested objects) are processed;
+            // returns false to stop the reading
+            virtual bool OnProgress(uint64_t /*nBytesRead*/, uint64_t /*nBytesTotal*/) { return true; }
         };
 
-        // C++ wrapper of readosm: .osm (expat) or .pbf by the file suffix.
+        // Reads .osm with readosm (expat), .pbf with COSMPbfReader (multithreaded), by the file suffix.
         // Exceptions of the handler are passed through readosm (C code) and rethrown.
         class COSMReader
         {
@@ -30,7 +33,8 @@ namespace GraphEngine {
             };
 
             // returns false if the handler stopped the reading
-            static bool Read(const std::string& sPath, IOSMReadHandler& handler, int nObjects = ReadAll);
+            // sPath - UTF-8; nThreads - the decoding threads of a .pbf file, 0 - by the number of the processors
+            static bool Read(const std::string& sPath, IOSMReadHandler& handler, int nObjects = ReadAll, int nThreads = 0);
 
             static std::string ErrorText(int nCode);
         };

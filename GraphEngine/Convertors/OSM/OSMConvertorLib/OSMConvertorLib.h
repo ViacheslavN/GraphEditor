@@ -75,6 +75,18 @@ namespace GraphEngine {
             uint64_t    nRelations = 0;
             uint64_t    nFeatures = 0;    // written features / records (conversion)
             std::string sMessage;
+
+            // reading of the file (.pbf; an .osm file has no byte counts)
+            int         nPass = 0;        // the pass over the file, from 1 (0 - the file isn't read now)
+            int         nPassCount = 0;   // the passes of this task
+            uint64_t    nBytesRead = 0;   // the data of the file processed in this pass
+            uint64_t    nBytesTotal = 0;  // the data this pass reads: the whole file or (the ways pass) only the blocks with ways,
+                                          // 0 - unknown
+            uint64_t    nFileSize = 0;
+
+            // the stages after the reading: multipolygons built / layers with the spatial index built, of all
+            uint64_t    nStepDone = 0;
+            uint64_t    nStepTotal = 0;
         };
 
         class IProgressUpdater {
@@ -225,15 +237,27 @@ namespace GraphEngine {
             int               nManualScaleExponent = 2;   // -22..22
         };
 
+        // the storage of the node coordinates (in the temporary folder) while the ways are built
+        enum eOSMNodeStore
+        {
+            OSMNodeStoreAuto   = 0,   // flat for the files of a continent / the planet (64-bit), sorted otherwise
+            OSMNodeStoreSorted = 1,   // the nodes sorted by id, 16 bytes per node: extracts
+            OSMNodeStoreFlat   = 2    // a file indexed by the node id, 8 bytes per id up to the biggest one (~100 GB for the
+                                      // current ids, sparse: the gaps take no disk space), the fastest lookup: the planet
+        };
+
         struct SOSMConvertSettings
         {
             std::string sTempDir;              // temporary files (node coordinates), empty - the system temporary folder
-            uint32_t    nNodeCacheMB = 512;    // memory for the node coordinates, the rest is in a temporary file
+            uint32_t    nNodeCacheMB = 512;    // memory for the node coordinates (the sorted node store) and the multipolygon ways, the rest is in temporary files
             bool        bWebMercator = true;   // geometry in Web Mercator (EPSG:3857), false - longitude / latitude (EPSG:4326)
             std::string sNameLanguage;         // "en", "de" ...: name:<language> is used for the names when it exists
             bool        bAddLayersToMap = true;
             // the geometry compression (GeometryCompression, NumLen coded deltas, about 4 times smaller)
             SOSMCompressSettings compression;
+            // the threads decoding the blocks of a .pbf file, 0 - by the number of the processors
+            int         nThreads = 0;
+            eOSMNodeStore nodeStore = OSMNodeStoreAuto;
         };
 
         class IOSMConvertor {

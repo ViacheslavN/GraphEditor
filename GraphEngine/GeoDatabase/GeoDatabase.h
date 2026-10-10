@@ -175,6 +175,11 @@ namespace GraphEngine
             virtual ~IDatabaseWorkspace(){}
             virtual ITransactionPtr StartTransaction(eTransactionType type) = 0;
 
+            // loading of much data in one transaction (conversions): the database settings for the speed
+            // (SQLite: the rollback journal instead of WAL - the data aren't written twice, a big page cache,
+            // no syncs); false - back to the normal settings. Outside of a transaction.
+            virtual void SetBulkLoadMode(bool bBulk) = 0;
+
             virtual ITablePtr CreateTable(const std::string& name, const std::string& viewName, IFieldsPtr ptrFields) = 0;
             virtual ITablePtr GetTable(const std::string& name) = 0;
             virtual ITablePtr CreateTableWithSpatialIndex(const std::string& name,
@@ -366,6 +371,8 @@ namespace GraphEngine
             virtual int                              GetBandCount() const = 0;
             virtual eRasterPixelType                 GetSourcePixelType() const = 0; // as stored (e.g. 1 bit stored, UChar delivered)
             virtual int                              GetSourceBandCount() const = 0;
+            // the value of the pixels without data (GeoTIFF GDAL_NODATA tag, the same for all the bands), false - none
+            virtual bool                             GetNoDataValue(double& dValue) const = 0;
             virtual IRasterCursorPtr				 Search(IRasterSpatialFilterPtr ptrFilter ) = 0;
 
         };
@@ -564,6 +571,12 @@ namespace GraphEngine
             virtual void BindBlob(int32_t col, const byte_t *pBuf, int32_t size, bool copy) = 0;
             virtual void BindShape(int32_t col, CommonLib::IGeoShapePtr ptrShape, bool copy) = 0;
             virtual void BindGuid(int32_t col, const CommonLib::CGuid& guid )= 0;
+
+            // bulk loading: the spatial index is built once by Finish (packed R-tree) instead of row by row,
+            // much faster for many rows; sTempDirUtf8 - the temporary files, empty - the system temporary folder
+            virtual void SetBulkSpatialIndex(const std::string& sTempDirUtf8 = std::string(), uint64_t nMemoryBytes = 256ull * 1024 * 1024) = 0;
+            // builds the bulk spatial index (nothing otherwise), call it before the commit
+            virtual void Finish() = 0;
         };
 
         class  IUpdateCursor : public ICursor

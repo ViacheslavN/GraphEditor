@@ -61,6 +61,8 @@ set(COMMON_SOURCE_FILES
         GeoDatabaseSQlite/SQLiteUtils.cpp
         GeoDatabaseSQlite/SQLiteInsertCursor.h
         GeoDatabaseSQlite/SQLiteInsertCursor.cpp
+        GeoDatabaseSQlite/SQLiteRTreeBuilder.h
+        GeoDatabaseSQlite/SQLiteRTreeBuilder.cpp
         GeoDatabaseSQlite/SQLiteTransaction.h
         GeoDatabaseSQlite/SQLiteTransaction.cpp
         Join.h
@@ -70,6 +72,8 @@ set(COMMON_SOURCE_FILES
         Utils.h
         utils.cpp
         GeoDatabaseRaster/RasterReader.h
+        GeoDatabaseRaster/TIFF/TIFF.h
+        GeoDatabaseRaster/TIFF/TIFF.cpp
         GeoDatabaseRaster/TIFFReader.h
         GeoDatabaseRaster/TIFFReader.cpp
         GeoDatabaseRaster/RasterBlock.h
@@ -82,6 +86,7 @@ set(COMMON_SOURCE_FILES
         GeoDatabaseRaster/RasterDataset.cpp
         GeoDatabaseRaster/RasterWorkspace.h
         GeoDatabaseRaster/RasterWorkspace.cpp
+        GeoDatabaseRaster/TIFF/TIFF.cpp
 
 )
 

@@ -1,12 +1,11 @@
 #pragma once
 
 #include "RasterReader.h"
+#include "TIFF/TIFF.h"
 
-#include <cstdarg>
 #include <deque>
 #include <unordered_map>
 
-typedef struct tiff TIFF;
 
 namespace GraphEngine
 {
@@ -22,6 +21,9 @@ namespace GraphEngine
         //   unusual bit depths) is returned as RGBA (4 x uint8)
         // - geo-referencing: GeoTIFF tags (ModelTransformation, or ModelPixelScale + ModelTiepoint,
         //   PixelIsPoint aware), EPSG code from the GeoKey directory; world file (.tfw/.tifw/.wld) as fallback
+        // - overviews (reduced resolution images of the IFD chain, as GDAL / COG write them): ReadWindow with a pixel
+        //   step reads the smallest overview which still has at least the requested resolution
+        //   (a 32 GB DEM drawn as a whole reads a few tiles of an overview instead of a tile per output pixel)
         class CTIFFReader : public IRasterReader
         {
         public:
@@ -41,12 +43,22 @@ namespace GraphEngine
             virtual int GetSourceBandCount() const;
             virtual eRasterPixelType GetSourcePixelType() const;
             virtual const SRasterGeoInfo& GetGeoInfo() const;
+            virtual bool GetNoDataValue(double& dValue) const;
 
             virtual void ReadWindow(int col, int row, int width, int height, int step, void* pDst);
 
             uint16_t GetPhotometric() const {return m_photometric;}
             uint16_t GetCompression() const {return m_compression;}
-            bool IsTiled() const {return m_bTiled;}
+            bool IsTiled() const {return m_levels.empty() ? false : m_levels[0].bTiled;}
+
+            // the images: 0 - the full resolution, then the overviews from the biggest one
+            int GetLevelCount() const {return (int)m_levels.size();}
+            int GetLevelWidth(int nLevel) const {return (int)m_levels.at(nLevel).width;}
+            int GetLevelHeight(int nLevel) const {return (int)m_levels.at(nLevel).height;}
+            // the level ReadWindow uses for a pixel step
+            int SelectLevel(int step) const;
+            // the strips / tiles decoded since Open (all the levels)
+            uint64_t GetDecodedChunkCount() const {return m_nDecodedChunks;}
 
             static bool IsTIFFFile(const std::string& sFilePath);
 
@@ -58,21 +70,35 @@ namespace GraphEngine
                 rmRGBA      // libtiff RGBA interface
             };
 
+            // an image of the file: the full resolution one or an overview
+            struct SLevel
+            {
+                TIFFLib::TIFFPtr ptrTif;    // the handle of the level (the full resolution - m_ptrTif), opened when it is read first
+                uint16_t nDirectory = 0;    // the IFD of the image
+                uint32_t width = 0;
+                uint32_t height = 0;
+                bool     bTiled = false;
+                uint32_t chunkWidth = 0;    // tile width or image width
+                uint32_t chunkHeight = 0;   // tile length or rows per strip
+                size_t   chunkRowBytes = 0; // bytes of one decoded row of a chunk
+                size_t   chunkBytes = 0;
+            };
+
             void Close();
             void Parse();
+            void InitLevel(const TIFFLib::TIFFPtr& ptrTif, SLevel& level);
+            void ScanOverviews();
+            TIFFLib::TIFFPtr LevelHandle(int nLevel);
+            TIFFLib::TIFFPtr OpenHandle() const;
             void ReadGeoInfo();
             bool ReadGeoTiffTags();
             bool ReadWorldFile();
-            const uint8_t* GetChunk(uint32_t nChunk, uint32_t chunkX0, uint32_t chunkY0);
-            void ThrowError(const std::string& sMsg) const;
-
-            static int ErrorHandler(TIFF* tif, void* pUserData, const char* module, const char* fmt, va_list ap);
-            static int WarningHandler(TIFF* tif, void* pUserData, const char* module, const char* fmt, va_list ap);
+            const uint8_t* GetChunk(int nLevel, uint32_t nChunk, uint32_t chunkX0, uint32_t chunkY0);
+            [[noreturn]] void ThrowError(const std::string& sMsg) const;
 
         private:
-            TIFF* m_pTif;
+            TIFFLib::TIFFPtr m_ptrTif;
             std::string m_sFilePath;
-            std::string m_sLastError;
 
             uint32_t m_width;
             uint32_t m_height;
@@ -83,12 +109,6 @@ namespace GraphEngine
             uint16_t m_sampleFormat;
             uint16_t m_orientation;
             uint16_t m_compression;
-            bool m_bTiled;
-
-            uint32_t m_chunkWidth;      // tile width or image width
-            uint32_t m_chunkHeight;     // tile length or rows per strip
-            size_t m_chunkRowBytes;     // bytes of one decoded row of a chunk
-            size_t m_chunkBytes;
 
             eReadMode m_readMode;
             eRasterPixelType m_sourcePixelType;
@@ -97,13 +117,18 @@ namespace GraphEngine
             std::vector<uint8_t> m_palette;  // RGB triples
 
             SRasterGeoInfo m_geoInfo;
+            bool m_bNoData;
+            double m_dNoData;
+            std::vector<SLevel> m_levels;
 
-            // decoded chunk cache
-            typedef std::unordered_map<uint32_t, std::vector<uint8_t> > TChunkMap;
+            // decoded chunk cache, the key is (level << 32) | chunk
+            typedef std::unordered_map<uint64_t, std::vector<uint8_t> > TChunkMap;
             TChunkMap m_chunks;
-            std::deque<uint32_t> m_chunkOrder;
+            std::deque<uint64_t> m_chunkOrder;
             size_t m_cacheBytes;
             size_t m_maxCacheBytes;
+            uint64_t m_nDecodedChunks;
+            std::vector<uint32_t> m_vecColumns;   // ReadWindow: the columns of the level
         };
     }
 }

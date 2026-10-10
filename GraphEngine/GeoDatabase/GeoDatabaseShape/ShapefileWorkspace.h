@@ -23,6 +23,7 @@ namespace GraphEngine
                                           const std::string& viewName,  const std::string& spatialIndexName, const std::string& shapeFieldName, const std::string& sOIDFieldName, IFieldsPtr ptrFields,
                                           CommonLib::eShapeType shapeType, Geometry::IEnvelopePtr  ptrExtent, Geometry::ISpatialReferencePtr ptrSpatialReference);
             virtual ITransactionPtr StartTransaction(eTransactionType type);
+            virtual void SetBulkLoadMode(bool /*bBulk*/) {}
 
             virtual void Save(CommonLib::ISerializeObjPtr pObj) const;
             virtual void Load(CommonLib::ISerializeObjPtr pObj);

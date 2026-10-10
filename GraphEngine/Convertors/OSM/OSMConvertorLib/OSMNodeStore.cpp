@@ -369,3 +369,31 @@ namespace GraphEngine {
         }
     }
 }
+
+#include "OSMFlatNodeStore.h"
+
+namespace GraphEngine {
+    namespace Convertors {
+
+        eOSMNodeStore IOSMNodeStore::ResolveType(eOSMNodeStore type, const std::string& sOSMPath, uint64_t nFileSize)
+        {
+            if(type != OSMNodeStoreAuto)
+                return type;
+            if(sizeof(void*) < 8)
+                return OSMNodeStoreSorted;
+
+            // .pbf / .osm.pbf, an XML file is about 10 times bigger for the same data
+            bool bPbf = sOSMPath.size() >= 4 && (sOSMPath.compare(sOSMPath.size() - 4, 4, ".pbf") == 0 || sOSMPath.compare(sOSMPath.size() - 4, 4, ".PBF") == 0);
+            uint64_t nThreshold = bPbf ? FlatNodeStoreFileSize : FlatNodeStoreFileSize * 10;
+            return nFileSize >= nThreshold ? OSMNodeStoreFlat : OSMNodeStoreSorted;
+        }
+
+        std::unique_ptr<IOSMNodeStore> IOSMNodeStore::Create(eOSMNodeStore type, const std::string& sOSMPath, uint64_t nFileSize,
+                                                             const std::string& sTempDir, uint64_t nMemoryBytes)
+        {
+            if(ResolveType(type, sOSMPath, nFileSize) == OSMNodeStoreFlat)
+                return std::unique_ptr<IOSMNodeStore>(new COSMFlatNodeStore(sTempDir));
+            return std::unique_ptr<IOSMNodeStore>(new COSMNodeStore(sTempDir, nMemoryBytes));
+        }
+    }
+}

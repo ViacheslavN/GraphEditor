@@ -81,7 +81,10 @@ private:
 	};
 
 	void ShowProgress(const GraphEngine::Convertors::SOSMProgress& progress);
-	int  Percent(const GraphEngine::Convertors::SOSMProgress& progress) const;   // -1 - unknown
+	// the part of the whole task which is done, 0..1, -1 - unknown
+	double TaskFraction(const GraphEngine::Convertors::SOSMProgress& progress) const;
+	// the line about the data: the pass, the bytes read of the file, the speed and the time left of the pass
+	std::wstring DataText(const GraphEngine::Convertors::SOSMProgress& progress);
 	void ShowElapsed();
 
 private:
@@ -100,6 +103,9 @@ private:
 	bool m_bMarquee;
 	std::chrono::steady_clock::time_point m_start;
 	double m_dElapsed;
+	double m_dFraction;             // the last TaskFraction, the estimate of the time left
+	int m_nPass;                    // the pass of the speed measurement
+	std::chrono::steady_clock::time_point m_passStart;
 
 	CProgressBarCtrl m_progressBar;
 };

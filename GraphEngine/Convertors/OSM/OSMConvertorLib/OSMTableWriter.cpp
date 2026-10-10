@@ -173,6 +173,8 @@ namespace GraphEngine {
 
         void COSMTableWriter::Finish()
         {
+            if(m_ptrInsert.get())
+                m_ptrInsert->Finish();   // the bulk spatial index
             if(m_nShapeColumn < 0 || m_extent.type != CommonLib::bbox_type_normal)
                 return;
             m_ptrTable->SetExtent(std::make_shared<Geometry::CEnvelope>(m_extent, m_ptrSpatRef));

@@ -1,5 +1,6 @@
 #include "TIFFReader.h"
 #include "RasterBlock.h"
+#include "../../CommonLib/filesystem/File.h"
 
 extern "C" {
 #include "tiffio.h"
@@ -10,8 +11,9 @@ extern "C" {
 #include <climits>
 #include <cstdint>
 #include <cstring>
+#include <cstdlib>
 #include <filesystem>
-#include <fstream>
+#include <sstream>
 #include <mutex>
 
 namespace GraphEngine
@@ -39,53 +41,59 @@ namespace GraphEngine
             const uint16_t kRasterPixelIsPoint    = 2;
             const uint16_t kUserDefined           = 32767;
 
-            TIFFFieldInfo g_GeoTiffFields[] = {
-                {kTagModelPixelScale,     TIFF_VARIABLE2, TIFF_VARIABLE2, TIFF_DOUBLE, FIELD_CUSTOM, 1, 1, "ModelPixelScaleTag"},
-                {kTagModelTiepoint,       TIFF_VARIABLE2, TIFF_VARIABLE2, TIFF_DOUBLE, FIELD_CUSTOM, 1, 1, "ModelTiepointTag"},
-                {kTagModelTransformation, TIFF_VARIABLE2, TIFF_VARIABLE2, TIFF_DOUBLE, FIELD_CUSTOM, 1, 1, "ModelTransformationTag"},
-                {kTagGeoKeyDirectory,     TIFF_VARIABLE2, TIFF_VARIABLE2, TIFF_SHORT,  FIELD_CUSTOM, 1, 1, "GeoKeyDirectoryTag"},
-                {kTagGeoDoubleParams,     TIFF_VARIABLE2, TIFF_VARIABLE2, TIFF_DOUBLE, FIELD_CUSTOM, 1, 1, "GeoDoubleParamsTag"},
-                {kTagGeoAsciiParams,      TIFF_VARIABLE,  TIFF_VARIABLE,  TIFF_ASCII,  FIELD_CUSTOM, 1, 0, "GeoASCIIParamsTag"},
-            };
+            const size_t kBaseCacheBytes = 32 * 1024 * 1024;
+            const size_t kMaxCacheBytes = 256 * 1024 * 1024;
 
-            TIFFExtendProc g_ParentExtender = nullptr;
-
-            void GeoTiffTagExtender(TIFF* tif)
+            // JPEG-in-TIFF YCbCr: libjpeg converts to RGB (also makes libtiff report RGB-sized strips/tiles);
+            // a pseudo tag, it is set again for every handle / directory
+            void SetJpegColorMode(const TIFFLib::TIFFPtr& ptrTif)
             {
-                TIFFMergeFieldInfo(tif, g_GeoTiffFields, sizeof(g_GeoTiffFields) / sizeof(g_GeoTiffFields[0]));
-                if(g_ParentExtender)
-                    g_ParentExtender(tif);
+                uint16_t compression = COMPRESSION_NONE, photometric = 0, planar = PLANARCONFIG_CONTIG;
+                ptrTif->GetFieldDefaulted(TIFFTAG_COMPRESSION, compression);
+                ptrTif->GetFieldDefaulted(TIFFTAG_PLANARCONFIG, planar);
+                if(compression == COMPRESSION_JPEG && ptrTif->GetField(TIFFTAG_PHOTOMETRIC, photometric) &&
+                   photometric == PHOTOMETRIC_YCBCR && planar == PLANARCONFIG_CONTIG)
+                    ptrTif->SetFieldInt(TIFFTAG_JPEGCOLORMODE, JPEGCOLORMODE_RGB);
             }
 
-            void RegisterGeoTiffTags()
+            // the text of a small file (a world file) through the CommonLib file, false - no file
+            bool ReadTextFile(const std::string& sPathUtf8, std::string& sText)
             {
-                static std::once_flag flag;
-                std::call_once(flag, []() { g_ParentExtender = TIFFSetTagExtender(GeoTiffTagExtender); });
+                try
+                {
+                    CommonLib::file::TFilePtr ptrFile = CommonLib::file::CFileCreator::OpenFileA(sPathUtf8.c_str(), CommonLib::file::ofmOpenExisting,
+                                                                                                CommonLib::file::arRead, CommonLib::file::smRead,
+                                                                                                CommonLib::file::oftBinary);
+                    uint64_t nSize = ptrFile->GetFileSize();
+                    if(nSize > 64 * 1024)
+                        return false;
+                    sText.assign((size_t)nSize, '\0');
+                    size_t nDone = 0;
+                    while(nDone < sText.size())
+                    {
+                        std::streamsize n = ptrFile->Read((byte_t*)&sText[nDone], sText.size() - nDone);
+                        if(n <= 0)
+                            break;
+                        nDone += (size_t)n;
+                    }
+                    sText.resize(nDone);
+                    ptrFile->CloseFile();
+                    return true;
+                }
+                catch (std::exception&)
+                {
+                    return false;
+                }
             }
 
             std::filesystem::path ToPath(const std::string& sUtf8)
             {
                 return std::filesystem::u8path(sUtf8);
             }
-
-            std::string FormatMsg(const char* module, const char* fmt, va_list ap)
-            {
-                char buf[1024];
-                vsnprintf(buf, sizeof(buf), fmt, ap);
-                std::string msg;
-                if(module && *module)
-                {
-                    msg = module;
-                    msg += ": ";
-                }
-                msg += buf;
-                return msg;
-            }
         }
 
         CTIFFReader::CTIFFReader() :
-            m_pTif(nullptr)
-            , m_width(0)
+            m_width(0)
             , m_height(0)
             , m_bitsPerSample(0)
             , m_samplesPerPixel(0)
@@ -94,17 +102,15 @@ namespace GraphEngine
             , m_sampleFormat(SAMPLEFORMAT_UINT)
             , m_orientation(ORIENTATION_TOPLEFT)
             , m_compression(COMPRESSION_NONE)
-            , m_bTiled(false)
-            , m_chunkWidth(0)
-            , m_chunkHeight(0)
-            , m_chunkRowBytes(0)
-            , m_chunkBytes(0)
             , m_readMode(rmNative)
             , m_sourcePixelType(RasterPixelTypeUnknown)
             , m_pixelType(RasterPixelTypeUnknown)
             , m_bandCount(0)
             , m_cacheBytes(0)
-            , m_maxCacheBytes(32 * 1024 * 1024)
+            , m_maxCacheBytes(kBaseCacheBytes)
+            , m_nDecodedChunks(0)
+            , m_bNoData(false)
+            , m_dNoData(0.)
         {
 
         }
@@ -116,77 +122,175 @@ namespace GraphEngine
 
         void CTIFFReader::Close()
         {
-            if(m_pTif)
-                TIFFClose(m_pTif);
-            m_pTif = nullptr;
+            m_levels.clear();       // the overview handles are closed by their CTIFF
+            m_ptrTif.reset();
             m_chunks.clear();
             m_chunkOrder.clear();
             m_cacheBytes = 0;
         }
 
-        int CTIFFReader::ErrorHandler(TIFF* /*tif*/, void* pUserData, const char* module, const char* fmt, va_list ap)
-        {
-            CTIFFReader* pReader = static_cast<CTIFFReader*>(pUserData);
-            if(pReader)
-                pReader->m_sLastError = FormatMsg(module, fmt, ap);
-            return 1; // handled, don't call the global (stderr) handler
-        }
-
-        int CTIFFReader::WarningHandler(TIFF* /*tif*/, void* /*pUserData*/, const char* /*module*/, const char* /*fmt*/, va_list /*ap*/)
-        {
-            return 1; // warnings (unknown tags etc.) are ignored
-        }
-
         void CTIFFReader::ThrowError(const std::string& sMsg) const
         {
-            if(m_sLastError.empty())
-                throw CommonLib::CExcBase("{0}, file: {1}", sMsg, m_sFilePath);
-            throw CommonLib::CExcBase("{0}, file: {1}, libtiff: {2}", sMsg, m_sFilePath, m_sLastError);
+            if(m_ptrTif.get())
+                m_ptrTif->ThrowError(sMsg);
+            throw CommonLib::CExcBase("{0}, file: {1}", sMsg, m_sFilePath);
         }
 
         bool CTIFFReader::IsTIFFFile(const std::string& sFilePath)
         {
-            std::ifstream file(ToPath(sFilePath), std::ios::binary);
-            if(!file)
-                return false;
-
-            unsigned char hdr[4] = {0, 0, 0, 0};
-            file.read(reinterpret_cast<char*>(hdr), 4);
-            if(file.gcount() != 4)
-                return false;
-
-            // classic TIFF (42) and BigTIFF (43), little and big endian
-            if(hdr[0] == 'I' && hdr[1] == 'I' && hdr[3] == 0 && (hdr[2] == 42 || hdr[2] == 43))
-                return true;
-            if(hdr[0] == 'M' && hdr[1] == 'M' && hdr[2] == 0 && (hdr[3] == 42 || hdr[3] == 43))
-                return true;
-            return false;
+            return TIFFLib::CTIFF::IsTIFFFile(sFilePath);
         }
 
         void CTIFFReader::Open(const std::string& sFilePath)
         {
             Close();
             m_sFilePath = sFilePath;
-            m_sLastError.clear();
-
-            RegisterGeoTiffTags();
-
-            TIFFOpenOptions* pOptions = TIFFOpenOptionsAlloc();
-            TIFFOpenOptionsSetErrorHandlerExtR(pOptions, &CTIFFReader::ErrorHandler, this);
-            TIFFOpenOptionsSetWarningHandlerExtR(pOptions, &CTIFFReader::WarningHandler, this);
-#ifdef _WIN32
-            std::wstring sWidePath = ToPath(sFilePath).wstring();
-            m_pTif = TIFFOpenWExt(sWidePath.c_str(), "r", pOptions);
-#else
-            m_pTif = TIFFOpenExt(sFilePath.c_str(), "r", pOptions);
-#endif
-            TIFFOpenOptionsFree(pOptions);
-
-            if(!m_pTif)
-                ThrowError("Failed to open TIFF");
+            m_ptrTif = OpenHandle();    // throws
 
             Parse();
+            ScanOverviews();
             ReadGeoInfo();
+
+            // GDAL_NODATA: the value as text ("-32767", "nan")
+            m_bNoData = false;
+            std::string sNoData;
+            if(m_ptrTif->GetField(TIFFTAG_GDAL_NODATA, sNoData) && !sNoData.empty())
+            {
+                char* pszEnd = nullptr;
+                double dValue = strtod(sNoData.c_str(), &pszEnd);
+                if(pszEnd != sNoData.c_str())
+                {
+                    m_dNoData = dValue;
+                    m_bNoData = true;
+                }
+            }
+        }
+
+        bool CTIFFReader::GetNoDataValue(double& dValue) const
+        {
+            if(!m_bNoData)
+                return false;
+            dValue = m_dNoData;
+            return true;
+        }
+
+        TIFFLib::TIFFPtr CTIFFReader::OpenHandle() const
+        {
+            // "O": the offsets / sizes of the strips and tiles are read when they are needed, not the whole arrays
+            // (379 220 tiles of a 32 GB DEM: 6 MB per directory)
+            return TIFFLib::CTIFF::Open(m_sFilePath, "rO");
+        }
+
+        void CTIFFReader::InitLevel(const TIFFLib::TIFFPtr& ptrTif, SLevel& level)
+        {
+            SetJpegColorMode(ptrTif);
+            level.bTiled = ptrTif->IsTiled();
+            if(level.bTiled)
+            {
+                if(!ptrTif->GetField(TIFFTAG_TILEWIDTH, level.chunkWidth) || !ptrTif->GetField(TIFFTAG_TILELENGTH, level.chunkHeight)
+                   || level.chunkWidth == 0 || level.chunkHeight == 0)
+                    ThrowError("Invalid TIFF tile size");
+                level.chunkRowBytes = (size_t)ptrTif->GetTileRowSize();
+                level.chunkBytes = (size_t)ptrTif->GetTileSize();
+            }
+            else
+            {
+                uint32_t rowsPerStrip = 0;
+                ptrTif->GetFieldDefaulted(TIFFTAG_ROWSPERSTRIP, rowsPerStrip);
+                level.chunkWidth = level.width;
+                level.chunkHeight = std::max<uint32_t>(1, (std::min)(rowsPerStrip, level.height));
+                level.chunkRowBytes = (size_t)ptrTif->GetScanlineSize();
+                level.chunkBytes = (size_t)ptrTif->GetVStripSize(level.chunkHeight);
+            }
+
+            if(m_readMode == rmRGBA)
+            {
+                level.chunkRowBytes = size_t(level.chunkWidth) * 4;
+                level.chunkBytes = level.chunkRowBytes * level.chunkHeight;
+            }
+
+            if(level.chunkBytes == 0 || level.chunkRowBytes == 0)
+                ThrowError("Invalid TIFF strip/tile size");
+        }
+
+        void CTIFFReader::ScanOverviews()
+        {
+            // the samples are delivered as stored only: an overview must have the same layout as the full image
+            if(m_readMode != rmNative)
+                return;
+
+            try
+            {
+                TIFFLib::TIFFPtr ptrScan = OpenHandle();
+                uint16_t photometric = 0;
+                ptrScan->GetFieldDefaulted(TIFFTAG_PHOTOMETRIC, photometric);
+                const uint32_t nDirectories = ptrScan->GetDirectoryCount();
+                for(uint32_t d = 1; d < nDirectories && d < 64; ++d)
+                {
+                    ptrScan->SetDirectory(d);
+
+                    // a reduced resolution image, not a mask
+                    uint32_t subfileType = 0;
+                    ptrScan->GetFieldDefaulted(TIFFTAG_SUBFILETYPE, subfileType);
+                    if(!(subfileType & FILETYPE_REDUCEDIMAGE) || (subfileType & FILETYPE_MASK))
+                        continue;
+
+                    SLevel level;
+                    uint16_t bits = 0, samples = 0, format = 0, planar = 0, levelPhotometric = 0;
+                    if(!ptrScan->GetField(TIFFTAG_IMAGEWIDTH, level.width) || !ptrScan->GetField(TIFFTAG_IMAGELENGTH, level.height))
+                        continue;
+                    ptrScan->GetFieldDefaulted(TIFFTAG_BITSPERSAMPLE, bits);
+                    ptrScan->GetFieldDefaulted(TIFFTAG_SAMPLESPERPIXEL, samples);
+                    ptrScan->GetFieldDefaulted(TIFFTAG_SAMPLEFORMAT, format);
+                    ptrScan->GetFieldDefaulted(TIFFTAG_PLANARCONFIG, planar);
+                    ptrScan->GetFieldDefaulted(TIFFTAG_PHOTOMETRIC, levelPhotometric);
+                    if(bits != m_bitsPerSample || samples != m_samplesPerPixel || format != m_sampleFormat || planar != m_planarConfig ||
+                       levelPhotometric != photometric)
+                        continue;
+                    if(level.width == 0 || level.height == 0 || level.width >= m_width || level.height >= m_height)
+                        continue;
+
+                    level.nDirectory = (uint16_t)d;
+                    InitLevel(ptrScan, level);
+                    m_levels.push_back(level);
+                }
+            }
+            catch (std::exception&)
+            {
+                // a damaged overview: the full resolution image is still read
+                m_levels.resize(1);
+            }
+
+            // from the biggest one
+            std::sort(m_levels.begin() + 1, m_levels.end(), [](const SLevel& a, const SLevel& b) { return a.width > b.width; });
+        }
+
+        TIFFLib::TIFFPtr CTIFFReader::LevelHandle(int nLevel)
+        {
+            SLevel& level = m_levels[nLevel];
+            if(nLevel == 0)
+                return m_ptrTif;
+            if(!level.ptrTif.get())
+            {
+                TIFFLib::TIFFPtr ptrTif = OpenHandle();
+                ptrTif->SetDirectory(level.nDirectory);
+                SetJpegColorMode(ptrTif);
+                level.ptrTif = ptrTif;
+            }
+            return level.ptrTif;
+        }
+
+        int CTIFFReader::SelectLevel(int step) const
+        {
+            // the smallest overview with a pixel not bigger than the step (1% for the rounding of the overview sizes)
+            int nBest = 0;
+            for(size_t i = 1; i < m_levels.size(); ++i)
+            {
+                double factor = (std::min)(double(m_width) / m_levels[i].width, double(m_height) / m_levels[i].height);
+                if(factor <= step * 1.01)
+                    nBest = (int)i;
+            }
+            return nBest;
         }
 
         IRasterReaderPtr CTIFFReader::Clone() const
@@ -198,18 +302,18 @@ namespace GraphEngine
 
         void CTIFFReader::Parse()
         {
-            if(!TIFFGetField(m_pTif, TIFFTAG_IMAGEWIDTH, &m_width) || !TIFFGetField(m_pTif, TIFFTAG_IMAGELENGTH, &m_height))
+            if(!m_ptrTif->GetField(TIFFTAG_IMAGEWIDTH, m_width) || !m_ptrTif->GetField(TIFFTAG_IMAGELENGTH, m_height))
                 ThrowError("TIFF has no image size");
             if(m_width == 0 || m_height == 0 || m_width > INT32_MAX || m_height > INT32_MAX)
                 ThrowError("Unsupported TIFF image size");
 
-            TIFFGetFieldDefaulted(m_pTif, TIFFTAG_BITSPERSAMPLE, &m_bitsPerSample);
-            TIFFGetFieldDefaulted(m_pTif, TIFFTAG_SAMPLESPERPIXEL, &m_samplesPerPixel);
-            TIFFGetFieldDefaulted(m_pTif, TIFFTAG_PLANARCONFIG, &m_planarConfig);
-            TIFFGetFieldDefaulted(m_pTif, TIFFTAG_SAMPLEFORMAT, &m_sampleFormat);
-            TIFFGetFieldDefaulted(m_pTif, TIFFTAG_ORIENTATION, &m_orientation);
-            TIFFGetFieldDefaulted(m_pTif, TIFFTAG_COMPRESSION, &m_compression);
-            if(!TIFFGetField(m_pTif, TIFFTAG_PHOTOMETRIC, &m_photometric))
+            m_ptrTif->GetFieldDefaulted(TIFFTAG_BITSPERSAMPLE, m_bitsPerSample);
+            m_ptrTif->GetFieldDefaulted(TIFFTAG_SAMPLESPERPIXEL, m_samplesPerPixel);
+            m_ptrTif->GetFieldDefaulted(TIFFTAG_PLANARCONFIG, m_planarConfig);
+            m_ptrTif->GetFieldDefaulted(TIFFTAG_SAMPLEFORMAT, m_sampleFormat);
+            m_ptrTif->GetFieldDefaulted(TIFFTAG_ORIENTATION, m_orientation);
+            m_ptrTif->GetFieldDefaulted(TIFFTAG_COMPRESSION, m_compression);
+            if(!m_ptrTif->GetField(TIFFTAG_PHOTOMETRIC, m_photometric))
                 m_photometric = m_samplesPerPixel >= 3 ? PHOTOMETRIC_RGB : PHOTOMETRIC_MINISBLACK;
             if(m_samplesPerPixel == 0)
                 ThrowError("TIFF has no samples");
@@ -217,7 +321,7 @@ namespace GraphEngine
             // JPEG-in-TIFF YCbCr: let libjpeg convert to RGB (also makes libtiff report RGB-sized strips/tiles)
             if(m_compression == COMPRESSION_JPEG && m_photometric == PHOTOMETRIC_YCBCR && m_planarConfig == PLANARCONFIG_CONTIG)
             {
-                TIFFSetField(m_pTif, TIFFTAG_JPEGCOLORMODE, JPEGCOLORMODE_RGB);
+                SetJpegColorMode(m_ptrTif);
                 m_photometric = PHOTOMETRIC_RGB;
             }
 
@@ -262,10 +366,10 @@ namespace GraphEngine
             if(!bNeedsRGBA && m_photometric == PHOTOMETRIC_PALETTE && m_samplesPerPixel == 1 && m_bitsPerSample <= 16
                && m_sourcePixelType != RasterPixelTypeUnknown)
             {
-                uint16_t* pRed = nullptr;
-                uint16_t* pGreen = nullptr;
-                uint16_t* pBlue = nullptr;
-                if(!TIFFGetField(m_pTif, TIFFTAG_COLORMAP, &pRed, &pGreen, &pBlue))
+                const uint16_t* pRed = nullptr;
+                const uint16_t* pGreen = nullptr;
+                const uint16_t* pBlue = nullptr;
+                if(!m_ptrTif->GetColorMap(pRed, pGreen, pBlue))
                     ThrowError("Paletted TIFF has no color map");
 
                 const size_t count = size_t(1) << m_bitsPerSample;
@@ -295,43 +399,22 @@ namespace GraphEngine
             }
             else
             {
-                char szMsg[1024] = {0};
-                if(!TIFFRGBAImageOK(m_pTif, szMsg))
-                    throw CommonLib::CExcBase("Unsupported TIFF format, file: {0}, {1}", m_sFilePath, std::string(szMsg));
+                std::string sMsg;
+                if(!m_ptrTif->IsRGBAImageOK(sMsg))
+                    throw CommonLib::CExcBase("Unsupported TIFF format, file: {0}, {1}", m_sFilePath, sMsg);
 
                 m_readMode = rmRGBA;
                 m_pixelType = RasterPixelTypeUChar;
                 m_bandCount = 4;
             }
 
-            // chunk (strip/tile) geometry
-            m_bTiled = TIFFIsTiled(m_pTif) != 0;
-            if(m_bTiled)
-            {
-                if(!TIFFGetField(m_pTif, TIFFTAG_TILEWIDTH, &m_chunkWidth) || !TIFFGetField(m_pTif, TIFFTAG_TILELENGTH, &m_chunkHeight)
-                   || m_chunkWidth == 0 || m_chunkHeight == 0)
-                    ThrowError("Invalid TIFF tile size");
-                m_chunkRowBytes = (size_t)TIFFTileRowSize64(m_pTif);
-                m_chunkBytes = (size_t)TIFFTileSize64(m_pTif);
-            }
-            else
-            {
-                uint32_t rowsPerStrip = 0;
-                TIFFGetFieldDefaulted(m_pTif, TIFFTAG_ROWSPERSTRIP, &rowsPerStrip);
-                m_chunkWidth = m_width;
-                m_chunkHeight = std::max<uint32_t>(1, (std::min)(rowsPerStrip, m_height));
-                m_chunkRowBytes = (size_t)TIFFScanlineSize64(m_pTif);
-                m_chunkBytes = (size_t)TIFFVStripSize64(m_pTif, m_chunkHeight);
-            }
-
-            if(m_readMode == rmRGBA)
-            {
-                m_chunkRowBytes = size_t(m_chunkWidth) * 4;
-                m_chunkBytes = m_chunkRowBytes * m_chunkHeight;
-            }
-
-            if(m_chunkBytes == 0 || m_chunkRowBytes == 0)
-                ThrowError("Invalid TIFF strip/tile size");
+            // chunk (strip/tile) geometry of the full resolution image
+            SLevel level;
+            level.ptrTif = m_ptrTif;
+            level.width = m_width;
+            level.height = m_height;
+            InitLevel(m_ptrTif, level);
+            m_levels.assign(1, level);
         }
 
         void CTIFFReader::ReadGeoInfo()
@@ -352,12 +435,11 @@ namespace GraphEngine
 
         bool CTIFFReader::ReadGeoTiffTags()
         {
-            uint32_t count = 0;
-            double* pData = nullptr;
-
+            std::vector<double> transform;
             bool bTransform = false;
-            if(TIFFGetField(m_pTif, kTagModelTransformation, &count, &pData) && count >= 16 && pData)
+            if(m_ptrTif->GetField(kTagModelTransformation, transform) && transform.size() >= 16)
             {
+                const double* pData = transform.data();
                 // [a b 0 d; e f 0 h; ...]  X = a*col + b*row + d, Y = e*col + f*row + h (rotation terms b, e ignored)
                 m_geoInfo.pixelSizeX = pData[0];
                 m_geoInfo.pixelSizeY = pData[5];
@@ -368,14 +450,13 @@ namespace GraphEngine
 
             if(!bTransform)
             {
-                uint32_t scaleCount = 0;
-                double* pScale = nullptr;
-                uint32_t tieCount = 0;
-                double* pTie = nullptr;
-                if(!TIFFGetField(m_pTif, kTagModelPixelScale, &scaleCount, &pScale) || scaleCount < 2 || !pScale)
+                std::vector<double> scale, tie;
+                if(!m_ptrTif->GetField(kTagModelPixelScale, scale) || scale.size() < 2)
                     return false;
-                if(!TIFFGetField(m_pTif, kTagModelTiepoint, &tieCount, &pTie) || tieCount < 6 || !pTie)
+                if(!m_ptrTif->GetField(kTagModelTiepoint, tie) || tie.size() < 6)
                     return false;
+                const double* pScale = scale.data();
+                const double* pTie = tie.data();
                 if(pScale[0] == 0. || pScale[1] == 0.)
                     return false;
 
@@ -390,10 +471,11 @@ namespace GraphEngine
             m_geoInfo.sSource = "geotiff";
 
             // GeoKey directory: header {version, revision, minor, numKeys}, then {keyId, tagLocation, count, value}
-            uint32_t keyCount = 0;
-            uint16_t* pKeys = nullptr;
-            if(TIFFGetField(m_pTif, kTagGeoKeyDirectory, &keyCount, &pKeys) && keyCount >= 4 && pKeys)
+            std::vector<uint16_t> keys;
+            if(m_ptrTif->GetField(kTagGeoKeyDirectory, keys) && keys.size() >= 4)
             {
+                const uint32_t keyCount = (uint32_t)keys.size();
+                const uint16_t* pKeys = keys.data();
                 uint16_t modelType = 0;
                 uint16_t rasterType = 0;
                 uint16_t geographicType = 0;
@@ -455,7 +537,10 @@ namespace GraphEngine
                 if(!std::filesystem::is_regular_file(candidate, ec))
                     continue;
 
-                std::ifstream file(candidate);
+                std::string sText;
+                if(!ReadTextFile(candidate.u8string(), sText))
+                    continue;
+                std::istringstream file(sText);
                 double v[6];
                 int n = 0;
                 while(n < 6 && (file >> v[n]))
@@ -511,13 +596,15 @@ namespace GraphEngine
             return m_geoInfo;
         }
 
-        const uint8_t* CTIFFReader::GetChunk(uint32_t nChunk, uint32_t chunkX0, uint32_t chunkY0)
+        const uint8_t* CTIFFReader::GetChunk(int nLevel, uint32_t nChunk, uint32_t chunkX0, uint32_t chunkY0)
         {
-            TChunkMap::iterator it = m_chunks.find(nChunk);
+            const uint64_t nKey = (uint64_t(nLevel) << 32) | nChunk;
+            TChunkMap::iterator it = m_chunks.find(nKey);
             if(it != m_chunks.end())
                 return it->second.data();
 
-            while(!m_chunkOrder.empty() && m_cacheBytes + m_chunkBytes > m_maxCacheBytes)
+            const SLevel& level = m_levels[nLevel];
+            while(!m_chunkOrder.empty() && m_cacheBytes + level.chunkBytes > m_maxCacheBytes)
             {
                 TChunkMap::iterator old = m_chunks.find(m_chunkOrder.front());
                 if(old != m_chunks.end())
@@ -528,34 +615,32 @@ namespace GraphEngine
                 m_chunkOrder.pop_front();
             }
 
-            std::vector<uint8_t> data(m_chunkBytes, 0);
-            m_sLastError.clear();
+            TIFFLib::TIFFPtr ptrTif = LevelHandle(nLevel);
+            std::vector<uint8_t> data(level.chunkBytes, 0);
 
             if(m_readMode == rmRGBA)
             {
-                int ok = m_bTiled ? TIFFReadRGBATile(m_pTif, chunkX0, chunkY0, reinterpret_cast<uint32_t*>(data.data()))
-                                  : TIFFReadRGBAStrip(m_pTif, chunkY0, reinterpret_cast<uint32_t*>(data.data()));
-                if(!ok)
-                    ThrowError("Failed to read TIFF data");
+                if(level.bTiled)
+                    ptrTif->ReadRGBATile(chunkX0, chunkY0, reinterpret_cast<uint32_t*>(data.data()));
+                else
+                    ptrTif->ReadRGBAStrip(chunkY0, reinterpret_cast<uint32_t*>(data.data()));
             }
+            else if(level.bTiled)
+                ptrTif->ReadEncodedTile(nChunk, data.data(), data.size());
             else
-            {
-                tmsize_t res = m_bTiled ? TIFFReadEncodedTile(m_pTif, nChunk, data.data(), (tmsize_t)data.size())
-                                        : TIFFReadEncodedStrip(m_pTif, nChunk, data.data(), (tmsize_t)data.size());
-                if(res < 0)
-                    ThrowError("Failed to read TIFF data");
-            }
+                ptrTif->ReadEncodedStrip(nChunk, data.data(), data.size());
+            ++m_nDecodedChunks;
 
             m_cacheBytes += data.size();
-            m_chunkOrder.push_back(nChunk);
-            std::vector<uint8_t>& stored = m_chunks[nChunk];
+            m_chunkOrder.push_back(nKey);
+            std::vector<uint8_t>& stored = m_chunks[nKey];
             stored.swap(data);
             return stored.data();
         }
 
         void CTIFFReader::ReadWindow(int col, int row, int width, int height, int step, void* pDst)
         {
-            if(!m_pTif)
+            if(!m_ptrTif.get())
                 throw CommonLib::CExcBase("TIFF reader is not opened");
             if(step < 1)
                 step = 1;
@@ -564,6 +649,27 @@ namespace GraphEngine
             if(col < 0 || row < 0 || int64_t(col) + int64_t(width - 1) * step >= int64_t(m_width)
                || int64_t(row) + int64_t(height - 1) * step >= int64_t(m_height))
                 throw CommonLib::CExcBase("TIFF read window is out of the image, file: {0}", m_sFilePath);
+
+            // the overview for the step: the pixels are taken from it by the position of their centers
+            const int nLevel = SelectLevel(step);
+            const SLevel& level = m_levels[nLevel];
+            TIFFLib::TIFFPtr ptrTif = LevelHandle(nLevel);
+            auto toLevel = [](uint32_t v, uint32_t full, uint32_t reduced) -> uint32_t
+            {
+                if(reduced == full)
+                    return v;
+                uint64_t lv = (uint64_t(v) * 2 + 1) * reduced / (uint64_t(full) * 2);
+                return (uint32_t)(std::min)(lv, uint64_t(reduced - 1));
+            };
+            m_vecColumns.resize(size_t(width));
+            for(int c = 0; c < width; ++c)
+                m_vecColumns[c] = toLevel(uint32_t(col + c * step), m_width, level.width);
+
+            // the chunks of one output row stay in the cache for the next rows
+            const bool bSeparateLayout = m_planarConfig == PLANARCONFIG_SEPARATE && m_readMode != rmRGBA;
+            uint64_t nRowChunks = uint64_t(m_vecColumns.back() - m_vecColumns.front()) / level.chunkWidth + 2;
+            uint64_t nNeeded = nRowChunks * level.chunkBytes * (bSeparateLayout ? m_samplesPerPixel : 1) * 2;
+            m_maxCacheBytes = (size_t)(std::max)((uint64_t)kBaseCacheBytes, (std::min)(nNeeded, (uint64_t)kMaxCacheBytes));
 
             const int outSampleBytes = CRasterBlock::GetSampleSize(m_pixelType);
             const size_t outPixelBytes = size_t(outSampleBytes) * m_bandCount;
@@ -578,8 +684,8 @@ namespace GraphEngine
 
             for(int r = 0; r < height; ++r)
             {
-                const uint32_t y = uint32_t(row + r * step);
-                const uint32_t fileY = bBottomUp ? m_height - 1 - y : y;
+                const uint32_t y = toLevel(uint32_t(row + r * step), m_height, level.height);
+                const uint32_t fileY = bBottomUp ? level.height - 1 - y : y;
                 uint8_t* pOutRow = pOutRows + size_t(r) * width * outPixelBytes;
 
                 for(int plane = 0; plane < planes; ++plane)
@@ -592,24 +698,24 @@ namespace GraphEngine
 
                     for(int c = 0; c < width; ++c)
                     {
-                        const uint32_t x = uint32_t(col + c * step);
-                        if(!bHasChunk || x < chunkX0 || x >= chunkX0 + m_chunkWidth)
+                        const uint32_t x = m_vecColumns[c];
+                        if(!bHasChunk || x < chunkX0 || x >= chunkX0 + level.chunkWidth)
                         {
-                            uint32_t nChunk = m_bTiled ? TIFFComputeTile(m_pTif, x, fileY, 0, (uint16_t)plane)
-                                                       : TIFFComputeStrip(m_pTif, fileY, (uint16_t)plane);
-                            chunkX0 = m_bTiled ? (x / m_chunkWidth) * m_chunkWidth : 0;
-                            chunkY0 = (fileY / m_chunkHeight) * m_chunkHeight;
-                            pChunk = GetChunk(nChunk, chunkX0, chunkY0);
+                            uint32_t nChunk = level.bTiled ? ptrTif->ComputeTile(x, fileY, 0, (uint16_t)plane)
+                                                           : ptrTif->ComputeStrip(fileY, (uint16_t)plane);
+                            chunkX0 = level.bTiled ? (x / level.chunkWidth) * level.chunkWidth : 0;
+                            chunkY0 = (fileY / level.chunkHeight) * level.chunkHeight;
+                            pChunk = GetChunk(nLevel, nChunk, chunkX0, chunkY0);
 
                             uint32_t rowInChunk = fileY - chunkY0;
                             if(m_readMode == rmRGBA)
                             {
                                 // RGBA buffers are bottom-up inside the strip/tile
-                                uint32_t rowsInChunk = m_bTiled ? m_chunkHeight : (std::min)(m_chunkHeight, m_height - chunkY0);
+                                uint32_t rowsInChunk = level.bTiled ? level.chunkHeight : (std::min)(level.chunkHeight, level.height - chunkY0);
                                 if(!bBottomUp)
                                     rowInChunk = rowsInChunk - 1 - rowInChunk;
                             }
-                            pRow = pChunk + size_t(rowInChunk) * m_chunkRowBytes;
+                            pRow = pChunk + size_t(rowInChunk) * level.chunkRowBytes;
                             bHasChunk = true;
                         }
 

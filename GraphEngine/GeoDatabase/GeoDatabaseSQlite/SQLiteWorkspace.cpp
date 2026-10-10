@@ -207,6 +207,32 @@ namespace GraphEngine {
             return std::make_shared<CSQLiteTransaction>(m_ptrDatabase);
         }
 
+        void CSQLiteWorkspace::SetBulkLoadMode(bool bBulk)
+        {
+            try
+            {
+                if(bBulk)
+                {
+                    // a new database gets new pages: the rollback journal stays small, WAL would hold the whole load
+                    // and copy it again into the database at the checkpoint
+                    m_ptrDatabase->Execute("PRAGMA journal_mode=DELETE");
+                    m_ptrDatabase->Execute("PRAGMA synchronous=OFF");
+                    m_ptrDatabase->Execute("PRAGMA cache_size=-262144");   // 256 MB
+                }
+                else
+                {
+                    m_ptrDatabase->Execute("PRAGMA cache_size=-2000");     // the SQLite default
+                    m_ptrDatabase->Execute("PRAGMA synchronous=FULL");
+                    m_ptrDatabase->Execute("PRAGMA journal_mode=WAL");
+                }
+            }
+            catch (std::exception& exc)
+            {
+                CommonLib::CExcBase::RegenExcT("SQLite workspace: failed to switch the bulk load mode to {0}", bBulk ? "on" : "off", exc);
+                throw;
+            }
+        }
+
         void CSQLiteWorkspace::Save(CommonLib::ISerializeObjPtr pObj) const
         {
             try

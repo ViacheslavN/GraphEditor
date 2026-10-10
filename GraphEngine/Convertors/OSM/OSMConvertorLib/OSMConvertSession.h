@@ -47,7 +47,7 @@ namespace GraphEngine {
             Cartography::IMapPtr                m_ptrMap;
             GeoDatabase::IDatabaseWorkspacePtr  m_ptrWorkspace;
             COSMProjection                      m_projection;
-            std::unique_ptr<COSMNodeStore>      m_ptrNodes;
+            std::unique_ptr<IOSMNodeStore>      m_ptrNodes;
             std::set<std::string>               m_setConverted;
             std::vector<std::pair<int, Cartography::ILayerPtr> > m_vecMapLayers;   // added layers with their rank
         };

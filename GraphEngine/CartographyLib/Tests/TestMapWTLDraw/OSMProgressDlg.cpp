@@ -44,11 +44,39 @@ namespace
 	{
 		return nTotal ? (std::min)(1., (double)nValue / (double)nTotal) : 0.;
 	}
+
+	// 1.5 GB, 236 MB, 12 KB
+	std::wstring FormatBytes(uint64_t nBytes)
+	{
+		wchar_t szText[64];
+		if(nBytes >= 1024ull * 1024 * 1024)
+			swprintf(szText, 64, L"%.2f GB", nBytes / (1024. * 1024 * 1024));
+		else if(nBytes >= 1024 * 1024)
+			swprintf(szText, 64, L"%.0f MB", nBytes / (1024. * 1024));
+		else
+			swprintf(szText, 64, L"%.0f KB", nBytes / 1024.);
+		return szText;
+	}
+
+	std::wstring FormatTime(double dSeconds)
+	{
+		int nSeconds = (int)(dSeconds + 0.5);
+		wchar_t szText[64];
+		swprintf(szText, 64, L"%02d:%02d:%02d", nSeconds / 3600, (nSeconds / 60) % 60, nSeconds % 60);
+		return szText;
+	}
+
+	// the parts of the conversion time (central-america: nodes and relations 14%, ways 69%, multipolygons 5%, indexes 12%)
+	const double NodesEnd = 0.15;       // 2 passes; 1 pass (no ways) - the nodes until FinishStart1
+	const double SortEnd = 0.17;
+	const double WaysEnd = 0.82;
+	const double MultipolygonsEnd = 0.88;
+	const double FinishStart1 = 0.85;
 }
 
 COSMProgressDlg::COSMProgressDlg(const std::wstring& sCaption, TTask task, uint64_t nTotalNodes, uint64_t nTotalWays, uint64_t nTotalRelations) :
 	m_sCaption(sCaption), m_task(task), m_nTotalNodes(nTotalNodes), m_nTotalWays(nTotalWays), m_nTotalRelations(nTotalRelations),
-	m_ptrCancel(std::make_shared<Cartography::CTrackCancel>()), m_bCanceling(false), m_bMarquee(false), m_dElapsed(0.)
+	m_ptrCancel(std::make_shared<Cartography::CTrackCancel>()), m_bCanceling(false), m_bMarquee(false), m_dElapsed(0.), m_dFraction(-1.), m_nPass(0)
 {
 
 }
@@ -72,6 +100,7 @@ LRESULT COSMProgressDlg::OnInitDialog(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /
 	m_progressBar.SetRange32(0, ProgressRange);
 
 	m_start = std::chrono::steady_clock::now();
+	m_passStart = m_start;
 	SetTimer(TimeTimerId, 500);
 	ShowElapsed();
 
@@ -99,33 +128,92 @@ LRESULT COSMProgressDlg::OnInitDialog(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /
 	return TRUE;
 }
 
-int COSMProgressDlg::Percent(const SOSMProgress& progress) const
+double COSMProgressDlg::TaskFraction(const SOSMProgress& progress) const
 {
-	// stages of the conversion: nodes + relations 45%, node index 10%, ways 40%, multipolygons and saving 5%
-	double dDone = -1.;
+	// the part of the pass: the bytes of a .pbf file, the objects by the counts of the map (ReadMap) for an .osm file
+	const bool bTwoPasses = progress.nPassCount > 1;
+	const bool bBytes = progress.nBytesTotal > 0;
+	const bool bCounts = m_nTotalNodes + m_nTotalWays + m_nTotalRelations > 0;
+	double dPass = -1.;
 	switch(progress.stage)
 	{
 		case OSMStageReadMap:
-			return -1;
+			return bBytes ? Fraction(progress.nBytesRead, progress.nBytesTotal) : -1.;
 		case OSMStageNodes:
-			dDone = 0.45 * Fraction(progress.nNodes + progress.nRelations, m_nTotalNodes + m_nTotalRelations);
-			break;
+			if(bBytes)
+				dPass = Fraction(progress.nBytesRead, progress.nBytesTotal);
+			else if(bCounts)
+				dPass = Fraction(progress.nNodes + progress.nRelations, m_nTotalNodes + m_nTotalRelations);
+			return dPass < 0 ? -1. : dPass * (bTwoPasses ? NodesEnd : FinishStart1);
 		case OSMStageSortNodes:
-			dDone = 0.45 + 0.10 * Fraction(progress.nNodes, m_nTotalNodes);
-			break;
+			return NodesEnd + (SortEnd - NodesEnd) * Fraction(progress.nNodes, m_nTotalNodes);
 		case OSMStageWays:
-			dDone = 0.55 + 0.40 * Fraction(progress.nWays, m_nTotalWays);
-			break;
+			if(bBytes)
+				dPass = Fraction(progress.nBytesRead, progress.nBytesTotal);
+			else if(m_nTotalWays)
+				dPass = Fraction(progress.nWays, m_nTotalWays);
+			return dPass < 0 ? -1. : SortEnd + (WaysEnd - SortEnd) * dPass;
 		case OSMStageMultipolygons:
-			dDone = 0.96;
-			break;
+			return WaysEnd + (MultipolygonsEnd - WaysEnd) * Fraction(progress.nStepDone, progress.nStepTotal);
 		default:
-			dDone = 0.98;
-			break;
+		{
+			double dStart = bTwoPasses ? MultipolygonsEnd : FinishStart1;
+			return dStart + (1. - dStart) * Fraction(progress.nStepDone, progress.nStepTotal);
+		}
 	}
-	if(m_nTotalNodes + m_nTotalWays + m_nTotalRelations == 0)
-		return -1;
-	return (int)(dDone * ProgressRange);
+}
+
+std::wstring COSMProgressDlg::DataText(const SOSMProgress& progress)
+{
+	if(progress.nPass > 0)
+	{
+		// the speed is measured from the start of the pass
+		auto now = std::chrono::steady_clock::now();
+		if(progress.nPass != m_nPass)
+		{
+			m_nPass = progress.nPass;
+			m_passStart = now;
+		}
+
+		std::wstring sText = L"Pass " + std::to_wstring(progress.nPass) + L" of " + std::to_wstring((std::max)(progress.nPass, progress.nPassCount));
+		if(progress.nBytesTotal == 0)
+		{
+			if(progress.nFileSize)
+				sText += L", the file is " + FormatBytes(progress.nFileSize);
+			return sText;
+		}
+
+		sText += L": " + FormatBytes(progress.nBytesRead) + L" of " + FormatBytes(progress.nBytesTotal);
+		wchar_t szPercent[32];
+		swprintf(szPercent, 32, L" (%.0f%%)", 100. * Fraction(progress.nBytesRead, progress.nBytesTotal));
+		sText += szPercent;
+		// a pass over the blocks of some objects (the ways) reads a part of the file
+		if(progress.nFileSize && progress.nBytesTotal < progress.nFileSize * 98 / 100)
+			sText += L", file " + FormatBytes(progress.nFileSize);
+
+		double dSeconds = std::chrono::duration<double>(now - m_passStart).count();
+		if(dSeconds >= 2. && progress.nBytesRead > 0)
+		{
+			double dRate = progress.nBytesRead / dSeconds;
+			wchar_t szRate[64];
+			swprintf(szRate, 64, L"\n%.1f MB/s", dRate / (1024. * 1024));
+			sText += szRate;
+			if(progress.nBytesRead < progress.nBytesTotal)
+				sText += L", the pass ends in about " + FormatTime((progress.nBytesTotal - progress.nBytesRead) / dRate);
+		}
+		return sText;
+	}
+
+	m_nPass = 0;
+	if(progress.nStepTotal > 0)
+	{
+		std::wstring sDone = FormatCount(progress.nStepDone) + L" of " + FormatCount(progress.nStepTotal);
+		if(progress.stage == OSMStageMultipolygons)
+			return L"Multipolygons: " + sDone;
+		if(progress.stage == OSMStageFinish)
+			return L"Layers saved (spatial index): " + sDone;
+	}
+	return std::wstring();
 }
 
 void COSMProgressDlg::ShowProgress(const SOSMProgress& progress)
@@ -138,7 +226,8 @@ void COSMProgressDlg::ShowProgress(const SOSMProgress& progress)
 		SetDlgItemText(IDC_PROGRESS_STAGE, sStage.c_str());
 	}
 
-	int nPercent = Percent(progress);
+	m_dFraction = TaskFraction(progress);
+	int nPercent = m_dFraction < 0 ? -1 : (int)(m_dFraction * ProgressRange);
 	bool bMarquee = nPercent < 0;
 	if(bMarquee != m_bMarquee)
 	{
@@ -159,6 +248,8 @@ void COSMProgressDlg::ShowProgress(const SOSMProgress& progress)
 	if(!bMarquee)
 		m_progressBar.SetPos(nPercent);
 
+	SetDlgItemText(IDC_PROGRESS_DATA, DataText(progress).c_str());
+
 	std::wstring sCounts = L"Nodes: " + FormatCount(progress.nNodes);
 	if(m_nTotalNodes)
 		sCounts += L" / " + FormatCount(m_nTotalNodes);
@@ -176,10 +267,11 @@ void COSMProgressDlg::ShowProgress(const SOSMProgress& progress)
 void COSMProgressDlg::ShowElapsed()
 {
 	m_dElapsed = std::chrono::duration<double>(std::chrono::steady_clock::now() - m_start).count();
-	int nSeconds = (int)m_dElapsed;
-	wchar_t szText[64];
-	swprintf(szText, 64, L"Elapsed: %02d:%02d:%02d", nSeconds / 3600, (nSeconds / 60) % 60, nSeconds % 60);
-	SetDlgItemText(IDC_PROGRESS_TIME, szText);
+	std::wstring sText = L"Elapsed: " + FormatTime((double)(int)m_dElapsed);
+	// the whole task by the parts of the stages (the speed of a stage depends on the data: an estimate)
+	if(m_dFraction >= 0.02 && m_dFraction < 1. && m_dElapsed >= 5. && !m_bCanceling)
+		sText += L"      Left: about " + FormatTime(m_dElapsed * (1. - m_dFraction) / m_dFraction);
+	SetDlgItemText(IDC_PROGRESS_TIME, sText.c_str());
 }
 
 LRESULT COSMProgressDlg::OnTimer(UINT /*uMsg*/, WPARAM wParam, LPARAM /*lParam*/, BOOL& bHandled)

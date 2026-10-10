@@ -37,6 +37,13 @@ namespace GraphEngine {
             , m_nTransparency(0)
             , m_stretchType(RasterStretchTypeNone)
             , m_dStdDevCount(2.)
+            , m_nBrightness(0)
+            , m_nContrast(0)
+            , m_dGamma(1.)
+            , m_nSaturation(0)
+            , m_bAdjust(false)
+            , m_dClipLow(2.)
+            , m_dClipHigh(98.)
             , m_bDisplayBackground(true)
             , m_drawPixelType(GeoDatabase::RasterPixelTypeUnknown)
         {
@@ -108,6 +115,165 @@ namespace GraphEngine {
             m_dStdDevCount = count;
         }
 
+        int CRasterRendererBase::GetBrightness() const
+        {
+            std::lock_guard<std::recursive_mutex> lock(m_mutex);
+            return m_nBrightness;
+        }
+
+        void CRasterRendererBase::SetBrightness(int value)
+        {
+            std::lock_guard<std::recursive_mutex> lock(m_mutex);
+            m_nBrightness = std::clamp(value, -100, 100);
+        }
+
+        int CRasterRendererBase::GetContrast() const
+        {
+            std::lock_guard<std::recursive_mutex> lock(m_mutex);
+            return m_nContrast;
+        }
+
+        void CRasterRendererBase::SetContrast(int value)
+        {
+            std::lock_guard<std::recursive_mutex> lock(m_mutex);
+            m_nContrast = std::clamp(value, -100, 100);
+        }
+
+        double CRasterRendererBase::GetGamma() const
+        {
+            std::lock_guard<std::recursive_mutex> lock(m_mutex);
+            return m_dGamma;
+        }
+
+        void CRasterRendererBase::SetGamma(double gamma)
+        {
+            std::lock_guard<std::recursive_mutex> lock(m_mutex);
+            if(!(gamma > 0.))
+                throw CommonLib::CExcBase("RasterRenderer: invalid gamma");
+            m_dGamma = std::clamp(gamma, kMinGamma, kMaxGamma);
+        }
+
+        int CRasterRendererBase::GetSaturation() const
+        {
+            std::lock_guard<std::recursive_mutex> lock(m_mutex);
+            return m_nSaturation;
+        }
+
+        void CRasterRendererBase::SetSaturation(int value)
+        {
+            std::lock_guard<std::recursive_mutex> lock(m_mutex);
+            m_nSaturation = std::clamp(value, -100, 100);
+        }
+
+        bool CRasterRendererBase::PrepareAdjustments()
+        {
+            m_bAdjust = m_nBrightness != 0 || m_nContrast != 0 || m_dGamma != 1. || m_nSaturation != 0;
+            const double contrast = 1. + m_nContrast / 100.;          // 0 .. 2
+            const double brightness = m_nBrightness * 255. / 100.;    // -255 .. 255
+            for(int v = 0; v < 256; ++v)
+            {
+                double res = (v - 127.5) * contrast + 127.5 + brightness;
+                res = std::clamp(res, 0., 255.);
+                if(m_dGamma != 1.)
+                    res = 255. * std::pow(res / 255., 1. / m_dGamma);
+                m_toneLut[v] = (uint8_t)std::clamp(std::lround(res), 0L, 255L);
+            }
+            return m_bAdjust;
+        }
+
+        void CRasterRendererBase::ApplyAdjustments(uint8_t* pBGRA, size_t count) const
+        {
+            if(!m_bAdjust)
+                return;
+            const double saturation = 1. + m_nSaturation / 100.;     // 0 - gray .. 2
+            for(size_t i = 0; i < count; ++i, pBGRA += 4)
+            {
+                if(pBGRA[3] == 0)
+                    continue;    // transparent (background / NoData)
+                double b = m_toneLut[pBGRA[0]];
+                double g = m_toneLut[pBGRA[1]];
+                double r = m_toneLut[pBGRA[2]];
+                if(m_nSaturation != 0)
+                {
+                    const double gray = 0.299 * r + 0.587 * g + 0.114 * b;
+                    r = std::clamp(gray + (r - gray) * saturation, 0., 255.);
+                    g = std::clamp(gray + (g - gray) * saturation, 0., 255.);
+                    b = std::clamp(gray + (b - gray) * saturation, 0., 255.);
+                }
+                pBGRA[0] = (uint8_t)std::lround(b);
+                pBGRA[1] = (uint8_t)std::lround(g);
+                pBGRA[2] = (uint8_t)std::lround(r);
+            }
+        }
+
+        bool CRasterRendererBase::GetStretchRange(int band, double& dMin, double& dMax) const
+        {
+            std::lock_guard<std::recursive_mutex> lock(m_mutex);
+            if(!m_ptrStats.get() || !m_ptrStats->IsCalculated() || band < 0 || band >= m_ptrStats->GetBandCount())
+                return false;
+            const CRasterStatistics::SBandStats& stats = m_ptrStats->GetBandStats(band);
+            if(!stats.bValid)
+                return false;
+            switch(m_stretchType)
+            {
+                case RasterStretchTypeStandardDeviation:
+                    dMin = (std::max)(stats.dMin, stats.dMean - stats.dStdDev * m_dStdDevCount);
+                    dMax = (std::min)(stats.dMax, stats.dMean + stats.dStdDev * m_dStdDevCount);
+                    return true;
+                case RasterStretchTypePercentClip:
+                    if(!m_ptrStats->HasHistogram())
+                        return false;
+                    dMin = m_ptrStats->GetPercentile(band, m_dClipLow);
+                    dMax = m_ptrStats->GetPercentile(band, m_dClipHigh);
+                    return true;
+                default:
+                    dMin = stats.dMin;
+                    dMax = stats.dMax;
+                    return true;
+            }
+        }
+
+        void CRasterRendererBase::CopyCommonSettings(const CRasterRendererBase& other)
+        {
+            if(&other == this)
+                return;
+            std::lock_guard<std::recursive_mutex> lockOther(other.m_mutex);
+            std::lock_guard<std::recursive_mutex> lock(m_mutex);
+            m_nTransparency = other.m_nTransparency;
+            m_stretchType = other.m_stretchType;
+            m_dStdDevCount = other.m_dStdDevCount;
+            m_dClipLow = other.m_dClipLow;
+            m_dClipHigh = other.m_dClipHigh;
+            m_vecBackgroundValues = other.m_vecBackgroundValues;
+            m_bDisplayBackground = other.m_bDisplayBackground;
+            m_nBrightness = other.m_nBrightness;
+            m_nContrast = other.m_nContrast;
+            m_dGamma = other.m_dGamma;
+            m_nSaturation = other.m_nSaturation;
+            m_ptrStats = other.m_ptrStats;
+        }
+
+        double CRasterRendererBase::GetClipLowPercent() const
+        {
+            std::lock_guard<std::recursive_mutex> lock(m_mutex);
+            return m_dClipLow;
+        }
+
+        double CRasterRendererBase::GetClipHighPercent() const
+        {
+            std::lock_guard<std::recursive_mutex> lock(m_mutex);
+            return m_dClipHigh;
+        }
+
+        void CRasterRendererBase::SetClipPercents(double low, double high)
+        {
+            std::lock_guard<std::recursive_mutex> lock(m_mutex);
+            if(!(low >= 0.) || !(high <= 100.) || !(low < high))
+                throw CommonLib::CExcBase("RasterRenderer: invalid clip percents");
+            m_dClipLow = low;
+            m_dClipHigh = high;
+        }
+
         const std::vector<double>& CRasterRendererBase::GetBackgroundValues() const
         {
             return m_vecBackgroundValues;
@@ -159,7 +325,9 @@ namespace GraphEngine {
             {
                 if(!m_ptrStats.get())
                     m_ptrStats = std::make_shared<CRasterStatistics>();
-                if(!m_ptrStats->IsCalculated() || m_ptrStats->GetBandCount() != bandCount)
+                // the percent clip needs the histograms (they aren't saved with the statistics)
+                if(!m_ptrStats->IsCalculated() || m_ptrStats->GetBandCount() != bandCount ||
+                   (m_stretchType == RasterStretchTypePercentClip && !m_ptrStats->HasHistogram()))
                 {
                     const std::vector<double>* pNoData = (!m_bDisplayBackground && !m_vecBackgroundValues.empty()) ? &m_vecBackgroundValues : nullptr;
                     m_ptrStats->Calculate(ptrRaster, pNoData, ptrTrackCancel);
@@ -184,6 +352,11 @@ namespace GraphEngine {
                 {
                     range.dMin = (std::max)(stats.dMin, stats.dMean - stats.dStdDev * m_dStdDevCount);
                     range.dMax = (std::min)(stats.dMax, stats.dMean + stats.dStdDev * m_dStdDevCount);
+                }
+                else if(m_stretchType == RasterStretchTypePercentClip)
+                {
+                    range.dMin = m_ptrStats->GetPercentile(b, m_dClipLow);
+                    range.dMax = m_ptrStats->GetPercentile(b, m_dClipHigh);
                 }
                 else
                 {
@@ -368,6 +541,7 @@ namespace GraphEngine {
 
                 PrepareStretch(ptrRaster, ptrTrackCancel);
                 PrepareDraw(ptrRaster);
+                PrepareAdjustments();
                 if(IsCanceled(ptrTrackCancel))
                     return;
 
@@ -410,8 +584,9 @@ namespace GraphEngine {
                     const size_t rowSize = size_t(ptrBlock->GetWidth()) * ptrBlock->GetPixelSize();
                     for(int y = 0; y < ptrBlock->GetHeight() && oy + y < winH; ++y)
                     {
-                        ConvertPixels(pData + size_t(y) * rowSize, bw, ptrBlock->GetBandCount(), ptrBlock->GetPixelType(),
-                                      window.data() + (size_t(oy + y) * winW + ox) * 4);
+                        uint8_t* pOut = window.data() + (size_t(oy + y) * winW + ox) * 4;
+                        ConvertPixels(pData + size_t(y) * rowSize, bw, ptrBlock->GetBandCount(), ptrBlock->GetPixelType(), pOut);
+                        ApplyAdjustments(pOut, bw);
                     }
                 }
 
@@ -501,6 +676,12 @@ namespace GraphEngine {
             pObj->AddPropertyInt32("Transparency", m_nTransparency);
             pObj->AddPropertyInt32("StretchType", (int32_t)m_stretchType);
             pObj->AddPropertyDouble("StdDevCount", m_dStdDevCount);
+            pObj->AddPropertyInt32("Brightness", m_nBrightness);
+            pObj->AddPropertyInt32("Contrast", m_nContrast);
+            pObj->AddPropertyDouble("Gamma", m_dGamma);
+            pObj->AddPropertyInt32("Saturation", m_nSaturation);
+            pObj->AddPropertyDouble("ClipLow", m_dClipLow);
+            pObj->AddPropertyDouble("ClipHigh", m_dClipHigh);
             pObj->AddPropertyBool("DisplayBackground", m_bDisplayBackground);
 
             CommonLib::ISerializeObjPtr ptrValues = pObj->CreateChildNode("BackgroundValues");
@@ -517,6 +698,12 @@ namespace GraphEngine {
             m_nTransparency = std::clamp((int)pObj->GetPropertyInt32("Transparency", m_nTransparency), 0, 100);
             m_stretchType = (eRasterStretchType)pObj->GetPropertyInt32("StretchType", (int32_t)m_stretchType);
             m_dStdDevCount = pObj->GetPropertyDouble("StdDevCount", m_dStdDevCount);
+            m_nBrightness = std::clamp((int)pObj->GetPropertyInt32("Brightness", m_nBrightness), -100, 100);
+            m_nContrast = std::clamp((int)pObj->GetPropertyInt32("Contrast", m_nContrast), -100, 100);
+            m_dGamma = std::clamp(pObj->GetPropertyDouble("Gamma", m_dGamma), kMinGamma, kMaxGamma);
+            m_nSaturation = std::clamp((int)pObj->GetPropertyInt32("Saturation", m_nSaturation), -100, 100);
+            m_dClipLow = pObj->GetPropertyDouble("ClipLow", m_dClipLow);
+            m_dClipHigh = pObj->GetPropertyDouble("ClipHigh", m_dClipHigh);
             m_bDisplayBackground = pObj->GetPropertyBool("DisplayBackground", m_bDisplayBackground);
 
             m_vecBackgroundValues.clear();

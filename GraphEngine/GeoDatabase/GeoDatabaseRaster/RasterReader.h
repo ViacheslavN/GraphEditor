@@ -41,6 +41,8 @@ namespace GraphEngine
             virtual int GetSourceBandCount() const = 0;            // as stored in the file
             virtual eRasterPixelType GetSourcePixelType() const = 0;
             virtual const SRasterGeoInfo& GetGeoInfo() const = 0;
+            // the value of the pixels without data, false - none
+            virtual bool GetNoDataValue(double& dValue) const = 0;
 
             // col, row - upper-left source pixel; width x height output pixels; every step-th source pixel is taken
             virtual void ReadWindow(int col, int row, int width, int height, int step, void* pDst) = 0;

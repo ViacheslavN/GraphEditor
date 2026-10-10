@@ -1,9 +1,11 @@
 #pragma once
 #include "../../../CommonLib/CommonLib.h"
 #include "../../../CommonLib/filesystem/File.h"
+#include "OSMConvertorLib.h"
 #include <cstdint>
 #include <functional>
 #include <list>
+#include <memory>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -11,29 +13,55 @@
 namespace GraphEngine {
     namespace Convertors {
 
+        // Coordinates of the OSM nodes by id: the conversion stores them in the first pass (Add), the ways get them
+        // in the second one (Get). The coordinates are stored with 1e-7 degree precision (as in OSM itself).
+        class IOSMNodeStore
+        {
+        public:
+            // the number of processed nodes, return false to cancel (Finish)
+            typedef std::function<bool(uint64_t nNodes)> TProgress;
+
+            IOSMNodeStore() {}
+            virtual ~IOSMNodeStore() {}
+
+            virtual void Add(int64_t nId, double dLon, double dLat) = 0;
+            // prepares the lookup; Add can't be called after it
+            virtual void Finish(TProgress progress = TProgress()) = 0;
+            virtual bool IsFinished() const = 0;
+            virtual bool Get(int64_t nId, double& dLon, double& dLat) = 0;
+            virtual uint64_t Count() const = 0;
+
+            // the store for the settings: Auto - the flat one for the files of a continent / the planet (see FlatNodeStoreFileSize)
+            // on a 64-bit build, the sorted one otherwise; nFileSize - the size of the OSM file
+            static std::unique_ptr<IOSMNodeStore> Create(eOSMNodeStore type, const std::string& sOSMPath, uint64_t nFileSize,
+                                                         const std::string& sTempDir, uint64_t nMemoryBytes);
+            static eOSMNodeStore ResolveType(eOSMNodeStore type, const std::string& sOSMPath, uint64_t nFileSize);
+
+            // Auto: the flat store from this size of a .pbf file (an .osm file is about 10 times bigger)
+            static const uint64_t FlatNodeStoreFileSize = 8ull * 1024 * 1024 * 1024;
+        };
+
         // Coordinates of the OSM nodes by id, for files of any size (country / planet):
         //  - the nodes are kept in memory while they fit into the memory limit;
         //  - then they go to a temporary file in sorted runs (planet / extracts are sorted by id, so usually
         //    it is one run), Finish merges the runs of an unsorted file;
         //  - the lookup finds the block (4096 nodes) by an in-memory index of the first ids, the blocks are cached (LRU).
         // 16 bytes per node, the coordinates are stored with 1e-7 degree precision (as in OSM itself).
-        class COSMNodeStore
+        // Good for extracts: the disk space is proportional to the number of nodes.
+        class COSMNodeStore : public IOSMNodeStore
         {
         public:
-            // the number of processed nodes, return false to cancel (Finish of an unsorted file)
-            typedef std::function<bool(uint64_t nNodes)> TProgress;
-
             COSMNodeStore(const std::string& sTempDir, uint64_t nMemoryBytes);
             ~COSMNodeStore();
 
-            void Add(int64_t nId, double dLon, double dLat);
+            virtual void Add(int64_t nId, double dLon, double dLat) override;
             // sorts / merges, builds the index; Add can't be called after it
-            void Finish(TProgress progress = TProgress());
-            bool IsFinished() const { return m_bFinished; }
+            virtual void Finish(TProgress progress = TProgress()) override;
+            virtual bool IsFinished() const override { return m_bFinished; }
 
-            bool Get(int64_t nId, double& dLon, double& dLat);
+            virtual bool Get(int64_t nId, double& dLon, double& dLat) override;
 
-            uint64_t Count() const { return m_nCount; }
+            virtual uint64_t Count() const override { return m_nCount; }
             bool     IsInFile() const { return m_ptrFile.get() != nullptr; }
             uint64_t GetCacheHits() const { return m_nHits; }
             uint64_t GetCacheMisses() const { return m_nMisses; }

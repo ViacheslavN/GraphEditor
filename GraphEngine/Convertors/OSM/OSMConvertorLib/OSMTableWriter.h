@@ -35,6 +35,9 @@ namespace GraphEngine {
             void SetText(int nField, const std::string& sValue);
             void SetShape(CommonLib::IGeoShapePtr ptrShape);
             // the shapes are written compressed (GeometryCompression), null - as they are
+            // the spatial index is packed once by Finish (IInsertCursor::SetBulkSpatialIndex)
+            // nMemoryBytes - the boxes kept in memory, the rest goes to a temporary file (all the layers are loaded at once)
+            void SetBulkSpatialIndex(const std::string& sTempDirUtf8, uint64_t nMemoryBytes) { if(m_ptrInsert.get()) m_ptrInsert->SetBulkSpatialIndex(sTempDirUtf8, nMemoryBytes); }
             void SetCompressor(std::shared_ptr<GeometryCompression::CShapeCompressor> ptrCompressor) { m_ptrCompressor = ptrCompressor; }
             void Insert();
 

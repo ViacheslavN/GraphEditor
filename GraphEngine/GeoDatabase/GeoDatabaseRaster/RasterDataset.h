@@ -41,6 +41,7 @@ namespace GraphEngine
             Geometry::IEnvelopePtr GetExtent() const;
             bool IsGeoreferenced() const;
             const SRasterGeoInfo& GetGeoInfo() const;
+            virtual bool GetNoDataValue(double& dValue) const;
             const std::string& GetFilePath() const;
 
         private:

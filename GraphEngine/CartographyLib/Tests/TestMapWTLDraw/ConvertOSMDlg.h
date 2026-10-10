@@ -42,6 +42,7 @@ public:
 		COMMAND_ID_HANDLER(IDC_OSM_SELECT_ALL, OnSelectAll)
 		COMMAND_ID_HANDLER(IDC_OSM_CLEAR_ALL, OnSelectAll)
 		COMMAND_HANDLER(IDC_OSM_PATH, EN_CHANGE, OnPathChanged)
+		COMMAND_HANDLER(IDC_OSM_NODE_STORE, CBN_SELCHANGE, OnNodeStoreChanged)
 	END_MSG_MAP()
 
 	LRESULT OnInitDialog(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/);
@@ -57,6 +58,7 @@ public:
 	LRESULT OnDatasetChanged(int /*idCtrl*/, LPNMHDR pnmh, BOOL& /*bHandled*/);
 	LRESULT OnSelectAll(WORD /*wNotifyCode*/, WORD wID, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnPathChanged(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
+	LRESULT OnNodeStoreChanged(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 
 private:
 	// reads the metadata and the layers of the file (progress window, can be canceled), true - read
@@ -67,6 +69,8 @@ private:
 	bool GetCompressSettings(GraphEngine::Convertors::SOSMCompressSettings& compression, std::wstring& sError) const;
 	// enables the scale controls, shows the resulting precision
 	void UpdateCompressControls();
+	// the node store chosen for the file (Auto - by its size) and its disk space
+	void UpdateNodeStoreInfo();
 	void FillDatasets();
 	void UpdateInfo();
 	GraphEngine::Convertors::IOSMDatasetPtr GetDataset(int nItem) const;

@@ -75,6 +75,7 @@ namespace GraphEngine {
 
                 ITransactionPtr ptrTransaction = ptrTarget->StartTransaction(ttModify);
                 IInsertCursorPtr ptrInsert = ptrTransaction->CreateInsertCusor(ptrTargetTable);
+                ptrInsert->SetBulkSpatialIndex();   // the index is packed once at the end
 
                 // all rows of the source
                 IQueryFilterPtr ptrFilter = std::make_shared<CQueryFilter>();
@@ -133,6 +134,7 @@ namespace GraphEngine {
                     }
                 }
 
+                ptrInsert->Finish();
                 ptrTransaction->Commit();
                 if(progress)
                     progress(nRows);

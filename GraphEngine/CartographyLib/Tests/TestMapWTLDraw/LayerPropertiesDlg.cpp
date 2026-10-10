@@ -19,6 +19,9 @@ CLayerPropertiesDlg::CLayerPropertiesDlg(CMapView* pView, Cartography::ILayerPtr
 	m_ptrFeatureLayer = std::dynamic_pointer_cast<Cartography::IFeatureLayer>(ptrLayer);
 	if(m_ptrFeatureLayer.get() && !m_ptrFeatureLayer->GetLayerTable().get())
 		m_ptrFeatureLayer.reset();   // no table - nothing to classify
+	m_ptrRasterLayer = std::dynamic_pointer_cast<Cartography::IRasterLayer>(ptrLayer);
+	if(m_ptrRasterLayer.get() && !m_ptrRasterLayer->GetRasterDataset().get())
+		m_ptrRasterLayer.reset();
 }
 
 std::wstring CLayerPropertiesDlg::DescribeSource() const
@@ -160,6 +163,13 @@ LRESULT CLayerPropertiesDlg::OnInitDialog(UINT /*uMsg*/, WPARAM /*wParam*/, LPAR
 			SetDlgItemText(IDC_SYMBOLOGY_NOTE, L"Some symbols of the layer can't be edited here, they are kept until the symbology is changed.");
 	}
 
+	if(m_ptrRasterLayer.get())
+	{
+		m_raster.SetLayer(m_ptrRasterLayer);
+		m_raster.Create(m_hWnd);
+		AddPage(L"Symbology", m_raster);
+	}
+
 	SelectPage(0);
 	::SetFocus(m_general.GetDlgItem(IDC_LAYER_NAME));
 	return FALSE;   // the focus is set
@@ -224,6 +234,13 @@ bool CLayerPropertiesDlg::Apply()
 				m_dataInfo.sOIDField = sOIDField;
 				m_dataInfo.sShapeField = sShapeField;
 			}
+		}
+
+		if(m_ptrRasterLayer.get() && !m_raster.Apply())
+		{
+			ShowPageOf(m_raster);
+			m_pView->Redraw();
+			return false;
 		}
 
 		m_ptrLayer->SetName(values.sName);

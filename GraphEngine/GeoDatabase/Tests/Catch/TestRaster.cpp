@@ -1,9 +1,12 @@
 #include "TestCommon.h"
+#include <catch2/matchers/catch_matchers_string.hpp>
 #include "../../GeoDatabaseRaster/RasterWorkspace.h"
 #include "../../GeoDatabaseRaster/RasterDataset.h"
 #include "../../GeoDatabaseRaster/RasterCursor.h"
 #include "../../GeoDatabaseRaster/RasterBlock.h"
 #include "../../GeoDatabaseRaster/RasterSpatialFilter.h"
+#include "../../GeoDatabaseRaster/TIFFReader.h"
+#include "../../GeoDatabaseRaster/TIFF/TIFF.h"
 
 extern "C" {
 #include "tiffio.h"
@@ -225,6 +228,8 @@ TEST_CASE("Raster: GeoTIFF RGB strips, georeference and full read", "[geodatabas
 
     REQUIRE(ptrDataset->GetDatasetType() == dtTypeRaster);
     REQUIRE(ptrDataset->GetDatasetName() == "rgb_strips.tif");
+    double dNoDataNone = 0.;
+    REQUIRE_FALSE(ptrDataset->GetNoDataValue(dNoDataNone));
     REQUIRE(pDataset->GetWidth() == 300);
     REQUIRE(pDataset->GetHeight() == 200);
     REQUIRE(ptrDataset->GetBandCount() == 3);
@@ -503,4 +508,210 @@ TEST_CASE("Raster: workspace errors and serialization", "[geodatabase][raster]")
     IWorkspacePtr ptrLoaded = CDatasetLoader::LoadWorkspace(ptrRoot);
     REQUIRE(ptrLoaded->GetWorkspaceType() == wtRaster);
     REQUIRE(ptrLoaded->GetWorkspaceId() == ptrWks->GetWorkspaceId());
+}
+
+namespace
+{
+    // the value of a level: 0 - the full resolution, 1.. - the overviews
+    int16_t LevelValue(int nLevel, uint32_t x, uint32_t y)
+    {
+        return int16_t(nLevel * 1000 + (x % 30) * 10 + y % 10);
+    }
+
+    void WriteLevel(TIFF* tif, int nLevel, uint32_t width, uint32_t height, uint32_t subfileType, uint16_t bits = 16)
+    {
+        TIFFSetField(tif, TIFFTAG_SUBFILETYPE, subfileType);
+        if(nLevel == 0)
+        {
+            static const TIFFFieldInfo noData[] = {{TIFFTAG_GDAL_NODATA, TIFF_VARIABLE, TIFF_VARIABLE, TIFF_ASCII, FIELD_CUSTOM, 1, 0, "GDALNoDataValue"}};
+            TIFFMergeFieldInfo(tif, noData, 1);
+            TIFFSetField(tif, TIFFTAG_GDAL_NODATA, "-32767");
+        }
+        TIFFSetField(tif, TIFFTAG_IMAGEWIDTH, width);
+        TIFFSetField(tif, TIFFTAG_IMAGELENGTH, height);
+        TIFFSetField(tif, TIFFTAG_BITSPERSAMPLE, bits);
+        TIFFSetField(tif, TIFFTAG_SAMPLESPERPIXEL, 1);
+        TIFFSetField(tif, TIFFTAG_SAMPLEFORMAT, SAMPLEFORMAT_INT);
+        TIFFSetField(tif, TIFFTAG_PHOTOMETRIC, PHOTOMETRIC_MINISBLACK);
+        TIFFSetField(tif, TIFFTAG_PLANARCONFIG, PLANARCONFIG_CONTIG);
+        TIFFSetField(tif, TIFFTAG_COMPRESSION, COMPRESSION_LZW);
+        TIFFSetField(tif, TIFFTAG_TILEWIDTH, 64);
+        TIFFSetField(tif, TIFFTAG_TILELENGTH, 64);
+        std::vector<uint8_t> tile((size_t)TIFFTileSize(tif), 0);
+        for(uint32_t ty = 0; ty < height; ty += 64)
+            for(uint32_t tx = 0; tx < width; tx += 64)
+            {
+                for(uint32_t y = 0; y < 64; ++y)
+                    for(uint32_t x = 0; x < 64; ++x)
+                    {
+                        if(bits == 16)
+                            reinterpret_cast<int16_t*>(tile.data())[y * 64 + x] = LevelValue(nLevel, tx + x, ty + y);
+                        else
+                            tile[y * 64 + x] = 7;
+                    }
+                REQUIRE(TIFFWriteTile(tif, tile.data(), tx, ty, 0, 0) >= 0);
+            }
+        REQUIRE(TIFFWriteDirectory(tif));
+    }
+}
+
+TEST_CASE("Raster: overviews are read for a pixel step", "[geodatabase][raster]")
+{
+    std::filesystem::path dir = TestDir() / "raster";
+    std::filesystem::create_directories(dir);
+    std::string sPath = (dir / "overviews.tif").string();
+    {
+        TIFF* tif = TIFFOpen(sPath.c_str(), "w8");    // BigTIFF, as the big COG files
+        REQUIRE(tif != nullptr);
+        WriteLevel(tif, 0, 1000, 800, 0);
+        WriteLevel(tif, 1, 500, 400, FILETYPE_REDUCEDIMAGE);
+        WriteLevel(tif, 9, 500, 400, FILETYPE_REDUCEDIMAGE | FILETYPE_MASK, 8);   // a mask: skipped
+        WriteLevel(tif, 3, 125, 100, FILETYPE_REDUCEDIMAGE);                       // out of order: sorted
+        WriteLevel(tif, 2, 250, 200, FILETYPE_REDUCEDIMAGE);
+        WriteLevel(tif, 9, 63, 50, FILETYPE_REDUCEDIMAGE, 8);                      // another pixel type: skipped
+        WriteLevel(tif, 9, 300, 300, 0);                                           // not an overview: skipped
+        TIFFClose(tif);
+    }
+
+    CTIFFReader reader;
+    reader.Open(sPath);
+    REQUIRE(reader.GetWidth() == 1000);
+    REQUIRE(reader.GetLevelCount() == 4);
+    REQUIRE(reader.GetLevelWidth(1) == 500);
+    REQUIRE(reader.GetLevelWidth(2) == 250);
+    REQUIRE(reader.GetLevelWidth(3) == 125);
+    REQUIRE(reader.SelectLevel(1) == 0);
+    REQUIRE(reader.SelectLevel(2) == 1);
+    REQUIRE(reader.SelectLevel(3) == 1);
+    REQUIRE(reader.SelectLevel(5) == 2);
+    REQUIRE(reader.SelectLevel(1000) == 3);
+    double dNoData = 0.;
+    REQUIRE(reader.GetNoDataValue(dNoData));
+    REQUIRE(dNoData == -32767.);
+
+    // step 1: the full resolution
+    std::vector<int16_t> buf(1000 * 800);
+    reader.ReadWindow(100, 50, 200, 3, 1, buf.data());
+    for(uint32_t r = 0; r < 3; ++r)
+        for(uint32_t c = 0; c < 200; ++c)
+            REQUIRE(buf[r * 200 + c] == LevelValue(0, 100 + c, 50 + r));
+
+    // step 4: the 250 x 200 overview, the pixel (c * 4, r * 4) is the overview pixel (c, r)
+    reader.ReadWindow(0, 0, 250, 200, 4, buf.data());
+    for(uint32_t r = 0; r < 200; ++r)
+        for(uint32_t c = 0; c < 250; ++c)
+            REQUIRE(buf[r * 250 + c] == LevelValue(2, c, r));
+
+    // step 10 from an offset: the 125 x 100 overview (factor 8), by the pixel centers
+    uint64_t nDecoded = reader.GetDecodedChunkCount();
+    reader.ReadWindow(5, 3, 99, 79, 10, buf.data());
+    for(uint32_t r = 0; r < 79; ++r)
+        for(uint32_t c = 0; c < 99; ++c)
+        {
+            uint32_t x = ((5 + c * 10) * 2 + 1) * 125 / 2000;
+            uint32_t y = ((3 + r * 10) * 2 + 1) * 100 / 1600;
+            REQUIRE(buf[r * 99 + c] == LevelValue(3, x, y));
+        }
+    REQUIRE(reader.GetDecodedChunkCount() - nDecoded == 4);    // 2 x 2 tiles of the overview
+
+    // the dataset cursor with a step, the extent stays the one of the full resolution
+    IRasterDatasetPtr ptrDataset = OpenRaster(sPath);
+    REQUIRE(ptrDataset->GetWidth() == 1000);
+    REQUIRE(ptrDataset->GetNoDataValue(dNoData));
+    std::shared_ptr<CRasterSpatialFilter> ptrFilter = std::make_shared<CRasterSpatialFilter>();
+    ptrFilter->SetPixelStep(2);
+    int width = 0, height = 0, pixelSize = 0, blocks = 0;
+    std::vector<uint8_t> data = ReadAll(ptrDataset, ptrFilter, width, height, pixelSize, blocks);
+    REQUIRE(width == 500);
+    REQUIRE(height == 400);
+    const int16_t* pValues = reinterpret_cast<const int16_t*>(data.data());
+    REQUIRE(pValues[0] == LevelValue(1, 0, 0));
+    REQUIRE(pValues[399 * 500 + 499] == LevelValue(1, 499, 399));
+}
+
+TEST_CASE("Raster: CTIFF wrapper writes and reads through the CommonLib file", "[geodatabase][raster]")
+{
+    std::filesystem::path dir = TestDir() / "raster";
+    std::filesystem::create_directories(dir);
+    // a non-ASCII name: the UTF-8 path goes to the CommonLib file
+    std::string sPath = (dir / std::filesystem::u8path(u8"тайл.tif")).u8string();
+
+    {
+        TIFFLib::TIFFPtr ptrTif = TIFFLib::CTIFF::Create(sPath, true);
+        REQUIRE(ptrTif->IsOpen());
+        REQUIRE(ptrTif->SetField(TIFFTAG_IMAGEWIDTH, (uint32_t)100));
+        REQUIRE(ptrTif->SetField(TIFFTAG_IMAGELENGTH, (uint32_t)70));
+        REQUIRE(ptrTif->SetField(TIFFTAG_BITSPERSAMPLE, (uint16_t)16));
+        REQUIRE(ptrTif->SetField(TIFFTAG_SAMPLESPERPIXEL, (uint16_t)1));
+        REQUIRE(ptrTif->SetField(TIFFTAG_SAMPLEFORMAT, (uint16_t)SAMPLEFORMAT_INT));
+        REQUIRE(ptrTif->SetField(TIFFTAG_PHOTOMETRIC, (uint16_t)PHOTOMETRIC_MINISBLACK));
+        REQUIRE(ptrTif->SetField(TIFFTAG_COMPRESSION, (uint16_t)COMPRESSION_DEFLATE));
+        REQUIRE(ptrTif->SetField(TIFFTAG_TILEWIDTH, (uint32_t)64));
+        REQUIRE(ptrTif->SetField(TIFFTAG_TILELENGTH, (uint32_t)64));
+        REQUIRE(ptrTif->SetField(TIFFTAG_GDAL_NODATA, std::string("-9999")));
+        REQUIRE(ptrTif->SetField(33550, std::vector<double>{2., 3., 0.}));
+        std::vector<int16_t> tile(64 * 64);
+        for(uint32_t ty = 0; ty < 70; ty += 64)
+            for(uint32_t tx = 0; tx < 100; tx += 64)
+            {
+                for(uint32_t y = 0; y < 64; ++y)
+                    for(uint32_t x = 0; x < 64; ++x)
+                        tile[y * 64 + x] = int16_t((tx + x) - (ty + y) * 3);
+                ptrTif->WriteTile(tile.data(), tx, ty, 0, 0);
+            }
+        ptrTif->Close();
+        REQUIRE_FALSE(ptrTif->IsOpen());
+    }
+
+    REQUIRE(TIFFLib::CTIFF::IsTIFFFile(sPath));
+    TIFFLib::TIFFPtr ptrTif = TIFFLib::CTIFF::Open(sPath);
+    uint32_t width = 0;
+    uint16_t bits = 0, planar = 0;
+    REQUIRE(ptrTif->GetField(TIFFTAG_IMAGEWIDTH, width));
+    REQUIRE(width == 100);
+    REQUIRE(ptrTif->GetField(TIFFTAG_BITSPERSAMPLE, bits));
+    REQUIRE(bits == 16);
+    REQUIRE(ptrTif->GetField(TIFFTAG_PLANARCONFIG, planar));
+    REQUIRE(planar == PLANARCONFIG_CONTIG);
+    uint16_t orientation = 0;
+    REQUIRE_FALSE(ptrTif->GetField(TIFFTAG_ORIENTATION, orientation));       // not written
+    REQUIRE(ptrTif->GetFieldDefaulted(TIFFTAG_ORIENTATION, orientation));
+    REQUIRE(orientation == ORIENTATION_TOPLEFT);
+    std::string sNoData;
+    REQUIRE(ptrTif->GetField(TIFFTAG_GDAL_NODATA, sNoData));
+    REQUIRE(sNoData == "-9999");
+    std::vector<double> scale;
+    REQUIRE(ptrTif->GetField(33550, scale));
+    REQUIRE(scale == std::vector<double>{2., 3., 0.});
+    REQUIRE(ptrTif->IsTiled());
+    REQUIRE(ptrTif->GetDirectoryCount() == 1);
+    REQUIRE(ptrTif->GetTileSize() == 64 * 64 * 2);
+
+    uint32_t nTile = ptrTif->ComputeTile(70, 65, 0, 0);
+    REQUIRE(nTile == 3);
+    std::vector<int16_t> data(64 * 64);
+    ptrTif->ReadEncodedTile(nTile, data.data(), data.size() * 2);
+    REQUIRE(data[1 * 64 + 6] == int16_t(70 - 65 * 3));
+    REQUIRE_THROWS_WITH(ptrTif->ReadEncodedTile(100, data.data(), data.size() * 2), Catch::Matchers::ContainsSubstring("libtiff"));
+    REQUIRE_THROWS(ptrTif->SetDirectory(5));
+
+    // the reader on the same file
+    CTIFFReader reader;
+    reader.Open(sPath);
+    double dNoData = 0.;
+    REQUIRE(reader.GetNoDataValue(dNoData));
+    REQUIRE(dNoData == -9999.);
+    int16_t value = 0;
+    reader.ReadWindow(99, 69, 1, 1, 1, &value);
+    REQUIRE(value == int16_t(99 - 69 * 3));
+
+    // errors: no file, not a TIFF
+    REQUIRE_THROWS(TIFFLib::CTIFF::Open((dir / "missing.tif").u8string()));
+    std::string sText = (dir / "not_tiff.tif").u8string();
+    {
+        std::ofstream out(std::filesystem::u8path(sText), std::ios::binary);
+        out << "this is not a TIFF file at all";
+    }
+    REQUIRE_FALSE(TIFFLib::CTIFF::IsTIFFFile(sText));
+    REQUIRE_THROWS_WITH(TIFFLib::CTIFF::Open(sText), Catch::Matchers::ContainsSubstring("Failed to open TIFF"));
 }

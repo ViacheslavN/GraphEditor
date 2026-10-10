@@ -11,6 +11,8 @@
 #include "OSMProgressDlg.h"
 #include "DialogUtils.h"
 #include "../../../Convertors/OSM/OSMConvertorLib/OSMConvertor.h"
+#include "../../../Convertors/OSM/OSMConvertorLib/OSMNodeStore.h"
+#include <filesystem>
 
 using namespace DialogUtils;
 using namespace GraphEngine;
@@ -100,6 +102,14 @@ LRESULT CConvertOSMDlg::OnInitDialog(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*
 	UpdateCompressControls();
 	SetDlgItemInt(IDC_OSM_NODE_CACHE, m_settings.nNodeCacheMB, FALSE);
 
+	// the order is eOSMNodeStore
+	CComboBox comboStore = GetDlgItem(IDC_OSM_NODE_STORE);
+	comboStore.AddString(L"Auto (by the file size)");
+	comboStore.AddString(L"Sorted (extracts: countries)");
+	comboStore.AddString(L"Flat file (continents, the planet)");
+	comboStore.SetCurSel((int)m_settings.nodeStore);
+	UpdateNodeStoreInfo();
+
 	UpdateInfo();
 	return TRUE;
 }
@@ -135,8 +145,8 @@ bool CConvertOSMDlg::ReadMap(const std::wstring& sPath)
 		return false;
 	}
 
-	// readosm opens the file with fopen (ANSI path on Windows)
-	std::string sFilePath = WideToFilePath(sPath);
+	// the OSM reader takes UTF-8 names
+	std::string sFilePath = WideToUtf8(sPath);
 	IOSMMapPtr ptrMap;
 	COSMProgressDlg progressDlg(L"Reading OpenStreetMap", [&sFilePath, &ptrMap](IProgressUpdaterPtr ptrProgress, Display::ITrackCancelPtr ptrCancel)
 	{
@@ -333,8 +343,36 @@ LRESULT CConvertOSMDlg::OnRead(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCt
 	return 0;
 }
 
+LRESULT CConvertOSMDlg::OnNodeStoreChanged(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/)
+{
+	UpdateNodeStoreInfo();
+	return 0;
+}
+
+void CConvertOSMDlg::UpdateNodeStoreInfo()
+{
+	int nSel = CComboBox(GetDlgItem(IDC_OSM_NODE_STORE)).GetCurSel();
+	eOSMNodeStore type = nSel == OSMNodeStoreSorted ? OSMNodeStoreSorted : (nSel == OSMNodeStoreFlat ? OSMNodeStoreFlat : OSMNodeStoreAuto);
+
+	std::wstring sPath = Trim(GetText(m_editPath));
+	std::error_code ec;
+	uint64_t nFileSize = sPath.empty() ? 0 : std::filesystem::file_size(std::filesystem::path(sPath), ec);
+	if(ec)
+		nFileSize = 0;
+	eOSMNodeStore resolved = IOSMNodeStore::ResolveType(type, WideToUtf8(sPath), nFileSize);
+
+	// the disk space in the temporary folder: 16 bytes per node / 8 bytes per id up to the biggest one (~14 billion now, sparse)
+	std::wstring sInfo;
+	if(type == OSMNodeStoreAuto)
+		sInfo = resolved == OSMNodeStoreFlat ? L"Flat for this file. " : L"Sorted for this file. ";
+	sInfo += resolved == OSMNodeStoreFlat ? L"Temporary file up to ~115 GB (sparse), 64-bit only" :
+	                                        L"Temporary file of 16 bytes per node, the cache in memory";
+	SetDlgItemText(IDC_OSM_NODE_STORE_INFO, sInfo.c_str());
+}
+
 LRESULT CConvertOSMDlg::OnPathChanged(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/)
 {
+	UpdateNodeStoreInfo();
 	// another file: the layers must be read again
 	if(m_ptrOSMMap.get() && Trim(GetText(m_editPath)) != m_sReadPath)
 	{
@@ -408,9 +446,8 @@ LRESULT CConvertOSMDlg::OnConvertAll(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*
 	IOSMMapPtr ptrMap;
 	try
 	{
-		// readosm opens the file with fopen (ANSI path on Windows)
 		COSMConvertor convertor;
-		ptrMap = convertor.CreateMap(WideToFilePath(sPath));
+		ptrMap = convertor.CreateMap(WideToUtf8(sPath));   // UTF-8 names
 	}
 	catch (std::exception& exc)
 	{
@@ -465,6 +502,8 @@ bool CConvertOSMDlg::PrepareRun()
 	BOOL bOk = FALSE;
 	UINT nCacheMB = GetDlgItemInt(IDC_OSM_NODE_CACHE, &bOk, FALSE);
 	m_settings.nNodeCacheMB = bOk && nCacheMB >= 16 ? nCacheMB : 16;
+	int nStore = CComboBox(GetDlgItem(IDC_OSM_NODE_STORE)).GetCurSel();
+	m_settings.nodeStore = nStore == OSMNodeStoreSorted ? OSMNodeStoreSorted : (nStore == OSMNodeStoreFlat ? OSMNodeStoreFlat : OSMNodeStoreAuto);
 	m_settings.bWebMercator = IsDlgButtonChecked(IDC_OSM_WEB_MERCATOR) == BST_CHECKED;
 	std::wstring sCompressError;
 	if(!GetCompressSettings(m_settings.compression, sCompressError))

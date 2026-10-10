@@ -11,6 +11,7 @@
 #include "SymbologyPage.h"
 #include "AnnotationPage.h"
 #include "LabelPage.h"
+#include "RasterDisplayPage.h"
 
 class CMapView;
 
@@ -51,6 +52,7 @@ private:
 	CMapView* m_pView;
 	GraphEngine::Cartography::ILayerPtr        m_ptrLayer;
 	GraphEngine::Cartography::IFeatureLayerPtr m_ptrFeatureLayer;   // null - not a feature layer (only General)
+	GraphEngine::Cartography::IRasterLayerPtr  m_ptrRasterLayer;    // null - not a raster layer
 	TestMapDraw::STableInfo m_table;
 	TestMapDraw::SLayerDataInfo m_dataInfo;   // the fields of the layer when the page was filled / applied
 	bool m_bSymbologyExact;
@@ -64,4 +66,5 @@ private:
 	CSymbologyPage     m_symbology;
 	CAnnotationPage    m_annotation;
 	CLabelPage         m_labels;
+	CRasterDisplayPage m_raster;
 };

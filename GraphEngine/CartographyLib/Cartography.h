@@ -39,7 +39,9 @@ namespace GraphEngine {
         {
             RasterStretchTypeNone = 0,               // 8-bit values as is, other types - min/max
             RasterStretchTypeStandardDeviation = 1,  // mean -/+ N standard deviations
-            RasterStretchTypeMinMax = 2
+            RasterStretchTypeMinMax = 2,
+            RasterStretchTypePercentClip = 3         // cumulative count cut: from the low to the high percentile of the values
+                                                     // (2 % - 98 % by default, as the QGIS default), the outliers don't darken the image
         };
 
         enum eDrawPhase

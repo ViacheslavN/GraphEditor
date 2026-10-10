@@ -10,7 +10,8 @@ namespace GraphEngine {
 
         // Raster layer: draws an IRasterDataset with an IRasterRenderer.
         // SetRasterDataset creates a default renderer when none is set (CreateDefaultRenderer).
-        class  CRasterLayer : public CLayerBase<IRasterLayer>
+        // The legend (ILegendInfo): RGB - the bands of the channels, stretch - the band with the colors and values of the ramp ends.
+        class  CRasterLayer : public CLayerBase<IRasterLayer>, public ILegendInfo
         {
         public:
 
@@ -30,12 +31,19 @@ namespace GraphEngine {
             virtual IRasterRendererPtr              GetRenderer() const;
             virtual void                            SetRenderer(IRasterRendererPtr ptrRenderer);
 
+            // ILegendInfo
+            virtual int             GetLegendGroupCount() const;
+            virtual ILegendGroupPtr GetLegendGroup(int nIndex) const;
+
             // ISerialize
             virtual void Save(CommonLib::ISerializeObjPtr pObj) const;
             virtual void Load(CommonLib::ISerializeObjPtr pObj);
 
             // RGB for 3+ bands and 8-bit single band rasters, stretch (std. deviation, black -> white) otherwise
             static IRasterRendererPtr CreateDefaultRenderer(GeoDatabase::IRasterDatasetPtr ptrDataset);
+            // a renderer of the kind (RasterRGBRendererID / RasterStretchRendererID) for the dataset: the bands by the
+            // dataset, the common settings (stretch, NoData, brightness ...) from ptrFrom when it is given, otherwise the defaults
+            static IRasterRendererPtr CreateRenderer(eRasterRendererID id, GeoDatabase::IRasterDatasetPtr ptrDataset, IRasterRendererPtr ptrFrom = IRasterRendererPtr());
 
         protected:
             virtual void DrawEx(eDrawPhase phase, Display::IDisplayPtr ptrDisplay, Display::ITrackCancelPtr ptrTrackCancel);

@@ -3,6 +3,8 @@
 #include "OSMConvertSession.h"
 #include "OSMGeometry.h"
 #include "../../../GisGeometry/Envelope.h"
+#include <chrono>
+#include <filesystem>
 #include <limits>
 
 namespace GraphEngine {
@@ -22,6 +24,11 @@ namespace GraphEngine {
                     m_bounds.xMin = m_bounds.yMin = (std::numeric_limits<double>::max)();
                     m_bounds.xMax = m_bounds.yMax = -(std::numeric_limits<double>::max)();
                     m_progress.stage = OSMStageReadMap;
+                    m_progress.nPass = 1;
+                    m_progress.nPassCount = 1;
+                    std::error_code ec;
+                    uint64_t nFileSize = std::filesystem::file_size(std::filesystem::u8path(ptrMap->GetPath()), ec);
+                    m_progress.nFileSize = ec ? 0 : nFileSize;
                     m_ptrRoutes = m_ptrMap->FindTableByType(OSMTableRoutes);
                     m_ptrRestrictions = m_ptrMap->FindTableByType(OSMTableRestrictions);
                     m_ptrTags = m_ptrMap->FindTableByType(OSMTableTags);
@@ -90,6 +97,20 @@ namespace GraphEngine {
                             AddTags(relation.tags, relation.tag_count);
                     }
                     return Step();
+                }
+
+                // .pbf: a block is processed, reported at most 5 times a second
+                virtual bool OnProgress(uint64_t nBytesRead, uint64_t nBytesTotal)
+                {
+                    m_progress.nBytesRead = nBytesRead;
+                    m_progress.nBytesTotal = nBytesTotal;
+                    auto now = std::chrono::steady_clock::now();
+                    if(nBytesRead < nBytesTotal && now - m_lastReport < std::chrono::milliseconds(200))
+                        return true;
+                    m_lastReport = now;
+                    if(m_ptrProgress.get())
+                        m_ptrProgress->UpdateStatusInfo(m_progress);
+                    return !m_ptrCancel.get() || m_ptrCancel->Continue();
                 }
 
                 void Finish()
@@ -164,6 +185,7 @@ namespace GraphEngine {
                 bool                     m_bSorted = true;
                 int                      m_nLastType = 0;
                 int64_t                  m_nLastId = (std::numeric_limits<int64_t>::min)();
+                std::chrono::steady_clock::time_point m_lastReport;
             };
         }
 
@@ -193,7 +215,7 @@ namespace GraphEngine {
                 ptrMap->SetPath(path);
 
                 CMapReadHandler handler(m_schema, ptrMap, ptrProgress, ptrCancel);
-                if(!COSMReader::Read(path, handler))
+                if(!COSMReader::Read(path, handler, COSMReader::ReadAll, m_settings.nThreads))
                     throw CommonLib::CExcBase("Reading is canceled");
 
                 handler.Finish();

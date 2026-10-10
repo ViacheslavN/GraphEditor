@@ -14,7 +14,7 @@ namespace GraphEngine {
             , m_bInvert(false)
             , m_bByteRaster(false)
         {
-            m_stretchType = RasterStretchTypeStandardDeviation;
+            m_stretchType = RasterStretchTypePercentClip;
             memset(m_rampLut, 0, sizeof(m_rampLut));
         }
 

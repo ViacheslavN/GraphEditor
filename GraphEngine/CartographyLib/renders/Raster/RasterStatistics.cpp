@@ -2,6 +2,7 @@
 #include "RasterPixelUtils.h"
 #include "../../../GeoDatabase/GeoDatabaseRaster/RasterSpatialFilter.h"
 
+#include <algorithm>
 #include <cmath>
 
 namespace GraphEngine {
@@ -41,9 +42,10 @@ namespace GraphEngine {
                 ptrFilter->SetPixelStep(step);
                 ptrFilter->SetBlockSize(512, 512);
 
-                // Welford's online mean / variance
+                // Welford's online mean / variance; the samples for the histograms
                 std::vector<SBandStats> stats(bands);
                 std::vector<double> m2(bands, 0.);
+                std::vector<std::vector<double> > samples(bands);
 
                 GeoDatabase::IRasterCursorPtr ptrCursor = ptrDataset->Search(ptrFilter);
                 GeoDatabase::IRasterBlockPtr ptrBlock = ptrCursor->CreateBlock();
@@ -78,6 +80,7 @@ namespace GraphEngine {
                                 if(v > s.dMax) s.dMax = v;
                             }
                             ++s.nCount;
+                            samples[b].push_back(v);
                             double delta = v - s.dMean;
                             s.dMean += delta / double(s.nCount);
                             m2[b] += delta * (v - s.dMean);
@@ -85,10 +88,28 @@ namespace GraphEngine {
                     }
                 }
 
+                const bool bInteger = pixelType != GeoDatabase::RasterPixelTypeFloat && pixelType != GeoDatabase::RasterPixelTypeDouble;
                 for(int b = 0; b < bands; ++b)
                 {
-                    stats[b].bValid = stats[b].nCount > 0;
-                    stats[b].dStdDev = stats[b].nCount > 1 ? std::sqrt(m2[b] / double(stats[b].nCount)) : 0.;
+                    SBandStats& s = stats[b];
+                    s.bValid = s.nCount > 0;
+                    s.dStdDev = s.nCount > 1 ? std::sqrt(m2[b] / double(s.nCount)) : 0.;
+                    if(!s.bValid)
+                        continue;
+
+                    // integer values with a small range: a bin per value
+                    const double range = s.dMax - s.dMin;
+                    size_t bins = kHistogramBins;
+                    if(bInteger && range + 1. <= double(kHistogramBins))
+                        bins = (size_t)range + 1;
+                    const double width = range > 0. ? (bInteger && bins == (size_t)range + 1 ? 1. : range / double(bins)) : 1.;
+                    s.histogram.assign(bins, 0);
+                    for(double v : samples[b])
+                    {
+                        size_t bin = (size_t)((v - s.dMin) / width);
+                        s.histogram[(std::min)(bin, bins - 1)]++;
+                    }
+                    std::vector<double>().swap(samples[b]);
                 }
 
                 m_vecBands.swap(stats);
@@ -104,6 +125,52 @@ namespace GraphEngine {
         bool CRasterStatistics::IsCalculated() const
         {
             return m_bCalculated;
+        }
+
+        bool CRasterStatistics::HasHistogram() const
+        {
+            if(!m_bCalculated)
+                return false;
+            for(const SBandStats& s : m_vecBands)
+            {
+                if(s.bValid && s.histogram.empty())
+                    return false;
+            }
+            return true;
+        }
+
+        double CRasterStatistics::GetPercentile(int band, double percent) const
+        {
+            const SBandStats& s = GetBandStats(band);
+            if(!s.bValid || s.histogram.empty())
+                return percent < 50. ? s.dMin : s.dMax;
+
+            uint64_t total = 0;
+            for(uint64_t n : s.histogram)
+                total += n;
+            if(total == 0)
+                return s.dMin;
+
+            const size_t bins = s.histogram.size();
+            const double range = s.dMax - s.dMin;
+            // a bin per integer value: the bin is the value itself
+            const bool bValueBins = range > 0. && double(bins) == range + 1.;
+            const double width = bValueBins ? 1. : (range > 0. ? range / double(bins) : 0.);
+
+            const double target = std::clamp(percent, 0., 100.) / 100. * double(total);
+            uint64_t cumulative = 0;
+            for(size_t i = 0; i < bins; ++i)
+            {
+                if(double(cumulative + s.histogram[i]) >= target && s.histogram[i] > 0)
+                {
+                    if(bValueBins)
+                        return s.dMin + double(i);
+                    double fraction = (target - double(cumulative)) / double(s.histogram[i]);
+                    return (std::min)(s.dMax, s.dMin + width * (double(i) + std::clamp(fraction, 0., 1.)));
+                }
+                cumulative += s.histogram[i];
+            }
+            return s.dMax;
         }
 
         int CRasterStatistics::GetBandCount() const

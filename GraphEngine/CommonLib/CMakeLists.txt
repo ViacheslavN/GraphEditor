@@ -130,6 +130,8 @@ set(COMMON_SOURCE_FILES
 		filesystem/filesystem.h
 		filesystem/PathUtils.cpp
 		filesystem/PathUtils.h
+		filesystem/FileMapping.cpp
+		filesystem/FileMapping.h
 
 		GoogleLogs/Logging.h
 
