@@ -1,5 +1,6 @@
 #include "stdafx.h"
 #include "GeoShape.h"
+#include "../../GeometryCompression/ShapeCompressor.h"
 
 namespace CommonLib
 {
@@ -239,25 +240,29 @@ namespace CommonLib
 
         buf += 8 * 4;
 
-        // part count
+        // part count (4 bytes: long is 8 bytes on 64-bit Linux / Android)
         if (genType != shape_type_general_multipoint)
         {
-            *reinterpret_cast<long*>(buf) = static_cast<long>(nparts);
+            *reinterpret_cast<int32_t*>(buf) = static_cast<int32_t>(nparts);
             buf += 4;
         }
         // point count
-        *reinterpret_cast<long*>(buf) = static_cast<long>(npoints);
+        *reinterpret_cast<int32_t*>(buf) = static_cast<int32_t>(npoints);
         buf += 4;
 
-        // parts starts
-        if (nparts > 1)
+        // parts starts: CalcSize and GetXYs reserve them for every part (also for a single one),
+        // they are zeroed, so the buffer has no garbage bytes
+        if (genType != shape_type_general_multipoint)
         {
-            if (genType != shape_type_general_multipoint)
-                buf += 4 * nparts;
+            memset(buf, 0, 4 * nparts);
+            buf += 4 * nparts;
 
             // parts types
             if (genType == shape_type_general_multipatch)
+            {
+                memset(buf, 0, 4 * nparts);
                 buf += 4 * nparts;
+            }
         }
 
         // x,y of points
@@ -277,9 +282,9 @@ namespace CommonLib
         if ((genType == shape_type_general_multipatch) && (!isTypeSimple(shapeType)))
         {
             if (has_m)
-                *reinterpret_cast<long*>(buf) = static_cast<long>(npoints);
+                *reinterpret_cast<int32_t*>(buf) = static_cast<int32_t>(npoints);
             else
-                *reinterpret_cast<long*>(buf) = 0;
+                *reinterpret_cast<int32_t*>(buf) = 0;
             buf += 4;
         }
 
@@ -296,25 +301,27 @@ namespace CommonLib
 
         if (has_curve)
         {
-            *reinterpret_cast<long*>(buf) = static_cast<long>(ncurves);
+            *reinterpret_cast<int32_t*>(buf) = static_cast<int32_t>(ncurves);
             buf += 4;
         }
         if ((genType == shape_type_general_multipatch) && (!isTypeSimple(shapeType))) //numIds
         {
             if (has_id)
-                *reinterpret_cast<long*>(buf) = static_cast<long>(npoints);
+                *reinterpret_cast<int32_t*>(buf) = static_cast<int32_t>(npoints);
             else
-                *reinterpret_cast<long*>(buf) = 0;
+                *reinterpret_cast<int32_t*>(buf) = 0;
             buf += 4;
         }
     }
 
-    CGeoShape::CGeoShape(IAllocPtr  pAlloc) : m_blob(pAlloc)
+    CGeoShape::CGeoShape(IAllocPtr  pAlloc) : m_blob(pAlloc), m_bCompressed(false)
     {
     }
 
-    CGeoShape::CGeoShape(const CGeoShape& geoShp) : m_blob(geoShp.m_blob)
-    {}
+    CGeoShape::CGeoShape(const CGeoShape& geoShp) : m_blob(geoShp.m_blob), m_bCompressed(false)
+    {
+        UpdateParams();
+    }
 
     CGeoShape& CGeoShape::operator=(const CGeoShape& shp)
     {
@@ -322,9 +329,7 @@ namespace CommonLib
             return *this;
 
         m_blob = shp.m_blob;
-        m_params.Reset();
-
-        m_params.Set(m_blob.Buffer());
+        UpdateParams();
 
 
         return *this;
@@ -336,7 +341,122 @@ namespace CommonLib
     void CGeoShape::Clear()
     {
         m_params.Reset();
+        m_reader.Close();
+        m_bCompressed = false;
         m_blob.Resize(0);
+    }
+
+    bool CGeoShape::IsCompressed(const byte_t* pBuf, uint32_t nSize)
+    {
+        return GraphEngine::GeometryCompression::IsCompressedShape(pBuf, nSize);
+    }
+
+    void CGeoShape::UpdateParams()
+    {
+        m_params.Reset();
+        m_reader.Close();
+        m_bCompressed = false;
+
+        const byte_t* pBuf = m_blob.Buffer();
+        uint32_t nSize = m_blob.Size();
+        if(pBuf == nullptr || nSize == 0)
+        {
+            m_params.m_bIsValid = true;   // an empty (null) shape: the buffer may keep old bytes
+            return;
+        }
+        if(!IsCompressed(pBuf, nSize))
+        {
+            m_params.Set(pBuf);
+            return;
+        }
+
+        try
+        {
+            m_reader.Open(pBuf, nSize);
+        }
+        catch (std::exception& exc)
+        {
+            // the shape is left empty
+            m_blob.Resize(0);
+            m_params.Reset();
+            m_params.m_bIsValid = true;
+            CExcBase::RegenExc("Failed to read a compressed shape", exc);
+            throw;
+        }
+
+        m_bCompressed = true;
+        m_params.m_bIsValid = true;
+        m_params.m_type = m_reader.Type();
+        m_params.m_general_type = m_reader.GeneralType();
+        m_params.m_nPointCount = m_reader.PointCount();
+        m_params.m_nPartCount = m_reader.PartCount();
+        m_params.m_pPoints = nullptr;   // no coordinates buffer in the compressed mode
+    }
+
+    void CGeoShape::Decompress()
+    {
+        if(!m_bCompressed)
+            return;
+
+        try
+        {
+            uint32_t nParts = m_reader.PartCount();
+            CGeoShape raw;
+            raw.Create(m_reader.Type(), m_reader.PointCount(), nParts > 0 ? nParts : 1);
+            m_reader.ReadAll(raw.GetPoints(), raw.GetParts());   // GetParts is null for a single part
+
+            if(m_reader.GeneralType() != shape_type_general_point)
+            {
+                // the box of the header (the same as of the decoded points)
+                double* pBounds = raw.GetBBoxVals();
+                CommonLib::bbox bb = m_reader.BoundingBox();
+                if(pBounds && bb.type == bbox_type_normal)
+                {
+                    pBounds[0] = bb.xMin;
+                    pBounds[1] = bb.yMin;
+                    pBounds[2] = bb.xMax;
+                    pBounds[3] = bb.yMax;
+                }
+            }
+
+            m_blob = raw.m_blob;
+            UpdateParams();
+        }
+        catch (std::exception& exc)
+        {
+            CExcBase::RegenExc("Failed to decompress a shape", exc);
+            throw;
+        }
+    }
+
+    void CGeoShape::DecompressIfNeeded() const
+    {
+        if(m_bCompressed)
+            const_cast<CGeoShape*>(this)->Decompress();
+    }
+
+    bool CGeoShape::Compress(int nScaleExponent)
+    {
+        if(m_bCompressed)
+            return true;
+
+        try
+        {
+            GraphEngine::GeometryCompression::SShapeCompressParams params;
+            params.nScaleExponent = nScaleExponent;
+            GraphEngine::GeometryCompression::CShapeCompressor compressor(params);
+            std::vector<uint8_t> blob;
+            if(!compressor.Compress(*this, blob))
+                return false;
+
+            Import(blob.data(), (uint32_t)blob.size());
+            return true;
+        }
+        catch (std::exception& exc)
+        {
+            CExcBase::RegenExc("Failed to compress a shape", exc);
+            throw;
+        }
     }
 
 
@@ -351,6 +471,7 @@ namespace CommonLib
         m_blob.Resize(pStream->ReadIntu32());
         if(m_blob.Size())
             pStream->Read(m_blob.Buffer(), m_blob.Size());
+        UpdateParams();
 
     }
 
@@ -421,7 +542,7 @@ namespace CommonLib
             {
                 //const unsigned char* buf = cbuffer();
                 //buf += 4 + 8 * 4;
-                return *reinterpret_cast<const long*>(buf + 1 + 2 + 8 * 4); // flag type bbox
+                return *reinterpret_cast<const uint32_t*>(buf + 1 + 2 + 8 * 4); // flag type bbox
             }
         }
 
@@ -430,6 +551,9 @@ namespace CommonLib
 
     uint32_t  CGeoShape::GetPart(uint32_t idx) const
     {
+        if (m_bCompressed)
+            return m_reader.PartSize(idx);
+
         uint32_t nparts = GetPartCount();
 
         if (nparts == 0 || idx >= nparts)
@@ -448,11 +572,13 @@ namespace CommonLib
 
     const uint32_t*  CGeoShape::GetParts() const
     {
+        DecompressIfNeeded();   // random access needs the raw buffer
         return GetParts(m_blob.Buffer());
     }
 
     uint32_t*  CGeoShape::GetParts()
     {
+        DecompressIfNeeded();   // random access needs the raw buffer
         return GetParts(m_blob.Buffer());
     }
 
@@ -509,6 +635,7 @@ namespace CommonLib
 
     patch_type*  CGeoShape::GetPartsTypes()
     {
+        DecompressIfNeeded();   // random access needs the raw buffer
 
 
         eShapeType genType = GeneralType();
@@ -523,6 +650,7 @@ namespace CommonLib
     }
     const patch_type* CGeoShape::GetPartsTypes() const
     {
+        DecompressIfNeeded();   // random access needs the raw buffer
 
 
         eShapeType genType = GeneralType();
@@ -544,6 +672,7 @@ namespace CommonLib
 
     GisXYPoint* CGeoShape::GetPoints()
     {
+        DecompressIfNeeded();   // random access needs the raw buffer
 
 
         if (m_params.m_bIsValid)
@@ -552,6 +681,7 @@ namespace CommonLib
     }
     const GisXYPoint* CGeoShape::GetPoints() const
     {
+        DecompressIfNeeded();   // random access needs the raw buffer
 
 
         if (m_params.m_bIsValid)
@@ -570,6 +700,8 @@ namespace CommonLib
 
     void CGeoShape::Create(uint32_t nSize)
     {
+        m_reader.Close();
+        m_bCompressed = false;
         m_blob.Reserve(nSize);
         m_params.Reset();
     }
@@ -582,6 +714,8 @@ namespace CommonLib
 
     void CGeoShape::Create(unsigned char* pBuf, uint32_t nSize, eShapeType shapeType, uint32_t npoints, uint32_t nparts, uint32_t ncurves)
     {
+        m_reader.Close();
+        m_bCompressed = false;
         InitShapeBufferBuffer(pBuf, shapeType, npoints, nparts, ncurves);
         m_params.Set(pBuf);
     }
@@ -589,6 +723,8 @@ namespace CommonLib
 
     void CGeoShape::Create(eShapeType shapeType, uint32_t npoints, uint32_t nparts, uint32_t ncurves, uint32_t mpatchSpecificSize)
     {
+        m_reader.Close();
+        m_bCompressed = false;
 
 
         uint32_t  nBufSize = CalcSize(shapeType, npoints, nparts, ncurves, mpatchSpecificSize);
@@ -604,19 +740,21 @@ namespace CommonLib
     {
 
         m_blob.Copy(extBuf, extBufSize);
-        m_params.Set(m_blob.Buffer());
+        UpdateParams();   // raw or compressed by the blob
 
     }
 
     void CGeoShape::Attach(byte* extBuf, uint32_t extBufSize)
     {
         m_blob.Attach(extBuf, extBufSize);
-        m_params.Set(m_blob.Buffer());
+        UpdateParams();
     }
 
     unsigned char* CGeoShape::Detach()
     {
         m_params.Reset();
+        m_reader.Close();
+        m_bCompressed = false;
         return m_blob.Deattach();
     }
 
@@ -776,6 +914,9 @@ namespace CommonLib
 
     void CGeoShape::CalcBB()
     {
+        if (m_bCompressed)
+            return;   // the header of a compressed shape has the exact box
+
 
         eShapeType genType;
         eShapeType shType = Type();
@@ -860,6 +1001,9 @@ namespace CommonLib
 
     bbox CGeoShape::GetBB() const
     {
+        if (m_bCompressed)
+            return m_reader.BoundingBox();
+
         bbox bb;
 
         if (GeneralType() == shape_type_general_point)
@@ -891,12 +1035,14 @@ namespace CommonLib
 
     double *CGeoShape::GetBBoxVals()
     {
+        DecompressIfNeeded();   // random access needs the raw buffer
         eShapeType genType;
         GetTypeParams(Type(), &genType);
         return GetBBoxVals(genType);
     }
     const double *CGeoShape::GetBBoxVals() const
     {
+        DecompressIfNeeded();   // random access needs the raw buffer
         eShapeType genType;
         GetTypeParams(Type(), &genType);
         return GetBBoxVals(genType);
@@ -920,20 +1066,44 @@ namespace CommonLib
     }
 
 
+    // NextPart / NextPoint: the compressed mode decodes in order, a jump back starts from the beginning
     uint32_t CGeoShape::NextPart(uint32_t nIdx) const
     {
-         return GetPart(nIdx);
+        if (!m_bCompressed)
+            return GetPart(nIdx);
+
+        if (nIdx < m_reader.NextPartIndex())
+            m_reader.RewindParts();
+        while (m_reader.NextPartIndex() < nIdx && m_reader.NextPart() > 0)
+            ;
+        return m_reader.NextPartIndex() == nIdx ? m_reader.NextPart() : 0;
     }
 
     GisXYPoint CGeoShape::NextPoint(uint32_t nIdx) const
     {
-         return GetPoints()[nIdx];
+        GisXYPoint pt = {0., 0.};
+        NextPoint(nIdx, pt);
+        return pt;
     }
 
     bool CGeoShape::NextPoint(uint32_t nIdx, GisXYPoint& pt) const
     {
-        pt = GetPoints()[nIdx];
-        return true;
+        if (!m_bCompressed)
+        {
+            if (nIdx >= GetPointCnt())
+                return false;
+            pt = GetPoints()[nIdx];
+            return true;
+        }
+
+        if (nIdx != m_reader.NextPointIndex())
+        {
+            if (nIdx < m_reader.NextPointIndex())
+                m_reader.RewindPoints();
+            if (!m_reader.SkipPoints(nIdx - m_reader.NextPointIndex()))
+                return false;
+        }
+        return m_reader.NextPoint(pt);
     }
 
     IGeoShapePtr CGeoShape::Clone()

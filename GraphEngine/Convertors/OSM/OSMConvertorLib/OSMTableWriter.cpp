@@ -134,6 +134,14 @@ namespace GraphEngine {
 
                 if(m_nShapeColumn >= 0)
                 {
+                    if(m_ptrShape.get() && m_ptrCompressor.get() && m_ptrCompressor->Compress(*m_ptrShape, m_vecBlob))
+                    {
+                        // the box of the compressed shape is the one of the rounded coordinates
+                        if(!m_ptrCompressed.get())
+                            m_ptrCompressed = std::make_shared<CommonLib::CGeoShape>();
+                        m_ptrCompressed->Import(m_vecBlob.data(), (uint32_t)m_vecBlob.size());
+                        m_ptrShape = m_ptrCompressed;
+                    }
                     if(m_ptrShape.get())
                     {
                         CommonLib::bbox bb = m_ptrShape->GetBB();

@@ -1,6 +1,8 @@
 #include "OSMConvertor.h"
 #include "OSMReader.h"
 #include "OSMConvertSession.h"
+#include "OSMGeometry.h"
+#include "../../../GisGeometry/Envelope.h"
 #include <limits>
 
 namespace GraphEngine {
@@ -94,6 +96,7 @@ namespace GraphEngine {
                 {
                     m_ptrMap->SetCounts(m_progress.nNodes, m_progress.nWays, m_progress.nRelations);
                     m_ptrMap->SetSorted(m_bSorted);
+                    m_ptrMap->SetScanned(true);
                     if(m_bounds.xMin <= m_bounds.xMax)
                     {
                         m_bounds.type = CommonLib::bbox_type_normal;
@@ -203,6 +206,65 @@ namespace GraphEngine {
             }
         }
 
+        IOSMMapPtr COSMConvertor::CreateMap(const std::string& path)
+        {
+            if(COSMMap::FormatByPath(path) == OSMFormatUnknown)
+                throw CommonLib::CExcBase("Unknown OSM file format {0}, expected .osm or .pbf", path);
+
+            COSMMapPtr ptrMap = m_schema.CreateMap();
+            ptrMap->SetPath(path);
+            return ptrMap;
+        }
+
+        CommonLib::bbox COSMConvertor::OutputExtent(const SOSMConvertSettings& settings, IOSMMapPtr ptrOSMMap)
+        {
+            // longitude / latitude: the bounds of the nodes or the world (Web Mercator stops at 85.0511 degrees)
+            CommonLib::bbox lonLat;
+            lonLat.type = CommonLib::bbox_type_normal;
+            lonLat.xMin = -180.;
+            lonLat.xMax = 180.;
+            lonLat.yMin = settings.bWebMercator ? -85.0511287798 : -90.;
+            lonLat.yMax = settings.bWebMercator ? 85.0511287798 : 90.;
+            if(ptrOSMMap.get() && ptrOSMMap->IsScanned() && ptrOSMMap->GetBounds().type == CommonLib::bbox_type_normal)
+                lonLat = ptrOSMMap->GetBounds();
+
+            COSMProjection projection(settings.bWebMercator);
+            CommonLib::bbox extent;
+            extent.type = CommonLib::bbox_type_normal;
+            projection.Project(lonLat.xMin, lonLat.yMin, extent.xMin, extent.yMin);
+            projection.Project(lonLat.xMax, lonLat.yMax, extent.xMax, extent.yMax);
+            return extent;
+        }
+
+        GeometryCompression::SShapeCompressParams COSMConvertor::CompressParams(const SOSMConvertSettings& settings, IOSMMapPtr ptrOSMMap)
+        {
+            CommonLib::bbox extent = OutputExtent(settings, ptrOSMMap);
+            switch(settings.compression.scale)
+            {
+                case OSMCompressScaleManual:
+                {
+                    if(settings.compression.nManualScaleExponent < -22 || settings.compression.nManualScaleExponent > 22)
+                        throw CommonLib::CExcBase("Wrong scale of the compressed coordinates 10^-{0}, expected -22..22", settings.compression.nManualScaleExponent);
+                    GeometryCompression::SShapeCompressParams params;
+                    params.nScaleExponent = settings.compression.nManualScaleExponent;
+                    return params;
+                }
+                case OSMCompressScaleMaximum:
+                    return GeometryCompression::MaxCompressParamsForExtent(extent);
+                default:
+                {
+                    COSMProjection projection(settings.bWebMercator);
+                    Geometry::CEnvelope envelope(extent, projection.CreateSpatialReference());
+                    return envelope.GetCompressParams();
+                }
+            }
+        }
+
+        GeometryCompression::SShapeCompressParams COSMConvertor::GetCompressParams(IOSMMapPtr ptrOSMMap) const
+        {
+            return CompressParams(m_settings, ptrOSMMap);
+        }
+
         IOSMConvertSessionPtr COSMConvertor::CreateSession(IOSMMapPtr ptrOSMMap, Cartography::IMapPtr ptrMap, GeoDatabase::IDatabaseWorkspacePtr ptrDstWorkspace)
         {
             return std::make_shared<COSMConvertSession>(m_schema, m_settings, ptrOSMMap, ptrMap, ptrDstWorkspace);
@@ -222,7 +284,7 @@ namespace GraphEngine {
             if(COSMMap::FormatByPath(path) != format)
                 throw CommonLib::CExcBase("Wrong OSM file {0}: expected the {1} suffix", path, format == OSMFormatPBF ? ".pbf" : ".osm");
 
-            Convert(ReadMap(path, ptrProgress, ptrCancel), ptrMap, ptrDstWorkspace, ptrProgress, ptrCancel);
+            Convert(CreateMap(path), ptrMap, ptrDstWorkspace, ptrProgress, ptrCancel);
         }
 
         void COSMConvertor::ConvertFromXML(const std::string& path, Cartography::IMapPtr ptrMap,

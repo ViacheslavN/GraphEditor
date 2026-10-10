@@ -305,6 +305,7 @@ namespace CommonLib {
                 {
                     m_nCapacity = 0;
                     m_pAlloc->Free(m_pBuffer);
+                    m_pBuffer = nullptr;   // operator= / Resize after Clear(true) freed it again
                 }
             }
         }

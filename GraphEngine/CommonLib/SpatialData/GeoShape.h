@@ -5,10 +5,19 @@
 #include "../stream/stream.h"
 #include "IGeoShape.h"
 #include "../data/blob.h"
+#include "../../GeometryCompression/CompressedShapeReader.h"
 
 namespace CommonLib
 {
 
+    // A shape in one of two modes, chosen by the blob (Import, Attach, Read):
+    //  - raw: the buffer with the doubles (flag byte 0), every method works directly on it;
+    //  - compressed: the GeometryCompression blob (flag byte 1). Type, counts and the bounding box come
+    //    from its header, NextPart / NextPoint decode the parts and the points in order without a buffer
+    //    (the drawing reads shapes this way). The methods with random access (GetPoints, GetParts,
+    //    GetBBoxVals ...) switch the shape to the raw mode once (Decompress), Data / Size return the
+    //    current blob. Compress switches a raw shape to the compressed mode.
+    // A damaged compressed blob throws CExcBase (the shape is left empty).
     class CGeoShape : public IGeoShape
     {
     public:
@@ -69,6 +78,15 @@ namespace CommonLib
 
         void Write(IWriteStream *pStream) const;
         void Read(IReadStream *pStream);
+
+        // the compressed mode (see above)
+        bool IsCompressed() const { return m_bCompressed; }
+        static bool IsCompressed(const byte_t* pBuf, uint32_t nSize);
+        // raw -> compressed, the coordinates are rounded to 10^-nScaleExponent (2 - centimeters, 7 - 1e-7 degree);
+        // false - the shape can't be compressed (Z, M, curves, a coordinate out of the integer range), it stays raw
+        bool Compress(int nScaleExponent = 2);
+        // compressed -> raw (nothing for a raw shape)
+        void Decompress();
 
         virtual uint32_t NextPart(uint32_t nIdx) const;
 
@@ -132,6 +150,7 @@ namespace CommonLib
         static void InitShapeBufferBuffer(unsigned char* buf, eShapeType shapeType, uint32_t npoints, uint32_t nparts, uint32_t ncurves);
         static uint32_t CalcSize(eShapeType shapeType, uint32_t npoints = 1, uint32_t nparts = 1, uint32_t ncurves = 0, uint32_t mpatchSpecificSize = 0);
 
+        // the static functions read a raw buffer only
         static uint32_t   PointCount(const byte* buf);
         static uint32_t   PointCount(const byte* buf, eShapeType general_type);
         static uint32_t   PartCount(const byte* buf);
@@ -169,6 +188,10 @@ namespace CommonLib
 
         virtual void  Add(IGeoShapePtr ptrShap);
 
+        // the parameters of the blob: the raw buffer or the header of a compressed one (throws if it is damaged)
+        void UpdateParams();
+        void DecompressIfNeeded() const;
+
     private:
         static const uint32_t __minimum_point_ = 10;
 
@@ -192,7 +215,9 @@ namespace CommonLib
             bool m_bIsValid;
         };
 
-        sShapeParams m_params;
+        mutable sShapeParams m_params;
+        mutable bool m_bCompressed;
+        mutable GraphEngine::GeometryCompression::CCompressedShapeReader m_reader;   // the compressed mode
 
     };
 }

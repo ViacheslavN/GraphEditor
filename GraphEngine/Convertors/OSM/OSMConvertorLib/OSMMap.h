@@ -197,6 +197,7 @@ namespace GraphEngine {
             virtual uint64_t            GetWayCount() const;
             virtual uint64_t            GetRelationCount() const;
             virtual bool                IsSorted() const;
+            virtual bool                IsScanned() const;
             virtual int                 GetLayerCount() const;
             virtual IOSMLayerPtr        GetLayer(int nIndex) const;
             virtual IOSMLayerPtr        FindLayer(const std::string& sName) const;
@@ -216,6 +217,7 @@ namespace GraphEngine {
             void SetCounts(uint64_t nNodes, uint64_t nWays, uint64_t nRelations);
             void SetBounds(const CommonLib::bbox& bounds);
             void SetSorted(bool bSorted);
+            void SetScanned(bool bScanned);
             void AddLayer(COSMLayerPtr ptrLayer);
             void AddTable(COSMTablePtr ptrTable);
             COSMLayerPtr GetLayerImpl(int nIndex) const;
@@ -232,6 +234,7 @@ namespace GraphEngine {
             uint64_t        m_nWays;
             uint64_t        m_nRelations;
             bool            m_bSorted;
+            bool            m_bScanned;
             std::vector<COSMLayerPtr> m_vecLayers;
             std::vector<COSMTablePtr> m_vecTables;
         };

@@ -77,6 +77,7 @@ TEST_CASE("OSM map: hierarchy of an XML file", "[osm]")
 
     REQUIRE(ptrMap != nullptr);
     REQUIRE(ptrMap->GetFormat() == OSMFormatXML);
+    REQUIRE(ptrMap->IsScanned());
     REQUIRE(ptrMap->GetNodeCount() == 10);
     REQUIRE(ptrMap->GetWayCount() == 10);
     REQUIRE(ptrMap->GetRelationCount() == 3);
@@ -155,6 +156,7 @@ TEST_CASE("OSM map: save / load", "[osm]")
     loaded.Load(ptrRoot);
     REQUIRE(loaded.GetFormat() == OSMFormatPBF);
     REQUIRE(loaded.GetNodeCount() == 100);
+    REQUIRE_FALSE(loaded.IsScanned());   // made by the schema, not by ReadMap
     REQUIRE(loaded.GetLayerCount() == ptrMap->GetLayerCount());
     REQUIRE_FALSE(loaded.FindLayer("buildings")->GetEnabled());
 

@@ -103,6 +103,7 @@ ENDIF()
 add_library(GeoDatabase ${SOURCE_FILES})
 
 target_link_libraries(${PROJECT_NAME} PUBLIC CommonLib)
+target_link_libraries(${PROJECT_NAME} PUBLIC GeometryCompression)
 target_link_libraries(${PROJECT_NAME} PUBLIC ShapeLib)
 target_link_libraries(${PROJECT_NAME} PUBLIC Tiff)
 

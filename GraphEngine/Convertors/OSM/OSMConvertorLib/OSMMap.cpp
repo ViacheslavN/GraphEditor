@@ -268,7 +268,7 @@ namespace GraphEngine {
 
         // ---------------- map ----------------
 
-        COSMMap::COSMMap() : m_format(OSMFormatUnknown), m_nNodes(0), m_nWays(0), m_nRelations(0), m_bSorted(true)
+        COSMMap::COSMMap() : m_format(OSMFormatUnknown), m_nNodes(0), m_nWays(0), m_nRelations(0), m_bSorted(true), m_bScanned(false)
         {
             m_bounds.xMin = m_bounds.yMin = m_bounds.xMax = m_bounds.yMax = 0.;
             m_bounds.type = CommonLib::bbox_type_null;
@@ -430,6 +430,16 @@ namespace GraphEngine {
             m_bounds = bounds;
         }
 
+        bool COSMMap::IsScanned() const
+        {
+            return m_bScanned;
+        }
+
+        void COSMMap::SetScanned(bool bScanned)
+        {
+            m_bScanned = bScanned;
+        }
+
         void COSMMap::SetSorted(bool bSorted)
         {
             m_bSorted = bSorted;
@@ -464,6 +474,7 @@ namespace GraphEngine {
                 ptrMapNode->AddPropertyIntU64("Ways", m_nWays);
                 ptrMapNode->AddPropertyIntU64("Relations", m_nRelations);
                 ptrMapNode->AddPropertyBool("Sorted", m_bSorted);
+                ptrMapNode->AddPropertyBool("Scanned", m_bScanned);
                 ptrMapNode->AddPropertyBool("HasBounds", (m_bounds.type & CommonLib::bbox_type_normal) != 0);
                 ptrMapNode->AddPropertyDouble("XMin", m_bounds.xMin);
                 ptrMapNode->AddPropertyDouble("YMin", m_bounds.yMin);
@@ -495,6 +506,7 @@ namespace GraphEngine {
                 m_nWays = ptrMapNode->GetPropertyIntU64("Ways", 0);
                 m_nRelations = ptrMapNode->GetPropertyIntU64("Relations", 0);
                 m_bSorted = ptrMapNode->GetPropertyBool("Sorted", true);
+                m_bScanned = ptrMapNode->GetPropertyBool("Scanned", true);   // saved before the flag - by ReadMap
                 m_bounds.xMin = ptrMapNode->GetPropertyDouble("XMin", 0.);
                 m_bounds.yMin = ptrMapNode->GetPropertyDouble("YMin", 0.);
                 m_bounds.xMax = ptrMapNode->GetPropertyDouble("XMax", 0.);

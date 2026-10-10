@@ -71,6 +71,7 @@ ENDIF()
 add_library(GisGeometry ${SOURCE_FILES})
 
 target_link_libraries(${PROJECT_NAME} PUBLIC CommonLib)
+target_link_libraries(${PROJECT_NAME} PUBLIC GeometryCompression)
 target_link_libraries(${PROJECT_NAME} PUBLIC Proj4)
 
 target_include_directories(${PROJECT_NAME} PRIVATE ./)

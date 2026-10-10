@@ -3,6 +3,7 @@
 #include "../../../GeoDatabase/GeoDatabase.h"
 #include "../../../DisplayLib/DisplayLib.h"
 #include "../../../CartographyLib/Cartography.h"
+#include "../../../GeometryCompression/ShapeCompressor.h"
 
 // OpenStreetMap (.osm XML, .osm.pbf) -> GraphEngine workspace and map.
 //
@@ -173,6 +174,9 @@ namespace GraphEngine {
             virtual uint64_t            GetRelationCount() const = 0;
             // the objects are sorted by id: nodes, then ways, then relations (planet / extracts are)
             virtual bool                IsSorted() const = 0;
+            // the file was read by ReadMap: the counts / bounds are known; false - a map by CreateMap,
+            // the counts are 0 and every enabled dataset is converted (the empty ones are not added to the map)
+            virtual bool                IsScanned() const = 0;
 
             virtual int                 GetLayerCount() const = 0;
             virtual IOSMLayerPtr        GetLayer(int nIndex) const = 0;
@@ -205,6 +209,22 @@ namespace GraphEngine {
             virtual void Close() = 0;
         };
 
+        // how the floating point coordinates are turned into the integers of the compressed geometry
+        // (they are stored as integers of 10^-k, k - the scale exponent)
+        enum eOSMCompressScale
+        {
+            OSMCompressScaleAuto    = 0,   // by the units of the output coordinate system: 1 cm (Web Mercator), 1e-7 degree (CEnvelope::GetCompressParams)
+            OSMCompressScaleManual  = 1,   // nManualScaleExponent
+            OSMCompressScaleMaximum = 2    // the largest k which keeps all the digits of the doubles through int64 (|x| * 10^k <= 2^53)
+        };
+
+        struct SOSMCompressSettings
+        {
+            bool              bEnabled = true;
+            eOSMCompressScale scale = OSMCompressScaleAuto;
+            int               nManualScaleExponent = 2;   // -22..22
+        };
+
         struct SOSMConvertSettings
         {
             std::string sTempDir;              // temporary files (node coordinates), empty - the system temporary folder
@@ -212,6 +232,8 @@ namespace GraphEngine {
             bool        bWebMercator = true;   // geometry in Web Mercator (EPSG:3857), false - longitude / latitude (EPSG:4326)
             std::string sNameLanguage;         // "en", "de" ...: name:<language> is used for the names when it exists
             bool        bAddLayersToMap = true;
+            // the geometry compression (GeometryCompression, NumLen coded deltas, about 4 times smaller)
+            SOSMCompressSettings compression;
         };
 
         class IOSMConvertor {
@@ -223,6 +245,15 @@ namespace GraphEngine {
             // everything is enabled
             virtual IOSMMapPtr ReadMap(const std::string& path, IProgressUpdaterPtr ptrProgress, Display::ITrackCancelPtr ptrCancel) = 0;
 
+            // all the datasets of the schema without reading the file (no counts, everything is enabled):
+            // the conversion makes one pass less
+            virtual IOSMMapPtr CreateMap(const std::string& path) = 0;
+
+            // the parameters of the geometry compression for the map (by the settings.compression): the extent is the bounds
+            // of the map (ReadMap) or the world (a map which isn't read) in the output coordinate system;
+            // the result is used when the compression is enabled
+            virtual GeometryCompression::SShapeCompressParams GetCompressParams(IOSMMapPtr ptrOSMMap) const = 0;
+
             // tables of the datasets are created in the workspace (SQLite ...); ptrMap can be null
             virtual IOSMConvertSessionPtr CreateSession(IOSMMapPtr ptrOSMMap, Cartography::IMapPtr ptrMap, GeoDatabase::IDatabaseWorkspacePtr ptrDstWorkspace) = 0;
 
@@ -230,7 +261,7 @@ namespace GraphEngine {
             virtual void Convert(IOSMMapPtr ptrOSMMap, Cartography::IMapPtr ptrMap,
                 GeoDatabase::IDatabaseWorkspacePtr ptrDstWorkspace, IProgressUpdaterPtr ptrProgress, Display::ITrackCancelPtr ptrCancel) = 0;
 
-            // the whole file: ReadMap + Convert
+            // the whole file: CreateMap + Convert
             virtual void ConvertFromXML(const std::string& path, Cartography::IMapPtr ptrMap ,
                 GeoDatabase::IDatabaseWorkspacePtr ptrDstWorkspace, IProgressUpdaterPtr ptrProgress, Display::ITrackCancelPtr ptrCancel) = 0;
 

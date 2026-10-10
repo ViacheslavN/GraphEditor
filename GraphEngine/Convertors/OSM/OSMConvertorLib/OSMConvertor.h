@@ -13,6 +13,12 @@ namespace GraphEngine {
             virtual ~COSMConvertor();
 
             virtual IOSMMapPtr ReadMap(const std::string& path, IProgressUpdaterPtr ptrProgress, Display::ITrackCancelPtr ptrCancel);
+            virtual IOSMMapPtr CreateMap(const std::string& path);
+            virtual GeometryCompression::SShapeCompressParams GetCompressParams(IOSMMapPtr ptrOSMMap) const;
+
+            // the extent of the map in the output coordinate system (see GetCompressParams)
+            static CommonLib::bbox OutputExtent(const SOSMConvertSettings& settings, IOSMMapPtr ptrOSMMap);
+            static GeometryCompression::SShapeCompressParams CompressParams(const SOSMConvertSettings& settings, IOSMMapPtr ptrOSMMap);
 
             virtual IOSMConvertSessionPtr CreateSession(IOSMMapPtr ptrOSMMap, Cartography::IMapPtr ptrMap, GeoDatabase::IDatabaseWorkspacePtr ptrDstWorkspace);
 

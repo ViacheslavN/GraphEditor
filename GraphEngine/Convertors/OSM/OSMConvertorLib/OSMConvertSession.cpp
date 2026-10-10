@@ -3,6 +3,7 @@
 #include "OSMTableWriter.h"
 #include "OSMWayStore.h"
 #include "OSMMapStyle.h"
+#include "OSMConvertor.h"
 #include <algorithm>
 #include <cstdlib>
 #include <cstring>
@@ -73,7 +74,7 @@ namespace GraphEngine {
             public:
                 CFeatureWriter(const SOSMLayerDef& def, const std::string& sTableName, const std::string& sNameKey,
                                GeoDatabase::IDatabaseWorkspacePtr ptrWorkspace, GeoDatabase::ITransactionPtr ptrTransaction,
-                               Geometry::ISpatialReferencePtr ptrSpatRef) :
+                               Geometry::ISpatialReferencePtr ptrSpatRef, std::shared_ptr<GeometryCompression::CShapeCompressor> ptrCompressor) :
                         m_def(def), m_sNameKey(sNameKey)
                 {
                     std::vector<COSMTableWriter::SField> vecFields = {
@@ -85,6 +86,7 @@ namespace GraphEngine {
                     CommonLib::eShapeType shapeType = def.geometryType == OSMGeometryPoint ? CommonLib::shape_type_point :
                                                       def.geometryType == OSMGeometryLine ? CommonLib::shape_type_polyline : CommonLib::shape_type_polygon;
                     m_ptrWriter = std::make_shared<COSMTableWriter>(ptrWorkspace, ptrTransaction, sTableName, vecFields, shapeType, ptrSpatRef);
+                    m_ptrWriter->SetCompressor(ptrCompressor);
                 }
 
                 void Write(int64_t nId, char cType, const SOSMMatch& match, const COSMTags& tags, CommonLib::IGeoShapePtr ptrShape)
@@ -576,23 +578,25 @@ namespace GraphEngine {
             return ptrDataset.get() && m_setConverted.count(DatasetKey(ptrDataset)) > 0;
         }
 
-        // the datasets without features (by ReadMap) are skipped, ConvertDataset creates also an empty table
+        // the datasets without features (by ReadMap) are skipped, ConvertDataset creates also an empty table;
+        // a map which isn't scanned (CreateMap) has no counts: all the enabled datasets are converted
         void COSMConvertSession::Convert(IProgressUpdaterPtr ptrProgress, Display::ITrackCancelPtr ptrCancel)
         {
+            const bool bScanned = m_ptrOSMMap->IsScanned();
             std::vector<IOSMDatasetPtr> vecDatasets;
             for(int i = 0; i < m_ptrOSMMap->GetLayerCount(); ++i)
             {
                 IOSMLayerPtr ptrLayer = m_ptrOSMMap->GetLayer(i);
-                if(ptrLayer->GetEnabled() && ptrLayer->GetFeatureCount() > 0 && !IsConverted(ptrLayer))
+                if(ptrLayer->GetEnabled() && (!bScanned || ptrLayer->GetFeatureCount() > 0) && !IsConverted(ptrLayer))
                     vecDatasets.push_back(ptrLayer);
             }
             for(int i = 0; i < m_ptrOSMMap->GetTableCount(); ++i)
             {
                 IOSMTablePtr ptrTable = m_ptrOSMMap->GetTable(i);
-                if(ptrTable->GetEnabled() && ptrTable->GetFeatureCount() > 0 && !IsConverted(ptrTable))
+                if(ptrTable->GetEnabled() && (!bScanned || ptrTable->GetFeatureCount() > 0) && !IsConverted(ptrTable))
                     vecDatasets.push_back(ptrTable);
             }
-            ConvertDatasets(vecDatasets, ptrProgress, ptrCancel);
+            ConvertDatasets(vecDatasets, !bScanned, ptrProgress, ptrCancel);
         }
 
         void COSMConvertSession::ConvertDataset(IOSMDatasetPtr ptrDataset, IProgressUpdaterPtr ptrProgress, Display::ITrackCancelPtr ptrCancel)
@@ -601,10 +605,10 @@ namespace GraphEngine {
                 throw CommonLib::CExcBase("OSM convert session: the dataset is null");
             if(IsConverted(ptrDataset))
                 return;
-            ConvertDatasets(std::vector<IOSMDatasetPtr>(1, ptrDataset), ptrProgress, ptrCancel);
+            ConvertDatasets(std::vector<IOSMDatasetPtr>(1, ptrDataset), false, ptrProgress, ptrCancel);
         }
 
-        void COSMConvertSession::ConvertDatasets(const std::vector<IOSMDatasetPtr>& vecDatasets, IProgressUpdaterPtr ptrProgress, Display::ITrackCancelPtr ptrCancel)
+        void COSMConvertSession::ConvertDatasets(const std::vector<IOSMDatasetPtr>& vecDatasets, bool bSkipEmptyLayers, IProgressUpdaterPtr ptrProgress, Display::ITrackCancelPtr ptrCancel)
         {
             if(vecDatasets.empty())
                 return;
@@ -615,6 +619,14 @@ namespace GraphEngine {
                 CRun run(m_schema, m_settings, m_projection, ptrProgress, ptrCancel);
                 Geometry::ISpatialReferencePtr ptrSpatRef = m_projection.CreateSpatialReference();
                 std::string sNameKey = m_settings.sNameLanguage.empty() ? std::string() : "name:" + m_settings.sNameLanguage;
+
+                // one compressor for all the layers (it keeps its buffers)
+                std::shared_ptr<GeometryCompression::CShapeCompressor> ptrCompressor;
+                if(m_settings.compression.bEnabled)
+                {
+                    // the precision by the settings: auto (the units), manual, maximum (see SOSMCompressSettings)
+                    ptrCompressor = std::make_shared<GeometryCompression::CShapeCompressor>(COSMConvertor::CompressParams(m_settings, m_ptrOSMMap));
+                }
 
                 // the layers of the schema: which are in the OSM map, selected (for the tags table), converted now
                 for(size_t i = 0; i < m_schema.Layers().size(); ++i)
@@ -647,7 +659,7 @@ namespace GraphEngine {
                         SLayerRun& layer = run.vecLayers[nIndex];
                         layer.ptrLayer = ptrLayer;
                         layer.bSelected = true;
-                        layer.ptrWriter = std::make_shared<CFeatureWriter>(def, ptrLayer->GetTableName(), sNameKey, m_ptrWorkspace, ptrTransaction, ptrSpatRef);
+                        layer.ptrWriter = std::make_shared<CFeatureWriter>(def, ptrLayer->GetTableName(), sNameKey, m_ptrWorkspace, ptrTransaction, ptrSpatRef, ptrCompressor);
                         run.bLines = run.bLines || def.geometryType != OSMGeometryPoint;
                         run.bPolygons = run.bPolygons || def.geometryType == OSMGeometryPolygon;
                         run.bPoints = run.bPoints || def.geometryType == OSMGeometryPoint;
@@ -774,11 +786,13 @@ namespace GraphEngine {
 
                 run.Report(OSMStageFinish, "Saving tables");
                 std::vector<GeoDatabase::ITablePtr> vecTables(vecRunLayers.size());
+                std::vector<uint64_t> vecRowCounts(vecRunLayers.size());
                 for(size_t i = 0; i < vecRunLayers.size(); ++i)
                 {
                     SLayerRun& layer = run.vecLayers[m_schema.FindLayerIndex(vecRunLayers[i]->GetName())];
                     layer.ptrWriter->Writer()->Finish();
                     vecTables[i] = layer.ptrWriter->Writer()->GetTable();
+                    vecRowCounts[i] = layer.ptrWriter->Writer()->GetRowCount();
                 }
                 for(STableRun* pTable : {&run.routes, &run.restrictions, &run.tagsTable})
                 {
@@ -797,7 +811,12 @@ namespace GraphEngine {
                 if(m_ptrMap.get() && m_settings.bAddLayersToMap)
                 {
                     for(size_t i = 0; i < vecRunLayers.size(); ++i)
+                    {
+                        // Convert of a map without counts creates the tables of all the layers: the empty ones aren't shown
+                        if(bSkipEmptyLayers && vecRowCounts[i] == 0)
+                            continue;
                         AddMapLayer(*vecRunLayers[i], vecTables[i]);
+                    }
                 }
 
                 run.Report(OSMStageFinish, "Done");

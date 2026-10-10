@@ -162,5 +162,10 @@ namespace GraphEngine {
 
         }*/
 
+        GeometryCompression::SShapeCompressParams CEnvelope::GetCompressParams() const
+        {
+            CommonLib::Units units = m_pSpatialRef.get() ? m_pSpatialRef->GetUnits() : CommonLib::UnitsUnknown;
+            return GeometryCompression::CompressParamsForExtent(m_box, units);
+        }
     }
     }

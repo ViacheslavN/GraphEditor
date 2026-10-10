@@ -284,6 +284,7 @@ namespace GraphEngine {
         CommonLib::IGeoShapePtr CSQLiteSelectCursor::ReadShape(int32_t col) const
         {
 
+            // CGeoShape takes raw and compressed blobs (GeometryCompression), a compressed one is decoded while it is read
             if(m_ptrCacheShape.get() == nullptr)
                 m_ptrCacheShape = std::make_shared<CommonLib::CGeoShape>();
 

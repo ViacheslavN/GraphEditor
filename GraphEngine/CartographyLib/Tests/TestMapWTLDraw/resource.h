@@ -91,6 +91,14 @@
 #define IDC_MAP_EXTENT                  1212
 #define IDC_LAYER_SCALE_SYMBOLS         1213
 #define IDC_LAYER_REF_SCALE_NOTE        1214
+#define IDC_OSM_CONVERT_ALL             1215
+#define IDC_OSM_EXPORT_TAGS             1216
+#define IDC_OSM_COMPRESS                1217
+#define IDC_OSM_SCALE_AUTO              1218
+#define IDC_OSM_SCALE_MAX               1219
+#define IDC_OSM_SCALE_MANUAL            1220
+#define IDC_OSM_SCALE_VALUE             1221
+#define IDC_OSM_SCALE_INFO              1222
 #define IDC_TABS                        1010
 #define IDC_SELECTOR_TYPE               1011
 #define IDC_SYMB_FIELD                  1012
@@ -168,7 +176,7 @@
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        201
 #define _APS_NEXT_COMMAND_VALUE         32799
-#define _APS_NEXT_CONTROL_VALUE         1215
+#define _APS_NEXT_CONTROL_VALUE         1223
 #define _APS_NEXT_SYMED_VALUE           113
 #endif
 #endif

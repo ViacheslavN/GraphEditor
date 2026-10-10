@@ -1,5 +1,7 @@
 #pragma once
 #include "OSMConvertorLib.h"
+#include "../../../GeometryCompression/ShapeCompressor.h"
+#include "../../../CommonLib/SpatialData/GeoShape.h"
 
 namespace GraphEngine {
     namespace Convertors {
@@ -32,6 +34,8 @@ namespace GraphEngine {
             void SetInt64(int nField, int64_t nValue);
             void SetText(int nField, const std::string& sValue);
             void SetShape(CommonLib::IGeoShapePtr ptrShape);
+            // the shapes are written compressed (GeometryCompression), null - as they are
+            void SetCompressor(std::shared_ptr<GeometryCompression::CShapeCompressor> ptrCompressor) { m_ptrCompressor = ptrCompressor; }
             void Insert();
 
             // saves the extent of a spatial table
@@ -63,6 +67,9 @@ namespace GraphEngine {
             Geometry::ISpatialReferencePtr    m_ptrSpatRef;
             CommonLib::bbox                   m_extent;
             uint64_t                          m_nRows;
+            std::shared_ptr<GeometryCompression::CShapeCompressor>    m_ptrCompressor;
+            std::shared_ptr<CommonLib::CGeoShape> m_ptrCompressed;   // reused for every row
+            std::vector<uint8_t>              m_vecBlob;
         };
 
         typedef std::shared_ptr<COSMTableWriter> COSMTableWriterPtr;

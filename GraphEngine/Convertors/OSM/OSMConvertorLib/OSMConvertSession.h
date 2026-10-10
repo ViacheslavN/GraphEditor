@@ -35,7 +35,8 @@ namespace GraphEngine {
             bool HasNodeStore() const { return m_ptrNodes.get() && m_ptrNodes->IsFinished(); }
 
         private:
-            void ConvertDatasets(const std::vector<IOSMDatasetPtr>& vecDatasets, IProgressUpdaterPtr ptrProgress, Display::ITrackCancelPtr ptrCancel);
+            // bSkipEmptyLayers - the layers without features aren't added to the map (their tables are created)
+            void ConvertDatasets(const std::vector<IOSMDatasetPtr>& vecDatasets, bool bSkipEmptyLayers, IProgressUpdaterPtr ptrProgress, Display::ITrackCancelPtr ptrCancel);
             std::string DatasetKey(const IOSMDatasetPtr& ptrDataset) const;
             void AddMapLayer(const IOSMLayer& osmLayer, GeoDatabase::ITablePtr ptrTable);
 

@@ -1,5 +1,6 @@
 #pragma once
 #include "Geometry.h"
+#include "../GeometryCompression/ShapeCompressor.h"
 
 namespace GraphEngine {
     namespace Geometry {
@@ -24,6 +25,10 @@ namespace GraphEngine {
             virtual bool Intersect(IEnvelopePtr envelope);
             virtual void Project(ISpatialReferencePtr spatRef);
              virtual IEnvelopePtr	Clone() const;
+
+            // the parameters of the geometry compression for the shapes inside the envelope:
+            // the precision by the units of the spatial reference (GeometryCompression::CompressParamsForExtent)
+            GeometryCompression::SShapeCompressParams GetCompressParams() const;
         private:
             CommonLib::bbox m_box;
             ISpatialReferencePtr m_pSpatialRef;

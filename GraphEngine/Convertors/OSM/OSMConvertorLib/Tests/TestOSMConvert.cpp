@@ -12,6 +12,7 @@
 #include "../../../../GeoDatabase/GeoDatabaseSQlite/SQLiteWorkspace.h"
 #include "../../../../CartographyLib/Map.h"
 
+#include "../../../../GeometryCompression/ShapeFormat.h"
 #include <algorithm>
 #include <cmath>
 #include <filesystem>
@@ -164,7 +165,11 @@ TEST_CASE("OSM conversion: the whole map", "[osm][convert]")
         REQUIRE(ptrCursor->ReadText(1) == "r");
         REQUIRE(ptrCursor->ReadText(2) == "landuse");
         REQUIRE(ptrCursor->ReadText(3) == "forest");
-        REQUIRE(ptrCursor->ReadShape(4)->GetPartCount() == 2);
+        CommonLib::IGeoShapePtr ptrShape = ptrCursor->ReadShape(4);
+        REQUIRE(ptrShape->GetPartCount() == 2);
+        // the geometry is written compressed (SOSMConvertSettings::compression)
+        REQUIRE(ptrShape->Data()[0] == GeometryCompression::ShapeCompressedFlag);
+        REQUIRE(ptrShape->GetPointCnt() == 10);
     }
 
     REQUIRE(RowCount(ptrDb, "osm_roads") == 2);
@@ -192,6 +197,39 @@ TEST_CASE("OSM conversion: the whole map", "[osm][convert]")
     }
     REQUIRE(RowCount(ptrDb, "osm_tags") == 17);
     REQUIRE(Query(ptrDb, "osm_tags", "SELECT value FROM osm_tags WHERE osm_type = 'w' AND osm_id = 203 AND key = 'maxspeed'")->ReadText(0) == "50 mph");
+}
+
+TEST_CASE("OSM conversion: without reading the map first", "[osm][convert]")
+{
+    std::string sPath = WriteFile(ConvertOSM, "convert_all.osm");
+    COSMConvertor convertor(TestSettings());
+    IOSMMapPtr ptrOSMMap = convertor.CreateMap(sPath);
+    REQUIRE_FALSE(ptrOSMMap->IsScanned());
+    REQUIRE(ptrOSMMap->GetNodeCount() == 0);
+    REQUIRE(ptrOSMMap->FindLayer("roads")->GetFeatureCount() == 0);
+
+    GeoDatabase::IDatabaseWorkspacePtr ptrDb = CreateDatabase("osm_all_unscanned");
+    Cartography::IMapPtr ptrMap = std::make_shared<Cartography::CMap>();
+    convertor.Convert(ptrOSMMap, ptrMap, ptrDb, IProgressUpdaterPtr(), Display::ITrackCancelPtr());
+
+    // the same as after ReadMap: the empty layers aren't added to the map
+    REQUIRE(ptrMap->GetLayers()->GetLayerCount() == 4);
+    REQUIRE(ptrMap->GetLayers()->GetLayer(0)->GetName() == "Landuse");
+    REQUIRE(ptrMap->GetLayers()->GetLayer(3)->GetName() == "Places");
+    REQUIRE(RowCount(ptrDb, "osm_landuse") == 1);
+    REQUIRE(RowCount(ptrDb, "osm_roads") == 2);
+    REQUIRE(RowCount(ptrDb, "osm_pois") == 1);
+    REQUIRE(RowCount(ptrDb, "osm_routes") == 1);
+    REQUIRE(RowCount(ptrDb, "osm_routes_members") == 3);
+    REQUIRE(RowCount(ptrDb, "osm_restrictions") == 1);
+    REQUIRE(RowCount(ptrDb, "osm_tags") == 17);
+
+    // ConvertFromXML doesn't read the map first either
+    GeoDatabase::IDatabaseWorkspacePtr ptrDb2 = CreateDatabase("osm_from_xml");
+    Cartography::IMapPtr ptrMap2 = std::make_shared<Cartography::CMap>();
+    convertor.ConvertFromXML(sPath, ptrMap2, ptrDb2, IProgressUpdaterPtr(), Display::ITrackCancelPtr());
+    REQUIRE(ptrMap2->GetLayers()->GetLayerCount() == 4);
+    REQUIRE(RowCount(ptrDb2, "osm_roads") == 2);
 }
 
 TEST_CASE("OSM conversion: session, datasets one by one", "[osm][convert]")
@@ -235,4 +273,54 @@ TEST_CASE("OSM conversion: session, datasets one by one", "[osm][convert]")
     // not the removed pois: 203 (4 of 5 tags), 41 (2 of 3), 2000, 2001, 2002 (2 each)
     REQUIRE(RowCount(ptrDb, "osm_tags") == 12);
     ptrSession->Close();
+}
+
+TEST_CASE("OSM conversion: compression settings", "[osm][convert]")
+{
+    std::string sPath = WriteFile(ConvertOSM, "compress.osm");
+    SOSMConvertSettings settings = TestSettings();
+
+    // the parameters: auto by the units, maximum by the extent (the bounds of a read map, the world otherwise), manual
+    COSMConvertor convertor(settings);
+    IOSMMapPtr ptrRead = convertor.ReadMap(sPath, IProgressUpdaterPtr(), Display::ITrackCancelPtr());
+    IOSMMapPtr ptrNotRead = convertor.CreateMap(sPath);
+    REQUIRE(convertor.GetCompressParams(ptrRead).nScaleExponent == 2);
+    settings.compression.scale = OSMCompressScaleMaximum;
+    REQUIRE(COSMConvertor::CompressParams(settings, ptrRead).nScaleExponent == 9);      // y ~ 6.4e6 m
+    REQUIRE(COSMConvertor::CompressParams(settings, ptrNotRead).nScaleExponent == 8);   // the world, 2e7 m
+    settings.bWebMercator = false;
+    REQUIRE(COSMConvertor::CompressParams(settings, ptrRead).nScaleExponent == 14);     // 50 degrees
+    settings.compression.scale = OSMCompressScaleAuto;
+    REQUIRE(COSMConvertor::CompressParams(settings, ptrRead).nScaleExponent == 7);
+    settings.compression.scale = OSMCompressScaleManual;
+    settings.compression.nManualScaleExponent = 30;
+    REQUIRE_THROWS(COSMConvertor::CompressParams(settings, ptrRead));
+
+    // a manual scale: the coordinates are rounded to meters
+    settings = TestSettings();
+    settings.compression.scale = OSMCompressScaleManual;
+    settings.compression.nManualScaleExponent = 0;
+    {
+        COSMConvertor manual(settings);
+        GeoDatabase::IDatabaseWorkspacePtr ptrDb = CreateDatabase("osm_compress_manual");
+        manual.Convert(manual.CreateMap(sPath), Cartography::IMapPtr(), ptrDb, IProgressUpdaterPtr(), Display::ITrackCancelPtr());
+        GeoDatabase::ISelectCursorPtr ptrCursor = Query(ptrDb, "osm_pois", "SELECT Shape FROM osm_pois");
+        CommonLib::IGeoShapePtr ptrShape = ptrCursor->ReadShape(0);
+        REQUIRE(ptrShape->Data()[0] == GeometryCompression::ShapeCompressedFlag);
+        CommonLib::GisXYPoint pt;
+        REQUIRE(ptrShape->NextPoint(0, pt));
+        REQUIRE(pt.x == std::round(pt.x));
+        REQUIRE(pt.x == Catch::Approx(14.05 * 20037508.342789244 / 180).margin(0.5));
+    }
+
+    // disabled: the shapes are raw
+    settings = TestSettings();
+    settings.compression.bEnabled = false;
+    {
+        COSMConvertor raw(settings);
+        GeoDatabase::IDatabaseWorkspacePtr ptrDb = CreateDatabase("osm_compress_off");
+        raw.Convert(raw.CreateMap(sPath), Cartography::IMapPtr(), ptrDb, IProgressUpdaterPtr(), Display::ITrackCancelPtr());
+        GeoDatabase::ISelectCursorPtr ptrCursor = Query(ptrDb, "osm_roads", "SELECT Shape FROM osm_roads");
+        REQUIRE(ptrCursor->ReadShape(0)->Data()[0] == 0);
+    }
 }
