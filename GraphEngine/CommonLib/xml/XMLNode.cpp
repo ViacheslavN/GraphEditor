@@ -348,7 +348,7 @@ namespace CommonLib
 							pSteam->Write(" ");
 							pSteam->Write(m_Props[i].first.c_str());
 							pSteam->Write("=\"");
-							pSteam->Write(m_Props[i].second.c_str());
+							pSteam->Write(CXMLUtils::EscapeAttribute(m_Props[i].second).c_str());
 							pSteam->Write("\"");
 						}
 
@@ -376,7 +376,7 @@ namespace CommonLib
 							bClose = true;
 						}
 
-						pSteam->Write(m_textUtf8.c_str());
+						pSteam->Write(CXMLUtils::EscapeText(m_textUtf8).c_str());
 					}
 
 					if (!m_caData.empty())

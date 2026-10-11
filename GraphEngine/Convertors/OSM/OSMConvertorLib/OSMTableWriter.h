@@ -7,6 +7,7 @@ namespace GraphEngine {
     namespace Convertors {
 
         // Creates a table in the database workspace and inserts rows into it (in the given transaction).
+        // The excluded fields (SField::bExcluded) keep their indexes for Set..., they aren't created.
         // The OID field (int64, primary key) is added and filled automatically; a spatial table has the field Shape,
         // its extent is calculated from the inserted shapes and saved by Finish.
         class COSMTableWriter
@@ -19,6 +20,7 @@ namespace GraphEngine {
             {
                 std::string             sName;
                 GeoDatabase::eDataTypes type;
+                bool                    bExcluded = false;   // no column: the values set for the field are ignored
             };
 
             // shapeType == shape_type_null - a table without geometry
@@ -33,6 +35,7 @@ namespace GraphEngine {
             // values of the current row, the fields which aren't set are NULL
             void SetInt64(int nField, int64_t nValue);
             void SetText(int nField, const std::string& sValue);
+            void SetText(int nField, const char* pszValue);
             void SetShape(CommonLib::IGeoShapePtr ptrShape);
             // a blob compressed already (CShapeCompressor, the parallel ways pass): it is written as it is
             void SetShapeBlob(const uint8_t* pData, size_t nSize);
@@ -47,6 +50,7 @@ namespace GraphEngine {
             void Finish();
 
             uint64_t                GetRowCount() const { return m_nRows; }
+            double                  GetInsertSeconds() const { return m_dInsertSeconds; }   // Insert: binding, compression, the database
             GeoDatabase::ITablePtr  GetTable() const { return m_ptrTable; }
             const std::string&      GetTableName() const { return m_sTableName; }
 
@@ -76,6 +80,7 @@ namespace GraphEngine {
             std::shared_ptr<CommonLib::CGeoShape> m_ptrCompressed;   // reused for every row
             std::vector<uint8_t>              m_vecBlob;
             bool                              m_bShapeCompressed = false;   // the shape is a compressed blob already
+            double                            m_dInsertSeconds = 0.;
         };
 
         typedef std::shared_ptr<COSMTableWriter> COSMTableWriterPtr;

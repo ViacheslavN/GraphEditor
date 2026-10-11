@@ -5,6 +5,7 @@
 #include "renders/RenderersLoader.h"
 #include "legend/Legend.h"
 #include "../GeoDatabase/DatasetLoader.h"
+#include "../../CommonLib/synch/ThreadCancel.h"
 
 namespace GraphEngine {
     namespace Cartography {
@@ -130,7 +131,21 @@ namespace GraphEngine {
             GeoDatabase::IRowPtr ptrRow = ptrCursor->CreateRow();
             uint32_t nRow = 0;
 
-            ptrDisplay->Lock();
+            // The display (the picture the UI thread copies while the map is drawn) is locked only while a feature is
+            // drawn, never while the rows are read: a read can wait for the disk (a big database on a HDD: random reads
+            // of the rows found by the spatial index), and the UI thread would wait for it in its paint.
+            struct SDisplayLock
+            {
+                Display::IDisplayPtr ptrDisplay;
+                bool bLocked = false;
+                void Lock() { if(!bLocked) { ptrDisplay->Lock(); bLocked = true; } }
+                void UnLock() { if(bLocked) { bLocked = false; ptrDisplay->UnLock(); } }
+                ~SDisplayLock() { UnLock(); }
+            } displayLock{ptrDisplay};
+
+            // a step of the query can read many rows before it returns one (a filter, a big database on a HDD):
+            // the database checks the cancel inside the step too, StopDraw doesn't wait for it
+            CommonLib::synch::CThreadCancelScope cancelScope([&ptrTrackCancel]() { return !ptrTrackCancel.get() || ptrTrackCancel->Continue(); });
             try
             {
                 while (ptrCursor->Next())
@@ -139,9 +154,6 @@ namespace GraphEngine {
                     {
                         if (ptrTrackCancel.get() && !ptrTrackCancel->Continue())
                             break;
-
-                        ptrDisplay->UnLock();
-                        ptrDisplay->Lock();
                     }
                     nRow++;
 
@@ -150,10 +162,12 @@ namespace GraphEngine {
 
                     ptrCursor->FillRow(ptrRow);
 
+                    displayLock.Lock();
                     if(ptrCustomSymbol.get())
                     {
                         // custom symbol (selection): draw once, renderer is used only to get the shape
                         vecRenderers[0]->DrawFeature(ptrDisplay, ptrRow, ptrCustomSymbol);
+                        displayLock.UnLock();
                         continue;
                     }
 
@@ -163,6 +177,7 @@ namespace GraphEngine {
                     // annotation is drawn right after its feature
                     if (ptrAnnoRenderer.get())
                         ptrAnnoRenderer->DrawFeature(ptrDisplay, ptrRow);
+                    displayLock.UnLock();
 
                     // labels are only collected, the label drawer places and draws them after all layers
                     if (ptrLabelRenderer.get())
@@ -173,20 +188,23 @@ namespace GraphEngine {
                 // symbols which collect the features (multi layer symbol with UseCache) draw them now
                 if(!ptrCustomSymbol.get())
                 {
+                    displayLock.Lock();
                     for (size_t i = 0, sz = vecRenderers.size(); i < sz; ++i)
                     {
                         ISymbolSelectorPtr ptrSelector = vecRenderers[i]->GetSymbolSelector();
                         if(ptrSelector.get())
                             ptrSelector->FlushBuffers(ptrDisplay, ptrTrackCancel);
                     }
+                    displayLock.UnLock();
                 }
             }
             catch (...)
             {
-                ptrDisplay->UnLock();
+                // the step interrupted by the cancel: not an error
+                if(ptrTrackCancel.get() && !ptrTrackCancel->Continue())
+                    return;
                 throw;
             }
-            ptrDisplay->UnLock();
         }
 
         void CFeatureLayer::DrawFeatures(eDrawPhase phase, const std::vector<int64_t>& vecOids, Display::IDisplayPtr ptrDisplay, Display::ITrackCancelPtr ptrTrackCancel, Display::ISymbolPtr ptrCustomSymbol) const

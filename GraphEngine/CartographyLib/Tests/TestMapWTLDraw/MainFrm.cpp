@@ -33,6 +33,7 @@ BOOL CMainFrame::OnIdle()
 	UISetCheck(ID_VIEW_3D, b3D ? 1 : 0);
 	UIEnable(ID_TILT_UP, b3D);
 	UIEnable(ID_TILT_DOWN, b3D);
+	UIEnable(ID_STOP_DRAWING, m_view.IsDrawing());
 	UIUpdateToolBar();
 	return FALSE;
 }

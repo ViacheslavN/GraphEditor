@@ -4,31 +4,37 @@
 #include "../../../DisplayLib/DisplayLib.h"
 #include "../../../CartographyLib/Cartography.h"
 #include "../../../GeometryCompression/ShapeCompressor.h"
+#include "LayerColumnExcludeList.h"
 
 // OpenStreetMap (.osm XML, .osm.pbf) -> GraphEngine workspace and map.
 //
 // OSM has no layers or tables: only nodes, ways and relations with free key=value tags.
-// The converter classifies them into datasets, the object model of a file (IOSMConvertor::ReadMap,
-// a fast pass over the tags only):
+// The converter classifies them into datasets, the object model of a file (IOSMConvertor::Analyze,
+// one pass over the file without the node coordinates):
 //
 //   IOSMMap               the file: format, bounds, numbers of nodes / ways / relations
 //    +- IOSMLayer         thematic spatial layer (Roads, Buildings, Water ...): geometry type, table name
 //    +- IOSMTable         non spatial table (Routes + members, Turn restrictions, Tags)
+//        +- SOSMColumn        column of the table: the columns of the converter (osm_id, class, type ...),
+//                             the fields of the schema and (Analyze) the OSM keys met on the features of the layer
 //        +- IOSMTagKey        OSM key the dataset is made of (highway, landuse, route ...)
 //            +- IOSMTagValue  value of the key (motorway, residential, bus ...) with the number of features
 //
-// Every level has the Enabled flag: a feature is converted when its dataset, key and value are enabled.
-// The datasets can be removed from the map, the map is serializable (the selection can be saved).
+// The map is serializable. What isn't converted is CLayerColumnExcludeList: the excluded layers / tables and
+// the excluded columns of a layer, an empty list - everything.
 //
-// Conversion: IOSMConvertor::Convert - everything enabled at once, or IOSMConvertSession -
-// the datasets one by one (the node coordinates are read once and kept in a temporary file for the session).
+// Conversion: IOSMConvertor::Convert - all the datasets which aren't excluded in one set of passes over the file
+// (nodes -> node store + points + relations, ways, multipolygons).
+//
+// Split data (IOSMConvertor::Split, OSMSplitFormat.h): the OSM file is split once into a folder - the nodes, the ways with
+// their coordinates, the relations (data + index by id) and the metadata (the analysis, the symbols); Analyze / CreateMap
+// open it (osm_split.xml) at once and Convert exports it without the OSM file and without node lookups.
 
 namespace GraphEngine {
     namespace Convertors {
 
         typedef std::shared_ptr<class IProgressUpdater> IProgressUpdaterPtr;
         typedef std::shared_ptr<class IOSMConvertor> IOSMConvertorPtr;
-        typedef std::shared_ptr<class IOSMConvertSession> IOSMConvertSessionPtr;
         typedef std::shared_ptr<class IOSMMap> IOSMMapPtr;
         typedef std::shared_ptr<class IOSMDataset> IOSMDatasetPtr;
         typedef std::shared_ptr<class IOSMLayer> IOSMLayerPtr;
@@ -40,7 +46,8 @@ namespace GraphEngine {
         {
             OSMFormatUnknown = 0,
             OSMFormatXML     = 1,   // .osm
-            OSMFormatPBF     = 2    // .pbf, .osm.pbf
+            OSMFormatPBF     = 2,   // .pbf, .osm.pbf
+            OSMFormatSplit   = 3    // the split data: the folder with osm_split.xml (the path of the map is that file)
         };
 
         enum eOSMGeometryType
@@ -59,17 +66,39 @@ namespace GraphEngine {
 
         enum eOSMStage
         {
-            OSMStageReadMap        = 0,   // analysis of the tags
+            OSMStageAnalyze        = 0,   // analysis of the file: datasets, columns, counts
             OSMStageNodes          = 1,   // nodes and relations
             OSMStageSortNodes      = 2,   // node coordinates of an unsorted file
             OSMStageWays           = 3,
             OSMStageMultipolygons  = 4,
-            OSMStageFinish         = 5
+            OSMStageFinish         = 5,
+            OSMStageSplit          = 6    // splitting the file into the split data (nodes, ways, relations, metadata)
+        };
+
+        // A part of the work of the current stage, to see where the time goes (the bottleneck):
+        // the objects / rows / blocks, the data read or written and the time spent on it.
+        struct SOSMProgressItem
+        {
+            std::string sName;              // "Reading the file", "Nodes", "Line features" ...
+            std::string sInfo;              // what is done: the file, the tables, the threads
+            uint64_t    nCount = 0;         // objects / rows / blocks, 0 - not counted
+            uint64_t    nBytes = 0;         // the data read / written, 0 - none
+            double      dSeconds = 0.;      // the time spent on it in the stage
+            bool        bThreads = false;   // dSeconds is summed over several threads (CPU time of a pool, can exceed the stage time)
+        };
+
+        // a finished stage of the task
+        struct SOSMStageSummary
+        {
+            eOSMStage   stage = OSMStageAnalyze;
+            std::string sMessage;
+            double      dSeconds = 0.;
+            std::vector<SOSMProgressItem> vecItems;
         };
 
         struct SOSMProgress
         {
-            eOSMStage   stage = OSMStageReadMap;
+            eOSMStage   stage = OSMStageAnalyze;
             uint64_t    nNodes = 0;       // read in the current pass
             uint64_t    nWays = 0;
             uint64_t    nRelations = 0;
@@ -87,6 +116,11 @@ namespace GraphEngine {
             // the stages after the reading: multipolygons built / layers with the spatial index built, of all
             uint64_t    nStepDone = 0;
             uint64_t    nStepTotal = 0;
+
+            // the details of the current stage (what is read / written where, how long it takes) and the finished stages
+            double      dStageSeconds = 0.;
+            std::vector<SOSMProgressItem> vecItems;
+            std::vector<SOSMStageSummary> vecStages;
         };
 
         class IProgressUpdater {
@@ -95,6 +129,17 @@ namespace GraphEngine {
             virtual ~IProgressUpdater() = default;
             // called from the converting thread from time to time
             virtual void UpdateStatusInfo(const SOSMProgress& progress) = 0;
+        };
+
+        // a column of the table of a dataset
+        struct SOSMColumn
+        {
+            std::string sName;              // the column in the destination table
+            std::string sKey;               // the OSM key of the value, empty - made by the converter (osm_id, osm_type, name, class, type,
+                                            // the columns of the tables)
+            bool        bInteger = false;   // int64, otherwise text
+            bool        bRequired = false;  // always written, can't be excluded (osm_id; type - the map styles draw by it)
+            uint64_t    nCount = 0;         // features / records having the value (Analyze), 0 - unknown
         };
 
         class IOSMTagValue
@@ -137,19 +182,19 @@ namespace GraphEngine {
             virtual const std::string&  GetDisplayName() const = 0;   // "Roads", "Routes" ...
             virtual const std::string&  GetTableName() const = 0;     // table in the destination workspace
             virtual void                SetTableName(const std::string& sTableName) = 0;
-            virtual uint64_t            GetFeatureCount() const = 0;  // features / records found by ReadMap
-            virtual bool                GetEnabled() const = 0;
-            virtual void                SetEnabled(bool bEnabled) = 0;
+            virtual uint64_t            GetFeatureCount() const = 0;  // features / records found by Analyze
+
+            // the columns of the table (the converter columns first, the OSM keys sorted by the number of features)
+            virtual int                 GetColumnCount() const = 0;
+            virtual const SOSMColumn&   GetColumn(int nIndex) const = 0;
+            virtual int                 FindColumn(const std::string& sName) const = 0;   // -1 - no such column
 
             virtual int                 GetKeyCount() const = 0;
             virtual IOSMTagKeyPtr       GetKey(int nIndex) const = 0;
             virtual IOSMTagKeyPtr       FindKey(const std::string& sKey) const = 0;
 
-            // the key and the value are enabled (a value which wasn't met by ReadMap is enabled),
-            // the Enabled flag of the dataset itself isn't checked
+            // the key and the value are enabled (a value which wasn't met by Analyze is enabled)
             virtual bool                IsValueEnabled(const std::string& sKey, const std::string& sValue) const = 0;
-            // GetEnabled() && IsValueEnabled()
-            virtual bool                IsEnabled(const std::string& sKey, const std::string& sValue) const = 0;
         };
 
         class IOSMLayer : public IOSMDataset
@@ -186,8 +231,8 @@ namespace GraphEngine {
             virtual uint64_t            GetRelationCount() const = 0;
             // the objects are sorted by id: nodes, then ways, then relations (planet / extracts are)
             virtual bool                IsSorted() const = 0;
-            // the file was read by ReadMap: the counts / bounds are known; false - a map by CreateMap,
-            // the counts are 0 and every enabled dataset is converted (the empty ones are not added to the map)
+            // the file was read by Analyze: the counts / bounds / OSM key columns are known; false - a map by CreateMap,
+            // the counts are 0, only the converter / schema columns, every dataset is converted (the empty ones are not added to the map)
             virtual bool                IsScanned() const = 0;
 
             virtual int                 GetLayerCount() const = 0;
@@ -199,26 +244,6 @@ namespace GraphEngine {
             virtual IOSMTablePtr        GetTable(int nIndex) const = 0;
             virtual IOSMTablePtr        FindTable(const std::string& sName) const = 0;
             virtual void                RemoveTable(const std::string& sName) = 0;
-        };
-
-        // conversion of the datasets of an OSM map one by one into a workspace (and the map)
-        class IOSMConvertSession
-        {
-        public:
-            IOSMConvertSession(){}
-            virtual ~IOSMConvertSession(){}
-
-            virtual IOSMMapPtr                 GetOSMMap() const = 0;
-            virtual Cartography::IMapPtr       GetMap() const = 0;
-            virtual GeoDatabase::IDatabaseWorkspacePtr GetWorkspace() const = 0;
-
-            // all the enabled datasets which aren't converted yet (one set of passes over the file)
-            virtual void Convert(IProgressUpdaterPtr ptrProgress, Display::ITrackCancelPtr ptrCancel) = 0;
-            // one dataset of the map (also a disabled one, its keys / values selection is used)
-            virtual void ConvertDataset(IOSMDatasetPtr ptrDataset, IProgressUpdaterPtr ptrProgress, Display::ITrackCancelPtr ptrCancel) = 0;
-            virtual bool IsConverted(IOSMDatasetPtr ptrDataset) const = 0;
-            // deletes the temporary files (also done by the destructor)
-            virtual void Close() = 0;
         };
 
         // how the floating point coordinates are turned into the integers of the compressed geometry
@@ -250,7 +275,13 @@ namespace GraphEngine {
         {
             std::string sTempDir;              // UTF-8, the temporary files (node coordinates ~115 GB for the planet, multipolygon ways,
                                                // spatial index runs), created if it doesn't exist; empty - the system temporary folder
-            uint32_t    nNodeCacheMB = 512;    // memory for the node coordinates (the sorted node store) and the multipolygon ways, the rest is in temporary files
+            uint32_t    nNodeCacheMB = 512;    // memory for the node coordinates (the sorted node store, the caches of the lookups of the flat one)
+                                               // and the multipolygon ways, the rest is in temporary files
+            // the splitting with the flat node store (the planet): the node coordinates are loaded into memory by parts of this size,
+            // the ways get them without random reads of the disk (a part per pass over the ways); 0 - 60% of the physical memory
+            uint32_t    nWaysNodeMemoryMB = 0;
+            uint32_t    nNodeWriteBufferMB = 1024;   // the flat node store: the nodes are collected in memory and written by big blocks
+                                               // in the background (two halves: one is filled while the other one is written)
             bool        bWebMercator = true;   // geometry in Web Mercator (EPSG:3857), false - longitude / latitude (EPSG:4326)
             std::string sNameLanguage;         // "en", "de" ...: name:<language> is used for the names when it exists
             bool        bAddLayersToMap = true;
@@ -266,27 +297,35 @@ namespace GraphEngine {
             IOSMConvertor(){}
             virtual ~IOSMConvertor(){}
 
-            // reads the file (.osm or .pbf): metadata and the dataset hierarchy with the numbers of features,
-            // everything is enabled
-            virtual IOSMMapPtr ReadMap(const std::string& path, IProgressUpdaterPtr ptrProgress, Display::ITrackCancelPtr ptrCancel) = 0;
+            // analyzes the file (.osm or .pbf): metadata, the layers / tables with the numbers of features,
+            // their columns (the OSM keys met on the features of every layer) and the key / value hierarchy
+            virtual IOSMMapPtr Analyze(const std::string& path, IProgressUpdaterPtr ptrProgress, Display::ITrackCancelPtr ptrCancel) = 0;
 
-            // all the datasets of the schema without reading the file (no counts, everything is enabled):
-            // the conversion makes one pass less
+            // a folder of split data (osm_split.xml) is opened at once: its map is analyzed already
+
+            // all the datasets of the schema without reading the file (no counts, only the converter / schema columns):
+            // the conversion makes one pass less; the split data: its analyzed map
             virtual IOSMMapPtr CreateMap(const std::string& path) = 0;
 
             // the parameters of the geometry compression for the map (by the settings.compression): the extent is the bounds
-            // of the map (ReadMap) or the world (a map which isn't read) in the output coordinate system;
+            // of the map (Analyze) or the world (a map which isn't read) in the output coordinate system;
             // the result is used when the compression is enabled
             virtual GeometryCompression::SShapeCompressParams GetCompressParams(IOSMMapPtr ptrOSMMap) const = 0;
 
-            // tables of the datasets are created in the workspace (SQLite ...); ptrMap can be null
-            virtual IOSMConvertSessionPtr CreateSession(IOSMMapPtr ptrOSMMap, Cartography::IMapPtr ptrMap, GeoDatabase::IDatabaseWorkspacePtr ptrDstWorkspace) = 0;
-
-            // the enabled datasets of the OSM map: CreateSession + Convert
-            virtual void Convert(IOSMMapPtr ptrOSMMap, Cartography::IMapPtr ptrMap,
+            // the datasets of the OSM map without the excluded ones / their excluded columns: the tables are created in the workspace
+            // (SQLite ...) and filled in one set of passes over the file; ptrMap can be null
+            virtual void Convert(IOSMMapPtr ptrOSMMap, const CLayerColumnExcludeList& excludeList, Cartography::IMapPtr ptrMap,
                 GeoDatabase::IDatabaseWorkspacePtr ptrDstWorkspace, IProgressUpdaterPtr ptrProgress, Display::ITrackCancelPtr ptrCancel) = 0;
 
-            // the whole file: CreateMap + Convert
+            // Splits an OSM file (.osm / .pbf) into a folder (created; the files there are replaced): the nodes, the ways with
+            // their coordinates, the relations with the indexes by id, the metadata (the analysis of the file, the symbols of
+            // the layers), see OSMSplitFormat.h. One pass over a sorted file (planet / extracts), two passes otherwise.
+            // bKeepNodeFile - nodes.flat (the coordinates of all the nodes, not needed by the export) stays in the folder.
+            // Returns the map of the split data (OSMFormatSplit): Convert exports it without the OSM file.
+            virtual IOSMMapPtr Split(const std::string& path, const std::string& sFolder, bool bKeepNodeFile,
+                                     IProgressUpdaterPtr ptrProgress, Display::ITrackCancelPtr ptrCancel) = 0;
+
+            // the whole file: CreateMap + Convert with nothing excluded
             virtual void ConvertFromXML(const std::string& path, Cartography::IMapPtr ptrMap ,
                 GeoDatabase::IDatabaseWorkspacePtr ptrDstWorkspace, IProgressUpdaterPtr ptrProgress, Display::ITrackCancelPtr ptrCancel) = 0;
 

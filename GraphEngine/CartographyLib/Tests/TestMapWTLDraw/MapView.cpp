@@ -658,12 +658,33 @@ LRESULT CMapView::OnZoomOut(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/
 	return 0;
 }
 
+LRESULT CMapView::OnStopDrawing(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/)
+{
+	// the picture drawn so far stays (copied when the drawing thread finishes); the wait is short: the thread stops
+	// at the next row or inside the current query step (the SQLite progress handler)
+	m_ptrDrawer->StopDraw(true);
+	CheckDrawer();
+	Invalidate(FALSE);
+	return 0;
+}
+
+bool CMapView::IsDrawing() const
+{
+	return m_ptrDrawer->IsDrawing();
+}
+
 LRESULT CMapView::OnClearSelection(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/)
 {
 	if(m_bConverting)
 	{
 		m_bConvertCancel = true; // Esc cancels the running conversion
 		return 0;
+	}
+	if(m_ptrDrawer->IsDrawing())
+	{
+		// Esc stops the drawing first, the next Esc clears the selection
+		BOOL bHandled = TRUE;
+		return OnStopDrawing(0, ID_STOP_DRAWING, nullptr, bHandled);
 	}
 
 	if(m_project.GetMap()->GetSelection()->IsEmpty())
@@ -919,6 +940,7 @@ LRESULT CMapView::OnConvertFromOSM(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hW
 		return 0;
 
 	Convertors::IOSMMapPtr ptrOSMMap = dlg.GetOSMMap();
+	Convertors::CLayerColumnExcludeList excludeList = dlg.GetExcludeList();
 	Convertors::SOSMConvertSettings settings = dlg.GetSettings();
 	std::wstring sOutput = dlg.GetOutputPath();
 	std::string sOutputUtf8 = ToUtf8(sOutput.c_str());   // SQLite opens files with UTF-8 names
@@ -939,13 +961,29 @@ LRESULT CMapView::OnConvertFromOSM(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hW
 		{
 			ptrDb = GeoDatabase::CSQLiteWorkspace::Create(sNameUtf8.c_str(), sOutputUtf8.c_str(), CommonLib::CGuid::CreateNew());
 			Convertors::COSMConvertor convertor(settings);
-			convertor.Convert(ptrOSMMap, ptrNewMap, ptrDb, ptrProgress, ptrCancel);
+			convertor.Convert(ptrOSMMap, excludeList, ptrNewMap, ptrDb, ptrProgress, ptrCancel);
 		},
 		ptrOSMMap->GetNodeCount(), ptrOSMMap->GetWayCount(), ptrOSMMap->GetRelationCount());
 
 	m_bConverting = true;
 	INT_PTR nResult = progressDlg.DoModal(m_hWnd);
 	m_bConverting = false;
+
+	// the report of the stages (where the time went) next to the database: <output>.log, also for a canceled / failed conversion
+	const Convertors::SOSMProgress& lastProgress = progressDlg.GetLastProgress();
+	std::wstring sLogPath = sOutput + L".log";
+	{
+		std::string sResult = nResult == IDOK ? "done" : (nResult == IDCANCEL ? "canceled" : "failed: " + ToUtf8(progressDlg.GetError().c_str()));
+		std::string sReport = Convertors::COSMConvertor::FormatReport(lastProgress, sResult);
+		FILE* pFile = _wfopen(sLogPath.c_str(), L"wb");
+		if(pFile)
+		{
+			fwrite(sReport.data(), 1, sReport.size(), pFile);
+			fclose(pFile);
+		}
+		else
+			sLogPath.clear();
+	}
 
 	if(nResult != IDOK)
 	{
@@ -955,11 +993,12 @@ LRESULT CMapView::OnConvertFromOSM(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hW
 		for(const wchar_t* pszSuffix : {L"", L"-wal", L"-shm", L"-journal"})
 			::DeleteFileW((sOutput + pszSuffix).c_str());
 
+		std::wstring sLogInfo = sLogPath.empty() ? std::wstring() : L"\n\nThe details of the stages: " + sLogPath;
 		if(nResult == IDCANCEL)
-			::MessageBox(m_hWnd, L"The conversion is canceled.", pszCaption, MB_OK | MB_ICONINFORMATION);
+			::MessageBox(m_hWnd, (L"The conversion is canceled." + sLogInfo).c_str(), pszCaption, MB_OK | MB_ICONINFORMATION);
 		else
 		{
-			std::wstring sMsg = L"The conversion failed:\n" + progressDlg.GetError();
+			std::wstring sMsg = L"The conversion failed:\n" + progressDlg.GetError() + sLogInfo;
 			::MessageBox(m_hWnd, sMsg.c_str(), pszCaption, MB_OK | MB_ICONERROR);
 		}
 		return 0;
@@ -984,9 +1023,19 @@ LRESULT CMapView::OnConvertFromOSM(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hW
 
 	int nSeconds = (int)progressDlg.GetElapsedSeconds();
 	wchar_t szText[1024];
-	swprintf(szText, 1024, L"The OSM data are converted into\n%s\nin %d min %d s, %d layers are added to the map.",
+	swprintf(szText, 1024, L"The OSM data are converted into\n%s\nin %d min %d s, %d layers are added to the map.\n",
 		sOutput.c_str(), nSeconds / 60, nSeconds % 60, nLayers);
-	::MessageBox(m_hWnd, szText, pszCaption, MB_OK | MB_ICONINFORMATION);
+	std::wstring sMessage = szText;
+	for(const Convertors::SOSMStageSummary& stage : lastProgress.vecStages)
+	{
+		int nStage = (int)(stage.dSeconds + 0.5);
+		wchar_t szStage[256];
+		swprintf(szStage, 256, L"\n%s: %d min %d s", ToWide(stage.sMessage).c_str(), nStage / 60, nStage % 60);
+		sMessage += szStage;
+	}
+	if(!sLogPath.empty())
+		sMessage += L"\n\nThe details of the stages: " + sLogPath;
+	::MessageBox(m_hWnd, sMessage.c_str(), pszCaption, MB_OK | MB_ICONINFORMATION);
 	return 0;
 #endif
 }

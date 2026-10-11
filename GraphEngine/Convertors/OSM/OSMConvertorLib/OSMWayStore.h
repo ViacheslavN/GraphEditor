@@ -98,6 +98,10 @@ namespace GraphEngine {
             void Finish();
             bool Get(int64_t nId, TOSMPoints& points);
             uint64_t Count() const { return m_nCount; }
+            // the progress details: the temporary files
+            uint64_t BytesWritten() const { return (m_ptrPoints ? m_ptrPoints->Size() : 0) + (m_ptrIndex ? m_ptrIndex->Size() : 0); }
+            double   WriteSeconds() const { return (m_ptrPoints ? m_ptrPoints->WriteSeconds() : 0.) + (m_ptrIndex ? m_ptrIndex->WriteSeconds() : 0.); }
+            std::string PointsPath() const { return m_ptrPoints ? m_ptrPoints->Path() : std::string(); }
 
             static const uint32_t IndexBlockSize = 1024;   // entries
 

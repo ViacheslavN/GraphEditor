@@ -21,9 +21,7 @@ using namespace GraphEngine::Convertors;
 namespace
 {
 	const wchar_t* Caption = L"Convert from OpenStreetMap";
-	const LPARAM TableItem = 0x10000;   // item data: layer index, TableItem + table index
-
-	enum eColumns { ColName, ColKind, ColCount, ColTable };
+	const int TableItem = 0x10000;   // SItem::nDataset: layer index, TableItem + table index
 
 	bool FileExists(const std::wstring& sPath)
 	{
@@ -36,9 +34,17 @@ namespace
 		return sText.size() >= nLen && _wcsicmp(sText.c_str() + sText.size() - nLen, pszSuffix) == 0;
 	}
 
-	// C:\data\czech-republic-latest.osm.pbf -> C:\data\czech-republic-latest.sqlite
+	bool IsSplitData(const std::wstring& sPath)
+	{
+		return EndsWith(sPath, L"osm_split.xml");
+	}
+
+	// C:\data\czech-republic-latest.osm.pbf -> C:\data\czech-republic-latest.sqlite,
+	// C:\data\czech_split\osm_split.xml -> C:\data\czech_split.sqlite
 	std::wstring DefaultOutputPath(const std::wstring& sOSMPath)
 	{
+		if(IsSplitData(sOSMPath))
+			return std::filesystem::path(sOSMPath).parent_path().wstring() + L".sqlite";
 		std::wstring sPath = sOSMPath;
 		for(const wchar_t* pszSuffix : {L".osm.pbf", L".pbf", L".osm"})
 		{
@@ -65,10 +71,47 @@ namespace
 	{
 		switch(type)
 		{
-			case OSMTableRoutes:       return L"Table (+ members)";
-			case OSMTableRestrictions: return L"Table";
-			default:                   return L"Table (key / value)";
+			case OSMTableRoutes:       return L"table (+ members)";
+			case OSMTableRestrictions: return L"table";
+			default:                   return L"table (key / value)";
 		}
+	}
+
+	// 1234567 -> 1 234 567
+	std::wstring CountText(uint64_t nCount)
+	{
+		std::wstring sDigits = std::to_wstring(nCount);
+		std::wstring sText;
+		for(size_t i = 0; i < sDigits.size(); ++i)
+		{
+			if(i > 0 && (sDigits.size() - i) % 3 == 0)
+				sText += L' ';
+			sText += sDigits[i];
+		}
+		return sText;
+	}
+
+	// Roads: lines, 12 345 features -> osm_roads
+	std::wstring DatasetText(const IOSMDataset& dataset, const std::wstring& sKind, bool bScanned)
+	{
+		std::wstring sText = Utf8ToWide(dataset.GetDisplayName()) + L": " + sKind;
+		if(bScanned)
+			sText += L", " + CountText(dataset.GetFeatureCount()) + L" features";
+		return sText + L" -> " + Utf8ToWide(dataset.GetTableName());
+	}
+
+	// addr_street (addr:street): text, 1 234 / osm_id: integer, always
+	std::wstring ColumnText(const SOSMColumn& column, bool bScanned)
+	{
+		std::wstring sText = Utf8ToWide(column.sName);
+		if(!column.sKey.empty() && column.sKey != column.sName)
+			sText += L" (" + Utf8ToWide(column.sKey) + L")";
+		sText += column.bInteger ? L": integer" : L": text";
+		if(bScanned)
+			sText += L", " + CountText(column.nCount);
+		if(column.bRequired)
+			sText += L", always";
+		return sText;
 	}
 }
 
@@ -85,16 +128,13 @@ LRESULT CConvertOSMDlg::OnInitDialog(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*
 
 	m_editPath = GetDlgItem(IDC_OSM_PATH);
 	m_editOutput = GetDlgItem(IDC_OSM_OUTPUT);
-	m_listDatasets = GetDlgItem(IDC_OSM_DATASETS);
-
-	m_listDatasets.SetExtendedListViewStyle(LVS_EX_CHECKBOXES | LVS_EX_FULLROWSELECT | LVS_EX_GRIDLINES);
-	m_listDatasets.InsertColumn(ColName, L"Layer / table", LVCFMT_LEFT, 190);
-	m_listDatasets.InsertColumn(ColKind, L"Geometry", LVCFMT_LEFT, 110);
-	m_listDatasets.InsertColumn(ColCount, L"Features", LVCFMT_RIGHT, 90);
-	m_listDatasets.InsertColumn(ColTable, L"Table name", LVCFMT_LEFT, 150);
+	m_treeDatasets = GetDlgItem(IDC_OSM_DATASETS);
+	// TVS_CHECKBOXES is set after the control is created (see the documentation of the style)
+	m_treeDatasets.ModifyStyle(0, TVS_CHECKBOXES);
 
 	CheckDlgButton(IDC_OSM_WEB_MERCATOR, m_settings.bWebMercator ? BST_CHECKED : BST_UNCHECKED);
 	CheckDlgButton(IDC_OSM_ADD_TO_MAP, m_bAddToMap ? BST_CHECKED : BST_UNCHECKED);
+	CheckDlgButton(IDC_OSM_KEEP_NODES, BST_CHECKED);
 	CheckDlgButton(IDC_OSM_EXPORT_TAGS, m_bExportTags ? BST_CHECKED : BST_UNCHECKED);
 	const SOSMCompressSettings& compression = m_settings.compression;
 	CheckDlgButton(IDC_OSM_COMPRESS, compression.bEnabled ? BST_CHECKED : BST_UNCHECKED);
@@ -103,6 +143,7 @@ LRESULT CConvertOSMDlg::OnInitDialog(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*
 	SetDlgItemText(IDC_OSM_SCALE_VALUE, std::to_wstring(compression.nManualScaleExponent).c_str());
 	UpdateCompressControls();
 	SetDlgItemInt(IDC_OSM_NODE_CACHE, m_settings.nNodeCacheMB, FALSE);
+	SetDlgItemInt(IDC_OSM_WRITE_BUFFER, m_settings.nNodeWriteBufferMB, FALSE);
 
 	// the order is eOSMNodeStore
 	CComboBox comboStore = GetDlgItem(IDC_OSM_NODE_STORE);
@@ -128,21 +169,22 @@ void CConvertOSMDlg::UpdateInfo()
 
 	if(!bRead)
 	{
-		SetDlgItemText(IDC_OSM_INFO, L"Choose an .osm or .osm.pbf file and press Read: its layers and tables are shown here. "
-		                         L"Convert all converts everything without reading the file first (faster, no counts).");
+		SetDlgItemText(IDC_OSM_INFO, L"Choose an .osm or .osm.pbf file and press Analyze: its layers / tables and their columns are shown here. "
+		                         L"Convert all converts everything without the analysis (faster, no counts, no OSM key columns).");
 		return;
 	}
 
 	const CommonLib::bbox& bounds = m_ptrOSMMap->GetBounds();
 	wchar_t szText[512];
-	swprintf(szText, 512, L"Nodes: %llu, ways: %llu, relations: %llu, %s.\nLongitude %.4f .. %.4f, latitude %.4f .. %.4f",
+	swprintf(szText, 512, L"%sNodes: %llu, ways: %llu, relations: %llu, %s.\nLongitude %.4f .. %.4f, latitude %.4f .. %.4f",
+		m_ptrOSMMap->GetFormat() == OSMFormatSplit ? L"Split data (exported without the OSM file). " : L"",
 		(unsigned long long)m_ptrOSMMap->GetNodeCount(), (unsigned long long)m_ptrOSMMap->GetWayCount(),
 		(unsigned long long)m_ptrOSMMap->GetRelationCount(), m_ptrOSMMap->IsSorted() ? L"sorted" : L"not sorted (slower conversion)",
 		bounds.xMin, bounds.xMax, bounds.yMin, bounds.yMax);
 	SetDlgItemText(IDC_OSM_INFO, szText);
 }
 
-bool CConvertOSMDlg::ReadMap(const std::wstring& sPath)
+bool CConvertOSMDlg::AnalyzeMap(const std::wstring& sPath)
 {
 	if(sPath.empty() || !FileExists(sPath))
 	{
@@ -153,74 +195,216 @@ bool CConvertOSMDlg::ReadMap(const std::wstring& sPath)
 	// the OSM reader takes UTF-8 names
 	std::string sFilePath = WideToUtf8(sPath);
 	IOSMMapPtr ptrMap;
-	COSMProgressDlg progressDlg(L"Reading OpenStreetMap", [&sFilePath, &ptrMap](IProgressUpdaterPtr ptrProgress, Display::ITrackCancelPtr ptrCancel)
+	COSMProgressDlg progressDlg(L"Analyzing OpenStreetMap", [&sFilePath, &ptrMap](IProgressUpdaterPtr ptrProgress, Display::ITrackCancelPtr ptrCancel)
 	{
 		COSMConvertor convertor;
-		ptrMap = convertor.ReadMap(sFilePath, ptrProgress, ptrCancel);
+		ptrMap = convertor.Analyze(sFilePath, ptrProgress, ptrCancel);
 	});
 
 	INT_PTR nResult = progressDlg.DoModal(m_hWnd);
 	if(nResult == IDABORT)
 	{
-		std::wstring sMsg = L"Failed to read the OSM file:\n" + progressDlg.GetError();
+		std::wstring sMsg = L"Failed to analyze the OSM file:\n" + progressDlg.GetError();
 		MessageBox(sMsg.c_str(), Caption, MB_OK | MB_ICONERROR);
 	}
 	if(nResult != IDOK || !ptrMap.get())
 		return false;
 
+	SetMap(ptrMap, sPath);
+	return true;
+}
+
+void CConvertOSMDlg::SetMap(IOSMMapPtr ptrMap, const std::wstring& sPath)
+{
 	m_ptrOSMMap = ptrMap;
-	m_sReadPath = sPath;
+	m_sReadPath = sPath;    // before the path changes: the map is kept (OnPathChanged)
+	if(Trim(GetText(m_editPath)) != sPath)
+		m_editPath.SetWindowText(sPath.c_str());
 	FillDatasets();
 	UpdateInfo();
 	UpdateCompressControls();   // the maximum precision is by the bounds of the map
 
 	std::wstring sOutput = Trim(GetText(m_editOutput));
-	if(sOutput.empty())
+	if(sOutput.empty() || IsSplitData(sPath))
 		m_editOutput.SetWindowText(DefaultOutputPath(sPath).c_str());
-	return true;
+}
+
+LRESULT CConvertOSMDlg::OnSplit(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/)
+{
+	std::wstring sPath = Trim(GetText(m_editPath));
+	if(sPath.empty() || !FileExists(sPath) || IsSplitData(sPath))
+	{
+		MessageBox(L"Choose an .osm or .osm.pbf file to split.", Caption, MB_OK | MB_ICONWARNING);
+		GotoDlgCtrl(m_editPath);
+		return 0;
+	}
+
+	// the folder <file name>_split is created in the chosen folder
+	std::filesystem::path osmPath(sPath);
+	std::wstring sName = osmPath.filename().wstring();
+	for(const wchar_t* pszSuffix : {L".osm.pbf", L".pbf", L".osm"})
+	{
+		if(EndsWith(sName, pszSuffix))
+		{
+			sName.resize(sName.size() - wcslen(pszSuffix));
+			break;
+		}
+	}
+	sName += L"_split";
+	std::wstring sTitle = L"Folder for the split data (the folder " + sName + L" is created in it: nodes, ways, relations, metadata)";
+	CFolderDialog dlg(m_hWnd, sTitle.c_str(), BIF_RETURNONLYFSDIRS | BIF_NEWDIALOGSTYLE);
+	dlg.SetInitialFolder(osmPath.parent_path().wstring().c_str());
+	if(dlg.DoModal() != IDOK)
+		return 0;
+	std::wstring sFolder = (std::filesystem::path(dlg.GetFolderPath()) / sName).wstring();
+
+	if(FileExists((std::filesystem::path(sFolder) / L"osm_split.xml").wstring()))
+	{
+		std::wstring sMsg = L"The split data already exist:\n" + sFolder + L"\n\nReplace them?";
+		if(MessageBox(sMsg.c_str(), Caption, MB_YESNO | MB_ICONQUESTION) != IDYES)
+			return 0;
+	}
+
+	bool bKeepNodes = IsDlgButtonChecked(IDC_OSM_KEEP_NODES) == BST_CHECKED;
+	std::string sFilePath = WideToUtf8(sPath);
+	std::string sFolderUtf8 = WideToUtf8(sFolder);
+	// the node store as for the conversion (Auto: flat for the planet / continents, sorted for extracts), its memory,
+	// the temporary folder (empty - the split folder)
+	SOSMConvertSettings settings = m_settings;
+	int nStore = CComboBox(GetDlgItem(IDC_OSM_NODE_STORE)).GetCurSel();
+	settings.nodeStore = nStore == OSMNodeStoreSorted ? OSMNodeStoreSorted : (nStore == OSMNodeStoreFlat ? OSMNodeStoreFlat : OSMNodeStoreAuto);
+	BOOL bCacheOk = FALSE;
+	UINT nCacheMB = GetDlgItemInt(IDC_OSM_NODE_CACHE, &bCacheOk, FALSE);
+	settings.nNodeCacheMB = bCacheOk && nCacheMB >= 16 ? nCacheMB : 16;
+	UINT nBufferMB = GetDlgItemInt(IDC_OSM_WRITE_BUFFER, &bCacheOk, FALSE);
+	settings.nNodeWriteBufferMB = bCacheOk && nBufferMB >= 16 ? nBufferMB : 16;
+	settings.sTempDir = WideToUtf8(Trim(GetText(GetDlgItem(IDC_OSM_TEMP_DIR))));
+	IOSMMapPtr ptrMap;
+	COSMProgressDlg progressDlg(L"Splitting OpenStreetMap", [&](IProgressUpdaterPtr ptrProgress, Display::ITrackCancelPtr ptrCancel)
+	{
+		COSMConvertor convertor(settings);
+		ptrMap = convertor.Split(sFilePath, sFolderUtf8, bKeepNodes, ptrProgress, ptrCancel);
+	});
+
+	INT_PTR nResult = progressDlg.DoModal(m_hWnd);
+
+	// the report of the stages next to the data, also for a canceled / failed splitting
+	std::wstring sLogPath = (std::filesystem::path(sFolder) / L"split.log").wstring();
+	{
+		std::string sResult = nResult == IDOK ? "done" : (nResult == IDCANCEL ? "canceled" : "failed: " + WideToUtf8(progressDlg.GetError()));
+		std::string sReport = COSMConvertor::FormatReport(progressDlg.GetLastProgress(), sResult);
+		std::error_code ec;
+		std::filesystem::create_directories(std::filesystem::path(sFolder), ec);
+		if(FILE* pFile = _wfopen(sLogPath.c_str(), L"wb"))
+		{
+			fwrite(sReport.data(), 1, sReport.size(), pFile);
+			fclose(pFile);
+		}
+	}
+	if(nResult == IDABORT)
+	{
+		std::wstring sMsg = L"Failed to split the OSM file:\n" + progressDlg.GetError() + L"\n\nThe details of the stages: " + sLogPath;
+		MessageBox(sMsg.c_str(), Caption, MB_OK | MB_ICONERROR);
+	}
+	else if(nResult == IDCANCEL)
+	{
+		std::wstring sMsg = L"The splitting is canceled.\n\nThe details of the stages: " + sLogPath;
+		MessageBox(sMsg.c_str(), Caption, MB_OK | MB_ICONINFORMATION);
+	}
+	if(nResult != IDOK || !ptrMap.get())
+		return 0;
+
+	SetMap(ptrMap, (std::filesystem::path(sFolder) / L"osm_split.xml").wstring());
+	int nSeconds = (int)progressDlg.GetElapsedSeconds();
+	wchar_t szText[1024];
+	swprintf(szText, 1024, L"The OSM file is split into\n%s\nin %d min %d s (the details: split.log there).\n\n"
+		L"Run exports the checked layers from the split data; Browse opens them later (osm_split.xml).",
+		sFolder.c_str(), nSeconds / 60, nSeconds % 60);
+	MessageBox(szText, Caption, MB_OK | MB_ICONINFORMATION);
+	return 0;
 }
 
 void CConvertOSMDlg::FillDatasets()
 {
-	m_listDatasets.DeleteAllItems();
-	if(!m_ptrOSMMap.get())
-		return;
-
-	// the datasets without features are unchecked (they are skipped anyway)
 	m_bUpdating = true;
-	auto addItem = [this](IOSMDatasetPtr ptrDataset, const std::wstring& sKind, LPARAM nData)
+	m_treeDatasets.DeleteAllItems();
+	m_vecItems.clear();
+	if(!m_ptrOSMMap.get())
 	{
-		int nItem = m_listDatasets.GetItemCount();
-		nItem = m_listDatasets.InsertItem(nItem, Utf8ToWide(ptrDataset->GetDisplayName()).c_str());
-		m_listDatasets.SetItemText(nItem, ColKind, sKind.c_str());
-		m_listDatasets.SetItemText(nItem, ColCount, std::to_wstring(ptrDataset->GetFeatureCount()).c_str());
-		m_listDatasets.SetItemText(nItem, ColTable, Utf8ToWide(ptrDataset->GetTableName()).c_str());
-		m_listDatasets.SetItemData(nItem, nData);
-		bool bCheck = ptrDataset->GetEnabled() && ptrDataset->GetFeatureCount() > 0;
+		m_bUpdating = false;
+		return;
+	}
+
+	// everything is checked: the datasets without features are skipped anyway, the tags table by the check box;
+	// the required columns have no check box
+	const bool bScanned = m_ptrOSMMap->IsScanned();
+	auto addItem = [this](HTREEITEM hParent, const std::wstring& sText, int nDataset, int nColumn) -> HTREEITEM
+	{
+		SItem item;
+		item.nDataset = nDataset;
+		item.nColumn = nColumn;
+		m_vecItems.push_back(item);
+		HTREEITEM hItem = m_treeDatasets.InsertItem(TVIF_TEXT | TVIF_PARAM, sText.c_str(), 0, 0, 0, 0, (LPARAM)m_vecItems.size(), hParent, TVI_LAST);
+		return hItem;
+	};
+	auto addDataset = [&](IOSMDatasetPtr ptrDataset, const std::wstring& sKind, int nDataset)
+	{
+		HTREEITEM hDataset = addItem(TVI_ROOT, DatasetText(*ptrDataset, sKind, bScanned), nDataset, -1);
+		bool bCheck = !bScanned || ptrDataset->GetFeatureCount() > 0;
 		IOSMTablePtr ptrTable = std::dynamic_pointer_cast<IOSMTable>(ptrDataset);
 		if(ptrTable.get() && ptrTable->GetTableType() == OSMTableTags)
 			bCheck = bCheck && m_bExportTags;
-		m_listDatasets.SetCheckState(nItem, bCheck);
+		m_treeDatasets.SetCheckState(hDataset, bCheck);
+
+		for(int c = 0; c < ptrDataset->GetColumnCount(); ++c)
+		{
+			const SOSMColumn& column = ptrDataset->GetColumn(c);
+			HTREEITEM hColumn = addItem(hDataset, ColumnText(column, bScanned), nDataset, c);
+			if(column.bRequired)
+				m_treeDatasets.SetItemState(hColumn, INDEXTOSTATEIMAGEMASK(0), TVIS_STATEIMAGEMASK);
+			else
+				m_treeDatasets.SetCheckState(hColumn, TRUE);
+		}
 	};
 
 	for(int i = 0; i < m_ptrOSMMap->GetLayerCount(); ++i)
-		addItem(m_ptrOSMMap->GetLayer(i), GeometryText(m_ptrOSMMap->GetLayer(i)->GetGeometryType()), i);
+		addDataset(m_ptrOSMMap->GetLayer(i), GeometryText(m_ptrOSMMap->GetLayer(i)->GetGeometryType()), i);
 	for(int i = 0; i < m_ptrOSMMap->GetTableCount(); ++i)
-		addItem(m_ptrOSMMap->GetTable(i), TableText(m_ptrOSMMap->GetTable(i)->GetTableType()), TableItem + i);
+		addDataset(m_ptrOSMMap->GetTable(i), TableText(m_ptrOSMMap->GetTable(i)->GetTableType()), TableItem + i);
 	m_bUpdating = false;
 }
 
-int CConvertOSMDlg::FindTagsItem() const
+const CConvertOSMDlg::SItem* CConvertOSMDlg::GetItem(HTREEITEM hItem) const
+{
+	if(!hItem)
+		return nullptr;
+	LPARAM nData = m_treeDatasets.GetItemData(hItem);
+	if(nData <= 0 || nData > (LPARAM)m_vecItems.size())
+		return nullptr;
+	return &m_vecItems[nData - 1];
+}
+
+IOSMDatasetPtr CConvertOSMDlg::GetDataset(int nDataset) const
+{
+	if(nDataset >= TableItem)
+		return m_ptrOSMMap->GetTable(nDataset - TableItem);
+	return m_ptrOSMMap->GetLayer(nDataset);
+}
+
+HTREEITEM CConvertOSMDlg::FindTagsItem() const
 {
 	if(!m_ptrOSMMap.get())
-		return -1;
-	for(int i = 0; i < m_listDatasets.GetItemCount(); ++i)
+		return NULL;
+	for(HTREEITEM hItem = m_treeDatasets.GetRootItem(); hItem; hItem = m_treeDatasets.GetNextSiblingItem(hItem))
 	{
-		IOSMTablePtr ptrTable = std::dynamic_pointer_cast<IOSMTable>(GetDataset(i));
+		const SItem* pItem = GetItem(hItem);
+		if(!pItem)
+			continue;
+		IOSMTablePtr ptrTable = std::dynamic_pointer_cast<IOSMTable>(GetDataset(pItem->nDataset));
 		if(ptrTable.get() && ptrTable->GetTableType() == OSMTableTags)
-			return i;
+			return hItem;
 	}
-	return -1;
+	return NULL;
 }
 
 void CConvertOSMDlg::SetExportTags(bool bExport)
@@ -228,10 +412,36 @@ void CConvertOSMDlg::SetExportTags(bool bExport)
 	m_bExportTags = bExport;
 	m_bUpdating = true;
 	CheckDlgButton(IDC_OSM_EXPORT_TAGS, bExport ? BST_CHECKED : BST_UNCHECKED);
-	int nItem = FindTagsItem();
-	if(nItem >= 0 && (m_listDatasets.GetCheckState(nItem) != FALSE) != bExport)
-		m_listDatasets.SetCheckState(nItem, bExport);
+	HTREEITEM hItem = FindTagsItem();
+	if(hItem && (m_treeDatasets.GetCheckState(hItem) != FALSE) != bExport)
+		m_treeDatasets.SetCheckState(hItem, bExport);
 	m_bUpdating = false;
+}
+
+CLayerColumnExcludeList CConvertOSMDlg::BuildExcludeList() const
+{
+	CLayerColumnExcludeList excludeList;
+	for(HTREEITEM hDataset = m_treeDatasets.GetRootItem(); hDataset; hDataset = m_treeDatasets.GetNextSiblingItem(hDataset))
+	{
+		const SItem* pItem = GetItem(hDataset);
+		if(!pItem)
+			continue;
+		IOSMDatasetPtr ptrDataset = GetDataset(pItem->nDataset);
+		if(!m_treeDatasets.GetCheckState(hDataset))
+			excludeList.ExcludeLayer(ptrDataset->GetName());
+
+		// the columns are kept also for an excluded dataset: it can be included again by the list
+		for(HTREEITEM hColumn = m_treeDatasets.GetChildItem(hDataset); hColumn; hColumn = m_treeDatasets.GetNextSiblingItem(hColumn))
+		{
+			const SItem* pColumn = GetItem(hColumn);
+			if(!pColumn || pColumn->nColumn < 0)
+				continue;
+			const SOSMColumn& column = ptrDataset->GetColumn(pColumn->nColumn);
+			if(!column.bRequired && !m_treeDatasets.GetCheckState(hColumn))
+				excludeList.ExcludeColumn(ptrDataset->GetName(), column.sName);
+		}
+	}
+	return excludeList;
 }
 
 bool CConvertOSMDlg::GetCompressSettings(SOSMCompressSettings& compression, std::wstring& sError) const
@@ -311,42 +521,34 @@ LRESULT CConvertOSMDlg::OnExportTags(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*
 
 LRESULT CConvertOSMDlg::OnDatasetChanged(int /*idCtrl*/, LPNMHDR pnmh, BOOL& /*bHandled*/)
 {
-	// the check box of the tags item is clicked in the list
-	NMLISTVIEW* pItem = (NMLISTVIEW*)pnmh;
-	if(m_bUpdating || !(pItem->uChanged & LVIF_STATE) || ((pItem->uNewState ^ pItem->uOldState) & LVIS_STATEIMAGEMASK) == 0)
+	// the check box of the tags item is clicked in the tree
+	NMTVITEMCHANGE* pChange = (NMTVITEMCHANGE*)pnmh;
+	if(m_bUpdating || !(pChange->uChanged & TVIF_STATE) || ((pChange->uStateNew ^ pChange->uStateOld) & TVIS_STATEIMAGEMASK) == 0)
 		return 0;
-	if(pItem->iItem >= 0 && pItem->iItem == FindTagsItem())
-		SetExportTags(m_listDatasets.GetCheckState(pItem->iItem) != FALSE);
+	if(pChange->hItem && pChange->hItem == FindTagsItem())
+		SetExportTags(m_treeDatasets.GetCheckState(pChange->hItem) != FALSE);
 	return 0;
-}
-
-IOSMDatasetPtr CConvertOSMDlg::GetDataset(int nItem) const
-{
-	LPARAM nData = m_listDatasets.GetItemData(nItem);
-	if(nData >= TableItem)
-		return m_ptrOSMMap->GetTable((int)(nData - TableItem));
-	return m_ptrOSMMap->GetLayer((int)nData);
 }
 
 LRESULT CConvertOSMDlg::OnBrowse(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/)
 {
 	std::wstring sCurrent = Trim(GetText(m_editPath));
 	CFileDialog fileDlg(TRUE, _T("pbf"), sCurrent.empty() ? NULL : sCurrent.c_str(), OFN_HIDEREADONLY | OFN_FILEMUSTEXIST,
-		_T("OpenStreetMap (*.osm;*.pbf)\0*.osm;*.pbf\0All Files (*.*)\0*.*\0"), m_hWnd);
+		_T("OpenStreetMap (*.osm;*.pbf;osm_split.xml)\0*.osm;*.pbf;osm_split.xml\0All Files (*.*)\0*.*\0"), m_hWnd);
 	if(fileDlg.DoModal() != IDOK)
 		return 0;
 
-	// only the path: the file is read by Read (a big file takes minutes) or converted at once by Convert all
+	// only the path: the file is analyzed by Analyze (a big file takes minutes) or converted at once by Convert all
 	m_editPath.SetWindowText(fileDlg.m_szFileName);
 	m_editOutput.SetWindowText(DefaultOutputPath(fileDlg.m_szFileName).c_str());
 	UpdateInfo();
-	GotoDlgCtrl(GetDlgItem(IDC_OSM_READ));
+	GotoDlgCtrl(GetDlgItem(IDC_OSM_ANALYZE));
 	return 0;
 }
 
-LRESULT CConvertOSMDlg::OnRead(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/)
+LRESULT CConvertOSMDlg::OnAnalyze(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/)
 {
-	ReadMap(Trim(GetText(m_editPath)));
+	AnalyzeMap(Trim(GetText(m_editPath)));
 	return 0;
 }
 
@@ -438,12 +640,12 @@ LRESULT CConvertOSMDlg::OnTempBrowse(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*
 LRESULT CConvertOSMDlg::OnPathChanged(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/)
 {
 	UpdateNodeStoreInfo();
-	// another file: the layers must be read again
+	// another file: it must be analyzed again
 	if(m_ptrOSMMap.get() && Trim(GetText(m_editPath)) != m_sReadPath)
 	{
 		m_ptrOSMMap.reset();
 		m_sReadPath.clear();
-		m_listDatasets.DeleteAllItems();
+		FillDatasets();
 		UpdateInfo();
 	}
 	return 0;
@@ -464,8 +666,18 @@ LRESULT CConvertOSMDlg::OnOutputBrowse(WORD /*wNotifyCode*/, WORD /*wID*/, HWND 
 
 LRESULT CConvertOSMDlg::OnSelectAll(WORD /*wNotifyCode*/, WORD wID, HWND /*hWndCtl*/, BOOL& /*bHandled*/)
 {
-	for(int i = 0; i < m_listDatasets.GetItemCount(); ++i)
-		m_listDatasets.SetCheckState(i, wID == IDC_OSM_SELECT_ALL);
+	// the layers / tables and their columns (the required columns have no check box)
+	BOOL bCheck = wID == IDC_OSM_SELECT_ALL;
+	for(HTREEITEM hDataset = m_treeDatasets.GetRootItem(); hDataset; hDataset = m_treeDatasets.GetNextSiblingItem(hDataset))
+	{
+		m_treeDatasets.SetCheckState(hDataset, bCheck);
+		for(HTREEITEM hColumn = m_treeDatasets.GetChildItem(hDataset); hColumn; hColumn = m_treeDatasets.GetNextSiblingItem(hColumn))
+		{
+			const SItem* pItem = GetItem(hColumn);
+			if(pItem && pItem->nColumn >= 0 && !GetDataset(pItem->nDataset)->GetColumn(pItem->nColumn).bRequired)
+				m_treeDatasets.SetCheckState(hColumn, bCheck);
+		}
+	}
 	return 0;
 }
 
@@ -474,14 +686,19 @@ LRESULT CConvertOSMDlg::OnRun(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl
 	if(!m_ptrOSMMap.get())
 		return 0;
 
-	// the selection
+	// the selection: the unchecked layers / tables / columns are excluded
+	CLayerColumnExcludeList excludeList = BuildExcludeList();
 	int nSelected = 0;
-	for(int i = 0; i < m_listDatasets.GetItemCount(); ++i)
+	for(int i = 0; i < m_ptrOSMMap->GetLayerCount(); ++i)
 	{
-		IOSMDatasetPtr ptrDataset = GetDataset(i);
-		bool bEnabled = m_listDatasets.GetCheckState(i) != FALSE;
-		ptrDataset->SetEnabled(bEnabled);
-		if(bEnabled && ptrDataset->GetFeatureCount() > 0)
+		IOSMLayerPtr ptrLayer = m_ptrOSMMap->GetLayer(i);
+		if(!excludeList.IsLayerExcluded(ptrLayer->GetName()) && ptrLayer->GetFeatureCount() > 0)
+			++nSelected;
+	}
+	for(int i = 0; i < m_ptrOSMMap->GetTableCount(); ++i)
+	{
+		IOSMTablePtr ptrTable = m_ptrOSMMap->GetTable(i);
+		if(!excludeList.IsLayerExcluded(ptrTable->GetName()) && ptrTable->GetFeatureCount() > 0)
 			++nSelected;
 	}
 	if(nSelected == 0)
@@ -492,6 +709,7 @@ LRESULT CConvertOSMDlg::OnRun(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl
 
 	if(!PrepareRun())
 		return 0;
+	m_excludeList = excludeList;
 	EndDialog(IDOK);
 	return 0;
 }
@@ -523,11 +741,15 @@ LRESULT CConvertOSMDlg::OnConvertAll(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*
 	if(!PrepareRun())
 		return 0;
 
-	// all the datasets are enabled, the tags table by the check box
-	for(int i = 0; i < ptrMap->GetTableCount(); ++i)
+	// everything is converted, the tags table by the check box
+	m_excludeList.Clear();
+	if(IsDlgButtonChecked(IDC_OSM_EXPORT_TAGS) != BST_CHECKED)
 	{
-		if(ptrMap->GetTable(i)->GetTableType() == OSMTableTags)
-			ptrMap->GetTable(i)->SetEnabled(IsDlgButtonChecked(IDC_OSM_EXPORT_TAGS) == BST_CHECKED);
+		for(int i = 0; i < ptrMap->GetTableCount(); ++i)
+		{
+			if(ptrMap->GetTable(i)->GetTableType() == OSMTableTags)
+				m_excludeList.ExcludeLayer(ptrMap->GetTable(i)->GetName());
+		}
 	}
 	m_ptrOSMMap = ptrMap;
 	m_sReadPath = sPath;
@@ -567,6 +789,8 @@ bool CConvertOSMDlg::PrepareRun()
 	BOOL bOk = FALSE;
 	UINT nCacheMB = GetDlgItemInt(IDC_OSM_NODE_CACHE, &bOk, FALSE);
 	m_settings.nNodeCacheMB = bOk && nCacheMB >= 16 ? nCacheMB : 16;
+	UINT nBufferMB = GetDlgItemInt(IDC_OSM_WRITE_BUFFER, &bOk, FALSE);
+	m_settings.nNodeWriteBufferMB = bOk && nBufferMB >= 16 ? nBufferMB : 16;
 
 	// the temporary files: the folder is created when it doesn't exist
 	s_sTempDir = Trim(GetText(GetDlgItem(IDC_OSM_TEMP_DIR)));

@@ -5,6 +5,18 @@
 namespace GraphEngine {
     namespace Convertors {
 
+        // the work of the reading of a .pbf file so far (one Read call)
+        struct SOSMReaderStats
+        {
+            int      nThreads = 0;          // the decoding threads
+            uint64_t nBlocks = 0;           // the blocks handed to the handler
+            uint64_t nBytesRead = 0;        // read from the file
+            double   dReadSeconds = 0.;     // reading the file on the reading thread (the disk)
+            double   dWaitSeconds = 0.;     // the reading thread waits for the decoding threads
+            double   dDispatchSeconds = 0.; // the handler (the objects) on the reading thread
+            double   dDecodeSeconds = 0.;   // inflating / decoding, summed over the decoding threads
+        };
+
         // receives the objects of an OSM file, returns false to stop the reading
         class IOSMReadHandler
         {
@@ -17,7 +29,12 @@ namespace GraphEngine {
             // .pbf: after every block, nBytesRead of nBytesTotal (the file or the blocks with the requested objects) are processed;
             // returns false to stop the reading
             virtual bool OnProgress(uint64_t /*nBytesRead*/, uint64_t /*nBytesTotal*/) { return true; }
+            // .pbf: before every OnProgress
+            virtual void OnReaderStats(const SOSMReaderStats& /*stats*/) {}
         };
+
+        // the items of the reading (SOSMProgressItem): the file, the decoding, the waiting, the handler
+        void AddReaderItems(std::vector<SOSMProgressItem>& vecItems, const SOSMReaderStats& stats, const std::string& sPath);
 
         // Reads .osm with readosm (expat), .pbf with COSMPbfReader (multithreaded), by the file suffix.
         // Exceptions of the handler are passed through readosm (C code) and rethrown.

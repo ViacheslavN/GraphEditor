@@ -30,7 +30,8 @@ namespace GraphEngine {
             void ReadAt(uint64_t nPos, void* pData, size_t nSize);
 
             void Flush();
-            const std::string& Path() const { return m_sPath; }
+            const std::string& Path() const { return m_sPath; }   // empty until the first write to the disk
+            double WriteSeconds() const { return m_dWriteSeconds; }
 
             template<class T> void WriteValue(const T& value) { Write(&value, sizeof(T)); }
             template<class T> bool ReadValue(T& value) { return Read(&value, sizeof(T)); }
@@ -55,6 +56,7 @@ namespace GraphEngine {
             std::vector<uint8_t> m_readBuffer;
             size_t      m_nReadPos;         // in m_readBuffer
             uint64_t    m_nFileReadPos;     // the file position after m_readBuffer
+            double      m_dWriteSeconds = 0.;
         };
     }
 }

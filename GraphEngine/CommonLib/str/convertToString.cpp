@@ -351,7 +351,7 @@ namespace CommonLib
 		const char  *start = val.c_str();
 		char *stop = 0;
 
-		uint64_t ret = strtoul(val.c_str(), &stop, 10);
+		uint64_t ret = strtoull(val.c_str(), &stop, 10);
 		if (start == stop)
 			throw CExcBase("Failed convert str to uint64_t, {0}", val);
 

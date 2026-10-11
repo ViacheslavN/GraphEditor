@@ -1,12 +1,17 @@
 #include "OSMConvertor.h"
 #include "OSMReader.h"
+#include "OSMAnalyzer.h"
 #include "OSMProgressThrottle.h"
 #include "OSMConvertSession.h"
+#include "OSMSplitter.h"
+#include "OSMSplitExport.h"
 #include "OSMGeometry.h"
 #include "../../../GisGeometry/Envelope.h"
 #include <chrono>
+#include <cstdio>
 #include <filesystem>
 #include <limits>
+#include <unordered_map>
 
 namespace GraphEngine {
     namespace Convertors {
@@ -15,89 +20,42 @@ namespace GraphEngine {
         {
             const uint64_t ProgressStep = 100000;
 
-            // ReadMap: one pass over the file, only the tags are classified (no node coordinates are kept)
-            class CMapReadHandler : public IOSMReadHandler
+            // Analyze: one pass over the file, only the tags are classified (COSMAnalyzer, no node coordinates are kept)
+            class CAnalyzeHandler : public IOSMReadHandler
             {
             public:
-                CMapReadHandler(const COSMSchema& schema, COSMMapPtr ptrMap, IProgressUpdaterPtr ptrProgress, Display::ITrackCancelPtr ptrCancel) :
-                        m_schema(schema), m_ptrMap(ptrMap), m_ptrProgress(ptrProgress), m_ptrCancel(ptrCancel)
+                CAnalyzeHandler(const COSMSchema& schema, COSMMapPtr ptrMap, IProgressUpdaterPtr ptrProgress, Display::ITrackCancelPtr ptrCancel) :
+                        m_analyzer(schema, ptrMap), m_ptrMap(ptrMap), m_ptrProgress(ptrProgress), m_ptrCancel(ptrCancel)
                 {
-                    m_bounds.xMin = m_bounds.yMin = (std::numeric_limits<double>::max)();
-                    m_bounds.xMax = m_bounds.yMax = -(std::numeric_limits<double>::max)();
-                    m_progress.stage = OSMStageReadMap;
+                    m_progress.stage = OSMStageAnalyze;
                     m_progress.nPass = 1;
                     m_progress.nPassCount = 1;
                     std::error_code ec;
                     uint64_t nFileSize = std::filesystem::file_size(std::filesystem::u8path(ptrMap->GetPath()), ec);
                     m_progress.nFileSize = ec ? 0 : nFileSize;
-                    m_ptrRoutes = m_ptrMap->FindTableByType(OSMTableRoutes);
-                    m_ptrRestrictions = m_ptrMap->FindTableByType(OSMTableRestrictions);
-                    m_ptrTags = m_ptrMap->FindTableByType(OSMTableTags);
-                    if(m_ptrTags.get())
-                        m_ptrTagKey = m_ptrTags->Keys().Find(COSMSchema::TableKey(OSMTableTags));
                 }
 
                 virtual bool OnNode(const readosm_node& node)
                 {
-                    ++m_progress.nNodes;
-                    CheckOrder(0, node.id);
-
-                    if(node.longitude != READOSM_UNDEFINED && node.latitude != READOSM_UNDEFINED)
-                    {
-                        m_bounds.xMin = (std::min)(m_bounds.xMin, node.longitude);
-                        m_bounds.xMax = (std::max)(m_bounds.xMax, node.longitude);
-                        m_bounds.yMin = (std::min)(m_bounds.yMin, node.latitude);
-                        m_bounds.yMax = (std::max)(m_bounds.yMax, node.latitude);
-                    }
-
-                    if(node.tag_count > 0 && Add(m_schema.MatchNode(COSMTags(node.tags, node.tag_count))))
-                        AddTags(node.tags, node.tag_count);
+                    m_analyzer.AddNode(node);
                     return Step();
                 }
 
                 virtual bool OnWay(const readosm_way& way)
                 {
-                    ++m_progress.nWays;
-                    CheckOrder(1, way.id);
-
-                    if(way.tag_count > 0 && way.node_ref_count >= 2)
-                    {
-                        bool bClosed = way.node_ref_count >= 4 && way.node_refs[0] == way.node_refs[way.node_ref_count - 1];
-                        SOSMMatch line, polygon;
-                        m_schema.MatchWay(COSMTags(way.tags, way.tag_count), bClosed, line, polygon);
-                        bool bLine = Add(line);
-                        bool bPolygon = Add(polygon);
-                        if(bLine || bPolygon)
-                            AddTags(way.tags, way.tag_count);
-                    }
+                    m_analyzer.AddWay(way);
                     return Step();
                 }
 
                 virtual bool OnRelation(const readosm_relation& relation)
                 {
-                    ++m_progress.nRelations;
-                    CheckOrder(2, relation.id);
-
-                    if(relation.tag_count > 0)
-                    {
-                        COSMTags tags(relation.tags, relation.tag_count);
-                        bool bMatched = Add(m_schema.MatchRelation(tags));
-                        const char* pszRoute = COSMSchema::MatchRoute(tags);
-                        if(pszRoute && m_ptrRoutes.get())
-                        {
-                            m_ptrRoutes->AddFeature(COSMSchema::TableKey(OSMTableRoutes), pszRoute);
-                            bMatched = true;
-                        }
-                        const char* pszRestriction = COSMSchema::MatchRestriction(tags);
-                        if(pszRestriction && m_ptrRestrictions.get())
-                        {
-                            m_ptrRestrictions->AddFeature(COSMSchema::TableKey(OSMTableRestrictions), pszRestriction);
-                            bMatched = true;
-                        }
-                        if(bMatched)
-                            AddTags(relation.tags, relation.tag_count);
-                    }
+                    m_analyzer.AddRelation(relation);
                     return Step();
+                }
+
+                virtual void OnReaderStats(const SOSMReaderStats& stats)
+                {
+                    m_reader = stats;
                 }
 
                 // .pbf: a block is processed, sent once per second and at the end
@@ -112,57 +70,35 @@ namespace GraphEngine {
 
                 void Send()
                 {
+                    m_progress.nNodes = m_analyzer.NodeCount();
+                    m_progress.nWays = m_analyzer.WayCount();
+                    m_progress.nRelations = m_analyzer.RelationCount();
+                    m_progress.dStageSeconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - m_start).count();
+                    m_progress.vecItems.clear();
+                    AddReaderItems(m_progress.vecItems, m_reader, m_ptrMap->GetPath());
                     if(m_ptrProgress.get())
                         m_ptrProgress->UpdateStatusInfo(m_progress);
                 }
 
                 void Finish()
                 {
-                    m_ptrMap->SetCounts(m_progress.nNodes, m_progress.nWays, m_progress.nRelations);
-                    m_ptrMap->SetSorted(m_bSorted);
-                    m_ptrMap->SetScanned(true);
-                    if(m_bounds.xMin <= m_bounds.xMax)
-                    {
-                        m_bounds.type = CommonLib::bbox_type_normal;
-                        m_ptrMap->SetBounds(m_bounds);
-                    }
-                    m_ptrMap->SortValues();
+                    m_analyzer.Finish();
 
+                    // the details of the analysis (the reading) as the finished stage
+                    Send();
+                    SOSMStageSummary summary;
+                    summary.stage = OSMStageAnalyze;
+                    summary.sMessage = "Analyzing the file";
+                    summary.dSeconds = m_progress.dStageSeconds;
+                    summary.vecItems = m_progress.vecItems;
+                    m_progress.vecStages.push_back(summary);
+                    m_progress.vecItems.clear();
                     m_progress.sMessage = "Done";
                     if(m_ptrProgress.get())
                         m_ptrProgress->UpdateStatusInfo(m_progress);
                 }
 
             private:
-                bool Add(const SOSMMatch& match)
-                {
-                    if(!match.IsValid())
-                        return false;
-                    m_ptrMap->GetLayerImpl(match.nLayer)->AddFeature(match.sKey, match.sValue);
-                    return true;
-                }
-
-                // tags table: the number of records (tags), its key "key" counts the objects having an OSM key
-                void AddTags(const readosm_tag* pTags, int nCount)
-                {
-                    if(!m_ptrTagKey.get())
-                        return;
-                    m_ptrTags->AddCount(nCount);
-                    for(int i = 0; i < nCount; ++i)
-                        m_ptrTagKey->AddFeature(pTags[i].key ? pTags[i].key : "");
-                }
-
-                // nodes, ways, relations, every type sorted by id
-                void CheckOrder(int nType, int64_t nId)
-                {
-                    if(!m_bSorted)
-                        return;
-                    if(nType < m_nLastType || (nType == m_nLastType && nId <= m_nLastId))
-                        m_bSorted = false;
-                    m_nLastType = nType;
-                    m_nLastId = nId;
-                }
-
                 bool Step()
                 {
                     if(++m_nObjects % ProgressStep)
@@ -174,22 +110,89 @@ namespace GraphEngine {
                 }
 
             private:
-                const COSMSchema&        m_schema;
+                COSMAnalyzer             m_analyzer;
                 COSMMapPtr               m_ptrMap;
-                COSMTablePtr             m_ptrRoutes;
-                COSMTablePtr             m_ptrRestrictions;
-                COSMTablePtr             m_ptrTags;
-                COSMTagKeyPtr            m_ptrTagKey;
                 IProgressUpdaterPtr      m_ptrProgress;
                 Display::ITrackCancelPtr m_ptrCancel;
                 SOSMProgress             m_progress;
-                CommonLib::bbox          m_bounds;
                 uint64_t                 m_nObjects = 0;
-                bool                     m_bSorted = true;
-                int                      m_nLastType = 0;
-                int64_t                  m_nLastId = (std::numeric_limits<int64_t>::min)();
                 COSMProgressThrottle     m_throttle;
+                SOSMReaderStats          m_reader;
+                std::chrono::steady_clock::time_point m_start = std::chrono::steady_clock::now();
             };
+        }
+
+        std::string COSMConvertor::FormatReport(const SOSMProgress& progress, const std::string& sResult)
+        {
+            auto time = [](double dSeconds)
+            {
+                int n = (int)(dSeconds + 0.5);
+                char sz[32];
+                snprintf(sz, sizeof(sz), "%02d:%02d:%02d", n / 3600, (n / 60) % 60, n % 60);
+                return std::string(sz);
+            };
+            auto bytes = [](uint64_t nBytes)
+            {
+                char sz[32];
+                if(nBytes == 0)
+                    return std::string();
+                if(nBytes >= 1024ull * 1024 * 1024)
+                    snprintf(sz, sizeof(sz), "%.2f GB", nBytes / (1024. * 1024 * 1024));
+                else
+                    snprintf(sz, sizeof(sz), "%.1f MB", nBytes / (1024. * 1024));
+                return std::string(sz);
+            };
+
+            // the finished stages and (a canceled / failed task) the stage which was running: its last details
+            std::vector<SOSMStageSummary> stages = progress.vecStages;
+            if(!progress.vecItems.empty() || (progress.dStageSeconds > 0 && progress.sMessage != "Done"))
+            {
+                SOSMStageSummary current;
+                current.stage = progress.stage;
+                current.sMessage = progress.sMessage + " (not finished)";
+                current.dSeconds = progress.dStageSeconds;
+                current.vecItems = progress.vecItems;
+                stages.push_back(current);
+            }
+
+            std::string sText;
+            if(!sResult.empty())
+                sText += "Result: " + sResult + "\n";
+            double dTotal = 0.;
+            for(const SOSMStageSummary& stage : stages)
+                dTotal += stage.dSeconds;
+            sText += "Total: " + time(dTotal) + "\n";
+            char szCounts[256];
+            snprintf(szCounts, sizeof(szCounts), "Nodes: %llu, ways: %llu, relations: %llu, written features / records: %llu\n",
+                     (unsigned long long)progress.nNodes, (unsigned long long)progress.nWays, (unsigned long long)progress.nRelations,
+                     (unsigned long long)progress.nFeatures);
+            sText += szCounts;
+            for(const SOSMStageSummary& stage : stages)
+            {
+                char szLine[256];
+                snprintf(szLine, sizeof(szLine), "\n%s: %s (%.0f%%)\n", stage.sMessage.c_str(), time(stage.dSeconds).c_str(),
+                         dTotal > 0 ? 100. * stage.dSeconds / dTotal : 0.);
+                sText += szLine;
+                for(const SOSMProgressItem& item : stage.vecItems)
+                {
+                    // name, count, data (MB/s of the stage), busy time (% of the stage), info
+                    std::string sCount = item.nCount ? std::to_string(item.nCount) : std::string();
+                    std::string sData = bytes(item.nBytes);
+                    if(item.nBytes && stage.dSeconds > 0)
+                    {
+                        char szRate[32];
+                        snprintf(szRate, sizeof(szRate), " (%.0f MB/s)", item.nBytes / (1024. * 1024) / stage.dSeconds);
+                        sData += szRate;
+                    }
+                    char szBusy[64] = "";
+                    if(item.dSeconds > 0)
+                        snprintf(szBusy, sizeof(szBusy), "%.1f s%s %3.0f%%", item.dSeconds, item.bThreads ? " (threads)" : "",
+                                 stage.dSeconds > 0 ? 100. * item.dSeconds / stage.dSeconds : 0.);
+                    snprintf(szLine, sizeof(szLine), "  %-34s %16s %22s %24s  ", item.sName.c_str(), sCount.c_str(), sData.c_str(), szBusy);
+                    sText += szLine + item.sInfo + "\n";
+                }
+            }
+            return sText;
         }
 
         COSMConvertor::COSMConvertor()
@@ -207,34 +210,49 @@ namespace GraphEngine {
 
         }
 
-        IOSMMapPtr COSMConvertor::ReadMap(const std::string& path, IProgressUpdaterPtr ptrProgress, Display::ITrackCancelPtr ptrCancel)
+        IOSMMapPtr COSMConvertor::Analyze(const std::string& path, IProgressUpdaterPtr ptrProgress, Display::ITrackCancelPtr ptrCancel)
         {
             try
             {
-                if(COSMMap::FormatByPath(path) == OSMFormatUnknown)
-                    throw CommonLib::CExcBase("Unknown OSM file format, expected .osm or .pbf");
+                eOSMFileFormat format = COSMMap::FormatByPath(path);
+                if(format == OSMFormatUnknown)
+                    throw CommonLib::CExcBase("Unknown OSM file format, expected .osm, .pbf or osm_split.xml");
+                // the split data are analyzed already
+                if(format == OSMFormatSplit)
+                {
+                    COSMSplitMeta meta;
+                    meta.Load(path);
+                    return meta.GetMap();
+                }
 
                 COSMMapPtr ptrMap = m_schema.CreateMap();
                 ptrMap->SetPath(path);
 
-                CMapReadHandler handler(m_schema, ptrMap, ptrProgress, ptrCancel);
+                CAnalyzeHandler handler(m_schema, ptrMap, ptrProgress, ptrCancel);
                 if(!COSMReader::Read(path, handler, COSMReader::ReadAll, m_settings.nThreads))
-                    throw CommonLib::CExcBase("Reading is canceled");
+                    throw CommonLib::CExcBase("Analysis is canceled");
 
                 handler.Finish();
                 return ptrMap;
             }
             catch (std::exception& exc)
             {
-                CommonLib::CExcBase::RegenExc("Failed to read OSM map {0}", path, exc);
+                CommonLib::CExcBase::RegenExc("Failed to analyze OSM file {0}", path, exc);
                 throw;
             }
         }
 
         IOSMMapPtr COSMConvertor::CreateMap(const std::string& path)
         {
-            if(COSMMap::FormatByPath(path) == OSMFormatUnknown)
-                throw CommonLib::CExcBase("Unknown OSM file format {0}, expected .osm or .pbf", path);
+            eOSMFileFormat format = COSMMap::FormatByPath(path);
+            if(format == OSMFormatUnknown)
+                throw CommonLib::CExcBase("Unknown OSM file format {0}, expected .osm, .pbf or osm_split.xml", path);
+            if(format == OSMFormatSplit)
+            {
+                COSMSplitMeta meta;
+                meta.Load(path);
+                return meta.GetMap();
+            }
 
             COSMMapPtr ptrMap = m_schema.CreateMap();
             ptrMap->SetPath(path);
@@ -290,17 +308,25 @@ namespace GraphEngine {
             return CompressParams(m_settings, ptrOSMMap);
         }
 
-        IOSMConvertSessionPtr COSMConvertor::CreateSession(IOSMMapPtr ptrOSMMap, Cartography::IMapPtr ptrMap, GeoDatabase::IDatabaseWorkspacePtr ptrDstWorkspace)
-        {
-            return std::make_shared<COSMConvertSession>(m_schema, m_settings, ptrOSMMap, ptrMap, ptrDstWorkspace);
-        }
-
-        void COSMConvertor::Convert(IOSMMapPtr ptrOSMMap, Cartography::IMapPtr ptrMap,
+        void COSMConvertor::Convert(IOSMMapPtr ptrOSMMap, const CLayerColumnExcludeList& excludeList, Cartography::IMapPtr ptrMap,
                                     GeoDatabase::IDatabaseWorkspacePtr ptrDstWorkspace, IProgressUpdaterPtr ptrProgress, Display::ITrackCancelPtr ptrCancel)
         {
-            IOSMConvertSessionPtr ptrSession = CreateSession(ptrOSMMap, ptrMap, ptrDstWorkspace);
-            ptrSession->Convert(ptrProgress, ptrCancel);
-            ptrSession->Close();
+            // the split data: exported from their files, an OSM file: converted in passes over it
+            if(ptrOSMMap.get() && ptrOSMMap->GetFormat() == OSMFormatSplit)
+            {
+                COSMSplitExport splitExport(m_schema, m_settings, ptrOSMMap, excludeList, ptrMap, ptrDstWorkspace);
+                splitExport.Convert(ptrProgress, ptrCancel);
+                return;
+            }
+            COSMConvertSession session(m_schema, m_settings, ptrOSMMap, excludeList, ptrMap, ptrDstWorkspace);
+            session.Convert(ptrProgress, ptrCancel);
+        }
+
+        IOSMMapPtr COSMConvertor::Split(const std::string& path, const std::string& sFolder, bool bKeepNodeFile,
+                                        IProgressUpdaterPtr ptrProgress, Display::ITrackCancelPtr ptrCancel)
+        {
+            COSMSplitter splitter(m_schema, m_settings);
+            return splitter.Split(path, sFolder, bKeepNodeFile, ptrProgress, ptrCancel);
         }
 
         void COSMConvertor::ConvertFile(const std::string& path, eOSMFileFormat format, Cartography::IMapPtr ptrMap,
@@ -309,7 +335,7 @@ namespace GraphEngine {
             if(COSMMap::FormatByPath(path) != format)
                 throw CommonLib::CExcBase("Wrong OSM file {0}: expected the {1} suffix", path, format == OSMFormatPBF ? ".pbf" : ".osm");
 
-            Convert(CreateMap(path), ptrMap, ptrDstWorkspace, ptrProgress, ptrCancel);
+            Convert(CreateMap(path), CLayerColumnExcludeList(), ptrMap, ptrDstWorkspace, ptrProgress, ptrCancel);
         }
 
         void COSMConvertor::ConvertFromXML(const std::string& path, Cartography::IMapPtr ptrMap,

@@ -17,6 +17,8 @@ namespace GraphEngine {
 
             // ---------------- external sort: in memory up to the limit, then sorted runs in a temporary file merged by Next
 
+            const size_t MinMergeChunkBytes = 4 * 1024 * 1024;
+
             template<class T, class TLess>
             class TExternalSorter
             {
@@ -49,9 +51,11 @@ namespace GraphEngine {
                     if(!m_buffer.empty())
                         SpillRun();
 
-                    // k-way merge, every run is read in chunks
+                    // k-way merge, every run is read in chunks: big chunks, every refill of a run is a seek
+                    // (HDD: ~10 ms), so 4 MB at least whatever the number of runs
                     m_bMerging = true;
-                    size_t nChunk = (std::max)((size_t)256, m_nMaxEntries / (m_vecRuns.size() + 1));
+                    const size_t nMinChunk = (std::max)((size_t)256, MinMergeChunkBytes / sizeof(T));
+                    size_t nChunk = (std::max)(nMinChunk, m_nMaxEntries / (m_vecRuns.size() + 1));
                     m_readers.resize(m_vecRuns.size());
                     for(size_t i = 0; i < m_vecRuns.size(); ++i)
                     {

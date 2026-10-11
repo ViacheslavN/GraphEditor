@@ -1,4 +1,5 @@
 #include "OSMTempFile.h"
+#include <chrono>
 #include "../../../CommonLib/exception/exc_base.h"
 #include <algorithm>
 #include <cstring>
@@ -67,11 +68,13 @@ namespace GraphEngine {
                 Flush();
             if(nSize >= m_nBufferSize)
             {
+                auto start = std::chrono::steady_clock::now();
                 Open();
                 m_ptrFile->SetFilePos64(m_nFileSize, CommonLib::soFromBegin);
                 if((size_t)m_ptrFile->Write((const byte_t*)p, nSize) != nSize)
                     throw CommonLib::CExcBase("Failed to write the temporary file {0} (no disk space?)", m_sPath);
                 m_nFileSize += nSize;
+                m_dWriteSeconds += std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
                 return;
             }
             m_writeBuffer.insert(m_writeBuffer.end(), p, p + nSize);
@@ -81,11 +84,13 @@ namespace GraphEngine {
         {
             if(m_writeBuffer.empty())
                 return;
+            auto start = std::chrono::steady_clock::now();
             Open();
             m_ptrFile->SetFilePos64(m_nFileSize, CommonLib::soFromBegin);
             if((size_t)m_ptrFile->Write((const byte_t*)m_writeBuffer.data(), m_writeBuffer.size()) != m_writeBuffer.size())
                 throw CommonLib::CExcBase("Failed to write the temporary file {0} (no disk space?)", m_sPath);
             m_nFileSize += m_writeBuffer.size();
+            m_dWriteSeconds += std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
             m_writeBuffer.clear();
         }
 

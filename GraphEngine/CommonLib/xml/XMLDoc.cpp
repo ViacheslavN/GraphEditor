@@ -134,12 +134,7 @@ namespace CommonLib
 								state = xlsParseTag;
 
 								if (!m_vecText.empty())
-								{
-									if (m_vecText.back() != 0)
-										m_vecText.push_back(0);
-				
-									pNode->SetText((const char *)&m_vecText[0]);
-								}
+									pNode->SetText(CXMLUtils::Unescape((const char *)m_vecText.data(), m_vecText.size()).c_str());
 
 
 							}
@@ -155,10 +150,9 @@ namespace CommonLib
 								get_string(pStream);
 								if (!m_vecText.empty())
 								{
-									if (m_vecText.back() != 0)
-										m_vecText.push_back(0);
-
-									pNode->AddPropertyString(sAttrName, (const char *)&m_vecText[0]);
+									// the entities (&quot; ...) back
+									std::string sValue = CXMLUtils::Unescape((const char *)m_vecText.data(), m_vecText.size());
+									pNode->AddPropertyString(sAttrName, sValue.c_str());
 								}
 							}
 							break;
@@ -175,12 +169,7 @@ namespace CommonLib
 
 								find_open_tag(pStream);
 								if (!m_vecText.empty())
-								{
-									if (m_vecText.back() != 0)
-										m_vecText.push_back(0);
-
-									pNode->SetText((const char *)&m_vecText[0]);
-								}
+									pNode->SetText(CXMLUtils::Unescape((const char *)m_vecText.data(), m_vecText.size()).c_str());
 
 								state = xlsParseTag;
 							}

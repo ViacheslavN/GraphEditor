@@ -72,7 +72,7 @@ TEST_CASE("OSM map: hierarchy of an XML file", "[osm]")
 {
     std::string sPath = WriteTestFile(TestOSM, "graphengine_test_map.osm");
     COSMConvertor convertor;
-    IOSMMapPtr ptrMap = convertor.ReadMap(sPath, IProgressUpdaterPtr(), Display::ITrackCancelPtr());
+    IOSMMapPtr ptrMap = convertor.Analyze(sPath, IProgressUpdaterPtr(), Display::ITrackCancelPtr());
     std::remove(sPath.c_str());
 
     REQUIRE(ptrMap != nullptr);
@@ -107,6 +107,31 @@ TEST_CASE("OSM map: hierarchy of an XML file", "[osm]")
     REQUIRE(ptrRoads->GetTableName() == "osm_roads");
     // values are sorted by the number of features
     REQUIRE(ptrRoads->FindKey("highway")->GetValue(0)->GetValue() == "residential");
+
+    // columns: osm_id, osm_type, name, class, type, the fields of the schema, the other OSM keys of the features
+    REQUIRE(ptrRoads->GetColumn(0).sName == "osm_id");
+    REQUIRE(ptrRoads->GetColumn(0).bRequired);
+    REQUIRE(ptrRoads->GetColumn(0).nCount == 3);
+    REQUIRE(ptrRoads->GetColumn(ptrRoads->FindColumn("name")).nCount == 1);
+    REQUIRE(ptrRoads->FindColumn("ref") >= 0);           // a field of the schema, no feature has it
+    REQUIRE(ptrRoads->FindColumn("highway") < 0);        // the key of the layer
+    int nJunction = ptrRoads->FindColumn("junction");
+    REQUIRE(nJunction >= 0);
+    REQUIRE(ptrRoads->GetColumn(nJunction).sKey == "junction");
+    REQUIRE(ptrRoads->GetColumn(nJunction).nCount == 1);
+    REQUIRE_FALSE(ptrRoads->GetColumn(nJunction).bInteger);
+    REQUIRE(ptrMap->FindLayer("places")->GetColumn(ptrMap->FindLayer("places")->FindColumn("population")).bInteger);
+    // the area key of the pedestrian polygon doesn't make a column of the roads
+    REQUIRE(ptrRoads->FindColumn("area") < 0);
+    REQUIRE(ptrMap->FindTable("routes")->FindColumn("route") >= 0);
+}
+
+TEST_CASE("OSM map: column names of the OSM keys", "[osm]")
+{
+    REQUIRE(COSMSchema::KeyColumnName("addr:street") == "addr_street");
+    REQUIRE(COSMSchema::KeyColumnName("building:levels") == "building_levels");
+    REQUIRE(COSMSchema::KeyColumnName("3dr:type") == "k_3dr_type");
+    REQUIRE(COSMSchema::KeyColumnName("") == "k_");
 }
 
 TEST_CASE("OSM map: selection", "[osm]")
@@ -118,20 +143,45 @@ TEST_CASE("OSM map: selection", "[osm]")
     ptrRoads->AddFeature("highway", "motorway");
     ptrRoads->AddFeature("highway", "footway");
 
-    REQUIRE(ptrRoads->IsEnabled("highway", "motorway"));
-    REQUIRE(ptrRoads->IsEnabled("highway", "unknown_value"));   // not met while reading - enabled
-    REQUIRE_FALSE(ptrRoads->IsEnabled("building", "yes"));      // not a key of the layer
+    REQUIRE(ptrRoads->IsValueEnabled("highway", "motorway"));
+    REQUIRE(ptrRoads->IsValueEnabled("highway", "unknown_value"));   // not met while analyzing - enabled
+    REQUIRE_FALSE(ptrRoads->IsValueEnabled("building", "yes"));      // not a key of the layer
 
     ptrRoads->FindKey("highway")->FindValue("footway")->SetEnabled(false);
-    REQUIRE_FALSE(ptrRoads->IsEnabled("highway", "footway"));
-    REQUIRE(ptrRoads->IsEnabled("highway", "motorway"));
+    REQUIRE_FALSE(ptrRoads->IsValueEnabled("highway", "footway"));
+    REQUIRE(ptrRoads->IsValueEnabled("highway", "motorway"));
 
     ptrRoads->FindKey("highway")->SetEnabled(false);
-    REQUIRE_FALSE(ptrRoads->IsEnabled("highway", "motorway"));
+    REQUIRE_FALSE(ptrRoads->IsValueEnabled("highway", "motorway"));
+}
 
-    ptrRoads->FindKey("highway")->SetEnabled(true);
-    ptrRoads->SetEnabled(false);
-    REQUIRE_FALSE(ptrRoads->IsEnabled("highway", "motorway"));
+TEST_CASE("OSM map: exclude list", "[osm]")
+{
+    CLayerColumnExcludeList excludeList;
+    REQUIRE(excludeList.IsEmpty());
+    excludeList.ExcludeLayer("buildings");
+    excludeList.ExcludeColumn("roads", "maxspeed");
+    excludeList.ExcludeColumn("roads", "addr_street");
+    REQUIRE_FALSE(excludeList.IsEmpty());
+    REQUIRE(excludeList.IsLayerExcluded("buildings"));
+    REQUIRE_FALSE(excludeList.IsLayerExcluded("roads"));
+    REQUIRE(excludeList.IsColumnExcluded("roads", "maxspeed"));
+    REQUIRE_FALSE(excludeList.IsColumnExcluded("buildings", "maxspeed"));
+
+    excludeList.IncludeColumn("roads", "addr_street");
+    REQUIRE(excludeList.GetExcludedColumns("roads") == std::vector<std::string>{"maxspeed"});
+
+    CommonLib::xml::IXMLNodePtr ptrNode = std::make_shared<CommonLib::xml::CXMLNode>(CommonLib::xml::IXMLNodePtr(), "root");
+    CommonLib::ISerializeObjPtr ptrRoot = std::make_shared<CommonLib::CSerializeObjXML>(ptrNode);
+    excludeList.Save(ptrRoot);
+    CLayerColumnExcludeList loaded;
+    loaded.Load(ptrRoot);
+    REQUIRE(loaded.IsLayerExcluded("buildings"));
+    REQUIRE(loaded.IsColumnExcluded("roads", "maxspeed"));
+    REQUIRE_FALSE(loaded.IsColumnExcluded("roads", "addr_street"));
+
+    excludeList.Clear();
+    REQUIRE(excludeList.IsEmpty());
 }
 
 TEST_CASE("OSM map: save / load", "[osm]")
@@ -146,7 +196,6 @@ TEST_CASE("OSM map: save / load", "[osm]")
     ptrRoads->AddFeature("highway", "footway");
     ptrRoads->SetTableName("roads_cz");
     ptrRoads->FindKey("highway")->FindValue("footway")->SetEnabled(false);
-    ptrMap->FindLayer("buildings")->SetEnabled(false);
 
     CommonLib::xml::IXMLNodePtr ptrNode = std::make_shared<CommonLib::xml::CXMLNode>(CommonLib::xml::IXMLNodePtr(), "root");
     CommonLib::ISerializeObjPtr ptrRoot = std::make_shared<CommonLib::CSerializeObjXML>(ptrNode);
@@ -156,15 +205,18 @@ TEST_CASE("OSM map: save / load", "[osm]")
     loaded.Load(ptrRoot);
     REQUIRE(loaded.GetFormat() == OSMFormatPBF);
     REQUIRE(loaded.GetNodeCount() == 100);
-    REQUIRE_FALSE(loaded.IsScanned());   // made by the schema, not by ReadMap
+    REQUIRE_FALSE(loaded.IsScanned());   // made by the schema, not by Analyze
     REQUIRE(loaded.GetLayerCount() == ptrMap->GetLayerCount());
-    REQUIRE_FALSE(loaded.FindLayer("buildings")->GetEnabled());
 
     IOSMLayerPtr ptrLoadedRoads = loaded.FindLayer("roads");
     REQUIRE(ptrLoadedRoads->GetTableName() == "roads_cz");
     REQUIRE(ptrLoadedRoads->GetGeometryType() == OSMGeometryLine);
     REQUIRE(ptrLoadedRoads->GetFeatureCount() == 3);
     REQUIRE(ptrLoadedRoads->FindKey("highway")->FindValue("footway")->GetFeatureCount() == 2);
-    REQUIRE_FALSE(ptrLoadedRoads->IsEnabled("highway", "footway"));
-    REQUIRE(ptrLoadedRoads->IsEnabled("highway", "motorway"));
+    REQUIRE_FALSE(ptrLoadedRoads->IsValueEnabled("highway", "footway"));
+    REQUIRE(ptrLoadedRoads->IsValueEnabled("highway", "motorway"));
+    REQUIRE(ptrLoadedRoads->GetColumnCount() == ptrRoads->GetColumnCount());
+    REQUIRE(ptrLoadedRoads->GetColumn(ptrLoadedRoads->FindColumn("maxspeed")).bInteger);
+    REQUIRE(ptrLoadedRoads->GetColumn(ptrLoadedRoads->FindColumn("maxspeed")).sKey == "maxspeed");
+    REQUIRE(ptrLoadedRoads->GetColumn(0).bRequired);
 }

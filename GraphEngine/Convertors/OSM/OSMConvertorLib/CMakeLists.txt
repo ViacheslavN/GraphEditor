@@ -47,6 +47,18 @@ set(SOURCE_FILES
         OSMMapStyle.cpp
         OSMConvertSession.h
         OSMConvertSession.cpp
+        LayerColumnExcludeList.h
+        LayerColumnExcludeList.cpp
+        OSMFeatureWriter.h
+        OSMFeatureWriter.cpp
+        OSMAnalyzer.h
+        OSMAnalyzer.cpp
+        OSMSplitFormat.h
+        OSMSplitFormat.cpp
+        OSMSplitter.h
+        OSMSplitter.cpp
+        OSMSplitExport.h
+        OSMSplitExport.cpp
 )
 
 add_library(OSMConvertorLib ${SOURCE_FILES})

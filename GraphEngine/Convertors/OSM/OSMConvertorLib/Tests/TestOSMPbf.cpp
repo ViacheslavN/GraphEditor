@@ -303,16 +303,16 @@ TEST_CASE("OSM PBF reader", "[osm][pbf]")
         virtual void UpdateStatusInfo(const SOSMProgress& progress) { log.push_back(progress); }
     };
     auto ptrUpdater = std::make_shared<SUpdater>();
-    convertor.Convert(convertor.ReadMap(sPath, ptrUpdater, Display::ITrackCancelPtr()), ptrMap, ptrDb, ptrUpdater, Display::ITrackCancelPtr());
+    convertor.Convert(convertor.Analyze(sPath, ptrUpdater, Display::ITrackCancelPtr()), CLayerColumnExcludeList(), ptrMap, ptrDb, ptrUpdater, Display::ITrackCancelPtr());
 
-    // ReadMap: one pass over the file; the conversion: 2 passes, the second one reads only the ways
+    // Analyze: one pass over the file; the conversion: 2 passes, the second one reads only the ways
     // (the file is indexed already: the passes read only the blocks with the objects, the header block is skipped)
     uint64_t nFileSize = std::filesystem::file_size(std::filesystem::u8path(sPath));
     bool bMapRead = false, bPass1 = false, bPass2 = false;
     for(const SOSMProgress& progress : ptrUpdater->log)
     {
         REQUIRE(progress.nBytesRead <= progress.nBytesTotal);
-        if(progress.stage == OSMStageReadMap && progress.nBytesTotal > 0 && progress.nBytesRead == progress.nBytesTotal)
+        if(progress.stage == OSMStageAnalyze && progress.nBytesTotal > 0 && progress.nBytesRead == progress.nBytesTotal)
             bMapRead = progress.nPass == 1 && progress.nPassCount == 1;
         if(progress.stage == OSMStageNodes && progress.nBytesTotal > 0 && progress.nBytesRead == progress.nBytesTotal)
             bPass1 = progress.nPass == 1 && progress.nPassCount == 2 && progress.nFileSize == nFileSize;
@@ -323,6 +323,27 @@ TEST_CASE("OSM PBF reader", "[osm][pbf]")
     REQUIRE(bPass1);
     REQUIRE(bPass2);
     REQUIRE(ptrUpdater->log.back().sMessage == "Done");
+
+    // the details: the finished stages of the conversion with the reading of the file in the passes
+    const SOSMProgress& last = ptrUpdater->log.back();
+    REQUIRE(last.vecItems.empty());
+    bool bNodesStage = false, bWaysStage = false;
+    for(const SOSMStageSummary& stage : last.vecStages)
+    {
+        if(stage.stage == OSMStageNodes || stage.stage == OSMStageWays)
+        {
+            REQUIRE_FALSE(stage.vecItems.empty());
+            REQUIRE(stage.vecItems[0].sName == "Reading the file");
+            REQUIRE(stage.vecItems[0].nBytes > 0);
+            REQUIRE(stage.vecItems[0].nCount > 0);
+        }
+        bNodesStage = bNodesStage || stage.stage == OSMStageNodes;
+        bWaysStage = bWaysStage || stage.stage == OSMStageWays;
+    }
+    REQUIRE(bNodesStage);
+    REQUIRE(bWaysStage);
+    REQUIRE(last.vecStages.back().stage == OSMStageFinish);
+    REQUIRE(COSMConvertor::FormatReport(last).find("Reading the file") != std::string::npos);
     REQUIRE(ptrDb->GetTable("osm_roads").get() != nullptr);
     REQUIRE(ptrMap->GetLayers()->GetLayerCount() >= 2);   // roads, pois / places
 }

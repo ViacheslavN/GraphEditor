@@ -7,6 +7,7 @@
 #include "../../str/str.h"
 #include "CryptoContextHolder.h"
 #include "Transaction.h"
+#include "../../synch/ThreadCancel.h"
 
 namespace CommonLib
 {
@@ -60,9 +61,22 @@ namespace CommonLib
 		{		
 
 
+			namespace
+			{
+				// every ProgressOpcodes virtual machine steps: non zero interrupts the statement (SQLITE_INTERRUPT)
+				// when the thread running it is canceled (synch::CThreadCancelScope)
+				const int ProgressOpcodes = 100;
+
+				int ProgressHandler(void*)
+				{
+					return synch::CThreadCancelScope::Continue() ? 0 : 1;
+				}
+			}
+
 			CDatabase::CDatabase(sqlite3* pDB, bool readOnly) :  m_readOnly(readOnly)
 			{
 				m_ptrDBApi.reset(new CSQliteApi(pDB));
+				sqlite3_progress_handler(pDB, ProgressOpcodes, &ProgressHandler, nullptr);
 			}
 
 			CDatabase::~CDatabase()

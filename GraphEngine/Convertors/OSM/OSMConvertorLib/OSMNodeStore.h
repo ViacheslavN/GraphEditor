@@ -17,6 +17,23 @@ namespace GraphEngine {
         // in the second one (Get). The coordinates are stored with 1e-7 degree precision (as in OSM itself).
         // Lookups of a finished node store for one thread (the parallel ways pass): every object has its own cache
         // and file handle, the objects of one store can be used by different threads at the same time.
+        // the reading of a lookup from the disk (the progress details)
+        struct SOSMLookupStats
+        {
+            uint64_t nReads = 0;        // reads from the file
+            uint64_t nBytesRead = 0;
+            uint64_t nCacheHits = 0;    // ids found in the cached data
+            double   dReadSeconds = 0.;
+
+            void Add(const SOSMLookupStats& stats)
+            {
+                nReads += stats.nReads;
+                nBytesRead += stats.nBytesRead;
+                nCacheHits += stats.nCacheHits;
+                dReadSeconds += stats.dReadSeconds;
+            }
+        };
+
         class IOSMNodeLookup
         {
         public:
@@ -24,6 +41,58 @@ namespace GraphEngine {
             virtual bool Get(int64_t nId, double& dLon, double& dLat) = 0;
             // the coordinates as stored: 1e-7 degrees (the OSM integers)
             virtual bool GetE7(int64_t nId, int32_t& nLon, int32_t& nLat) = 0;
+            // many ids at once, pIds sorted ascending (duplicates allowed): the store is read in the id order,
+            // pFound[i] - 1 / 0
+            virtual void GetSortedE7(const int64_t* pIds, size_t nCount, int32_t* pLons, int32_t* pLats, uint8_t* pFound)
+            {
+                for(size_t i = 0; i < nCount; ++i)
+                    pFound[i] = GetE7(pIds[i], pLons[i], pLats[i]) ? 1 : 0;
+            }
+            // the statistics since the last call
+            virtual SOSMLookupStats TakeStats() { return SOSMLookupStats(); }
+        };
+
+        // The node refs of a batch of ways resolved at once: the ids are sorted, the duplicates removed, the store is read
+        // in the id order (GetSortedE7), the coordinates are scattered back to the refs.
+        class COSMRefResolver
+        {
+        public:
+            // the refs [nStart, nStart + nCount) of pRefs are resolved; Add for every range, then Resolve
+            // (fnContinue is checked after every ResolveChunk ids, false - throws "canceled")
+            void Clear();
+            void Add(const int64_t* pRefs, uint32_t nStart, uint32_t nCount);
+            void Resolve(IOSMNodeLookup& lookup, size_t nTotalRefs, const std::function<bool()>& fnContinue = std::function<bool()>());
+            static const size_t ResolveChunk = 1024;
+
+            // the ref by its index in pRefs (only the added ranges)
+            bool Get(size_t nRef, int32_t& nLon, int32_t& nLat) const
+            {
+                if(!m_refFound[nRef])
+                    return false;
+                nLon = m_refLons[nRef];
+                nLat = m_refLats[nRef];
+                return true;
+            }
+            uint64_t RefCount() const { return m_pairs.size(); }
+            uint64_t UniqueCount() const { return m_ids.size(); }
+
+        private:
+            std::vector<std::pair<int64_t, uint32_t> > m_pairs;   // id, ref index
+            std::vector<int64_t> m_ids;
+            std::vector<int32_t> m_lons, m_lats;
+            std::vector<uint8_t> m_found;
+            std::vector<int32_t> m_refLons, m_refLats;
+            std::vector<uint8_t> m_refFound;
+        };
+
+        // the writing of a node store (the progress details)
+        struct SOSMStoreStats
+        {
+            std::string sType;              // "flat", "sorted"
+            std::string sPath;              // the temporary file, empty - in memory (yet)
+            uint64_t    nBytesWritten = 0;
+            double      dIOSeconds = 0.;    // writing (and merging) the file
+            double      dWaitSeconds = 0.;  // Add waits for the background writer (the disk is slower than the reading)
         };
 
         class IOSMNodeStore
@@ -41,13 +110,17 @@ namespace GraphEngine {
             virtual bool IsFinished() const = 0;
             virtual bool Get(int64_t nId, double& dLon, double& dLat) = 0;
             virtual uint64_t Count() const = 0;
+            virtual SOSMStoreStats GetStats() const = 0;
+            // checked while Add waits for the disk (the background writer of the flat store), false - Add throws "canceled"
+            virtual void SetContinue(std::function<bool()> fnContinue) { (void)fnContinue; }
             // after Finish; nCacheBytes - the memory of the lookup for the cached blocks (a store on the disk)
             virtual std::unique_ptr<IOSMNodeLookup> CreateLookup(uint64_t nCacheBytes) const = 0;
 
             // the store for the settings: Auto - the flat one for the files of a continent / the planet (see FlatNodeStoreFileSize)
             // on a 64-bit build, the sorted one otherwise; nFileSize - the size of the OSM file
+            // nFlatBufferBytes - the write buffer of the flat store, 0 - COSMFlatNodeStore::DefaultBufferBytes
             static std::unique_ptr<IOSMNodeStore> Create(eOSMNodeStore type, const std::string& sOSMPath, uint64_t nFileSize,
-                                                         const std::string& sTempDir, uint64_t nMemoryBytes);
+                                                         const std::string& sTempDir, uint64_t nMemoryBytes, uint64_t nFlatBufferBytes = 0);
             static eOSMNodeStore ResolveType(eOSMNodeStore type, const std::string& sOSMPath, uint64_t nFileSize);
 
             // Auto: the flat store from this size of a .pbf file (an .osm file is about 10 times bigger)
@@ -76,6 +149,15 @@ namespace GraphEngine {
             virtual bool Get(int64_t nId, double& dLon, double& dLat) override;
 
             virtual uint64_t Count() const override { return m_nCount; }
+            virtual SOSMStoreStats GetStats() const override
+            {
+                SOSMStoreStats stats;
+                stats.sType = "sorted";
+                stats.sPath = m_sFilePath;
+                stats.nBytesWritten = m_nBytesWritten;
+                stats.dIOSeconds = m_dIOSeconds;
+                return stats;
+            }
             virtual std::unique_ptr<IOSMNodeLookup> CreateLookup(uint64_t nCacheBytes) const override;
             bool     IsInFile() const { return m_ptrFile.get() != nullptr; }
             uint64_t GetCacheHits() const { return m_nHits; }
@@ -136,6 +218,8 @@ namespace GraphEngine {
             uint64_t    m_nLastBlock;
             uint64_t    m_nHits;
             uint64_t    m_nMisses;
+            uint64_t    m_nBytesWritten = 0;
+            double      m_dIOSeconds = 0.;
         };
     }
 }

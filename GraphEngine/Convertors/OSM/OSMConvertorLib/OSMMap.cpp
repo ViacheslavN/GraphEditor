@@ -134,7 +134,7 @@ namespace GraphEngine {
             if(it != m_mapValues.end())
                 return m_vecValues[it->second]->GetEnabled();
 
-            // not met by ReadMap: the values over MaxValues are counted as "other"
+            // not met by Analyze: the values over MaxValues are counted as "other"
             if((int)m_vecValues.size() >= MaxValues)
             {
                 it = m_mapValues.find(OtherValue);
@@ -289,6 +289,8 @@ namespace GraphEngine {
                 return sLower.size() >= len && sLower.compare(sLower.size() - len, len, pszSuffix) == 0;
             };
 
+            if(endsWith("osm_split.xml"))
+                return OSMFormatSplit;
             if(endsWith(".pbf"))
                 return OSMFormatPBF;
             if(endsWith(".osm"))
@@ -506,7 +508,7 @@ namespace GraphEngine {
                 m_nWays = ptrMapNode->GetPropertyIntU64("Ways", 0);
                 m_nRelations = ptrMapNode->GetPropertyIntU64("Relations", 0);
                 m_bSorted = ptrMapNode->GetPropertyBool("Sorted", true);
-                m_bScanned = ptrMapNode->GetPropertyBool("Scanned", true);   // saved before the flag - by ReadMap
+                m_bScanned = ptrMapNode->GetPropertyBool("Scanned", true);   // saved before the flag - by Analyze
                 m_bounds.xMin = ptrMapNode->GetPropertyDouble("XMin", 0.);
                 m_bounds.yMin = ptrMapNode->GetPropertyDouble("YMin", 0.);
                 m_bounds.xMax = ptrMapNode->GetPropertyDouble("XMax", 0.);

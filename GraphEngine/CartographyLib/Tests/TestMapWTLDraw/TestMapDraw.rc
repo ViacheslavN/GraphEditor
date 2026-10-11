@@ -63,6 +63,7 @@ BEGIN
     BUTTON      ID_APP_ABOUT
     BUTTON      ID_REDRAW_MAP
     BUTTON      ID_FULL_ZOOM
+    BUTTON      ID_STOP_DRAWING
 END
 
 
@@ -113,6 +114,7 @@ BEGIN
     BEGIN
         MENUITEM "&Redraw\tF5",                 ID_REDRAW_MAP
         MENUITEM "&Full extent\tHome",          ID_FULL_ZOOM
+        MENUITEM "&Stop drawing\tEsc",          ID_STOP_DRAWING
         MENUITEM "Zoom to &layer...\tCtrl+L",   ID_ZOOM_TO_LAYER
         MENUITEM "Zoom &in\t+",                 ID_ZOOM_IN
         MENUITEM "Zoom &out\t-",                ID_ZOOM_OUT
@@ -195,7 +197,7 @@ BEGIN
     PUSHBUTTON      "Cancel",IDCANCEL,315,299,50,14
 END
 
-IDD_CONVERT_OSM DIALOG 0, 0, 372, 442
+IDD_CONVERT_OSM DIALOG 0, 0, 372, 458
 STYLE DS_SETFONT | DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION "Convert from OpenStreetMap"
 FONT 8, "MS Shell Dlg"
@@ -203,14 +205,16 @@ BEGIN
     LTEXT           "OSM file:",IDC_STATIC,7,10,34,8
     EDITTEXT        IDC_OSM_PATH,44,7,198,14,ES_AUTOHSCROLL
     PUSHBUTTON      "...",IDC_OSM_BROWSE,245,7,20,14
-    PUSHBUTTON      "Read",IDC_OSM_READ,269,7,42,14
+    PUSHBUTTON      "Analyze",IDC_OSM_ANALYZE,269,7,42,14
     PUSHBUTTON      "Convert all",IDC_OSM_CONVERT_ALL,315,7,50,14
-    LTEXT           "Choose an .osm or .osm.pbf file, its layers are shown after reading.",IDC_OSM_INFO,7,26,358,18
-    LTEXT           "Layers and tables (unchecked are not converted):",IDC_STATIC,7,48,200,8
-    CONTROL         "",IDC_OSM_DATASETS,"SysListView32",LVS_REPORT | LVS_SINGLESEL | LVS_SHOWSELALWAYS | WS_BORDER | WS_TABSTOP,7,59,358,150
+    LTEXT           "Choose an .osm / .osm.pbf file or split data (osm_split.xml), its layers and their columns are shown after Analyze.",IDC_OSM_INFO,7,26,358,18
+    LTEXT           "Layers / tables and their columns (the unchecked ones are not converted):",IDC_STATIC,7,48,300,8
+    CONTROL         "",IDC_OSM_DATASETS,"SysTreeView32",TVS_HASBUTTONS | TVS_HASLINES | TVS_LINESATROOT | TVS_SHOWSELALWAYS | WS_BORDER | WS_TABSTOP,7,59,358,150
     PUSHBUTTON      "Select all",IDC_OSM_SELECT_ALL,7,213,50,14
     PUSHBUTTON      "Clear all",IDC_OSM_CLEAR_ALL,61,213,50,14
-    GROUPBOX        "Output",IDC_STATIC,7,232,358,124
+    PUSHBUTTON      "Split into files...",IDC_OSM_SPLIT,150,213,80,14
+    CONTROL         "Keep node coordinates (nodes.flat/.sorted)",IDC_OSM_KEEP_NODES,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,236,215,129,10
+    GROUPBOX        "Output",IDC_STATIC,7,232,358,140
     LTEXT           "SQLite database:",IDC_STATIC,14,246,58,8
     EDITTEXT        IDC_OSM_OUTPUT,74,243,262,14,ES_AUTOHSCROLL
     PUSHBUTTON      "...",IDC_OSM_OUTPUT_BROWSE,339,243,20,14
@@ -225,32 +229,37 @@ BEGIN
     LTEXT           "Node store:",IDC_STATIC,14,309,58,8
     COMBOBOX        IDC_OSM_NODE_STORE,74,307,150,60,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
     LTEXT           "",IDC_OSM_NODE_STORE_INFO,230,305,130,18
-    LTEXT           "Temporary files:",IDC_STATIC,14,327,58,8
-    EDITTEXT        IDC_OSM_TEMP_DIR,74,325,262,14,ES_AUTOHSCROLL
-    PUSHBUTTON      "...",IDC_OSM_TEMP_BROWSE,339,325,20,14
-    LTEXT           "",IDC_OSM_TEMP_INFO,74,342,285,8
-    GROUPBOX        "Geometry compression",IDC_STATIC,7,360,358,62
-    CONTROL         "Compress the geometry (about 4 times smaller): the coordinates are stored as integers",IDC_OSM_COMPRESS,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,14,373,345,10
-    CONTROL         "Automatic scale (by the units)",IDC_OSM_SCALE_AUTO,"Button",BS_AUTORADIOBUTTON | WS_GROUP | WS_TABSTOP,24,387,140,10
-    CONTROL         "Maximum (all the digits of the doubles)",IDC_OSM_SCALE_MAX,"Button",BS_AUTORADIOBUTTON,170,387,180,10
-    CONTROL         "Manual, decimal places:",IDC_OSM_SCALE_MANUAL,"Button",BS_AUTORADIOBUTTON,24,402,96,10
-    EDITTEXT        IDC_OSM_SCALE_VALUE,122,400,28,12,ES_AUTOHSCROLL | WS_GROUP
-    LTEXT           "",IDC_OSM_SCALE_INFO,156,402,204,16
-    DEFPUSHBUTTON   "Run",IDOK,258,425,50,14
-    PUSHBUTTON      "Cancel",IDCANCEL,315,425,50,14
+    LTEXT           "Write buffer, MB:",IDC_STATIC,14,327,58,8
+    EDITTEXT        IDC_OSM_WRITE_BUFFER,74,325,40,12,ES_NUMBER
+    LTEXT           "the flat node store: the nodes are collected in memory, written by big blocks in the background",IDC_STATIC,118,327,241,8
+    LTEXT           "Temporary files:",IDC_STATIC,14,343,58,8
+    EDITTEXT        IDC_OSM_TEMP_DIR,74,341,262,14,ES_AUTOHSCROLL
+    PUSHBUTTON      "...",IDC_OSM_TEMP_BROWSE,339,341,20,14
+    LTEXT           "",IDC_OSM_TEMP_INFO,74,358,285,8
+    GROUPBOX        "Geometry compression",IDC_STATIC,7,376,358,62
+    CONTROL         "Compress the geometry (about 4 times smaller): the coordinates are stored as integers",IDC_OSM_COMPRESS,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,14,389,345,10
+    CONTROL         "Automatic scale (by the units)",IDC_OSM_SCALE_AUTO,"Button",BS_AUTORADIOBUTTON | WS_GROUP | WS_TABSTOP,24,403,140,10
+    CONTROL         "Maximum (all the digits of the doubles)",IDC_OSM_SCALE_MAX,"Button",BS_AUTORADIOBUTTON,170,403,180,10
+    CONTROL         "Manual, decimal places:",IDC_OSM_SCALE_MANUAL,"Button",BS_AUTORADIOBUTTON,24,418,96,10
+    EDITTEXT        IDC_OSM_SCALE_VALUE,122,416,28,12,ES_AUTOHSCROLL | WS_GROUP
+    LTEXT           "",IDC_OSM_SCALE_INFO,156,418,204,16
+    DEFPUSHBUTTON   "Run",IDOK,258,441,50,14
+    PUSHBUTTON      "Cancel",IDCANCEL,315,441,50,14
 END
 
-IDD_OSM_PROGRESS DIALOG 0, 0, 280, 120
+IDD_OSM_PROGRESS DIALOG 0, 0, 520, 290
 STYLE DS_SETFONT | DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION "OpenStreetMap"
 FONT 8, "MS Shell Dlg"
 BEGIN
-    LTEXT           "Starting...",IDC_PROGRESS_STAGE,7,7,266,8
-    CONTROL         "",IDC_PROGRESS_BAR,"msctls_progress32",WS_BORDER,7,20,266,12
-    LTEXT           "",IDC_PROGRESS_DATA,7,38,266,16
-    LTEXT           "",IDC_PROGRESS_COUNTS,7,56,266,26
-    LTEXT           "",IDC_PROGRESS_TIME,7,85,210,8
-    PUSHBUTTON      "Cancel",IDCANCEL,223,99,50,14
+    LTEXT           "Starting...",IDC_PROGRESS_STAGE,7,7,506,8
+    CONTROL         "",IDC_PROGRESS_BAR,"msctls_progress32",WS_BORDER,7,20,506,12
+    LTEXT           "",IDC_PROGRESS_DATA,7,38,506,16
+    LTEXT           "",IDC_PROGRESS_COUNTS,7,56,506,18
+    LTEXT           "Where the time goes (busy: the time of the work in the stage, the bottleneck is close to 100%):",IDC_STATIC,7,77,506,8
+    CONTROL         "",IDC_PROGRESS_ITEMS,"SysListView32",LVS_REPORT | LVS_NOSORTHEADER | LVS_SHOWSELALWAYS | WS_BORDER | WS_TABSTOP,7,88,506,174
+    LTEXT           "",IDC_PROGRESS_TIME,7,271,400,8
+    PUSHBUTTON      "Cancel",IDCANCEL,463,269,50,14
 END
 
 IDD_PAGE_SYMBOLOGY DIALOG 0, 0, 350, 228
@@ -624,6 +633,7 @@ STRINGTABLE
 BEGIN
     ID_REDRAW_MAP           "Redraw the map\nRedraw"
     ID_FULL_ZOOM            "Zoom to the full extent of the map\nFull Extent"
+    ID_STOP_DRAWING         "Stop drawing the map (the part drawn so far stays)\nStop drawing"
     ID_ADD_SHAPE_FILE       "Add an ESRI shape file as a new layer\nAdd Shape File"
     ID_REMOVE_ALL_LAYERS    "Remove all layers from the map\nRemove All Layers"
     ID_ZOOM_IN              "Zoom in\nZoom In"

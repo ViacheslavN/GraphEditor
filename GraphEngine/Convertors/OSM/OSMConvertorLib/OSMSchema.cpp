@@ -1,5 +1,7 @@
 #include "OSMSchema.h"
 #include <algorithm>
+#include <cctype>
+#include <set>
 
 namespace GraphEngine {
     namespace Convertors {
@@ -44,6 +46,32 @@ namespace GraphEngine {
                         return true;
                 }
                 return false;
+            }
+        }
+
+        const char* COSMSchema::ColumnOsmId = "osm_id";
+        const char* COSMSchema::ColumnOsmType = "osm_type";
+        const char* COSMSchema::ColumnName = "name";
+        const char* COSMSchema::ColumnClass = "class";
+        const char* COSMSchema::ColumnType = "type";
+
+        namespace
+        {
+            SOSMColumn Column(const std::string& sName, bool bInteger = false, bool bRequired = false, const std::string& sKey = std::string())
+            {
+                SOSMColumn column;
+                column.sName = sName;
+                column.sKey = sKey;
+                column.bInteger = bInteger;
+                column.bRequired = bRequired;
+                return column;
+            }
+
+            std::string Lower(const std::string& sText)
+            {
+                std::string sLower = sText;
+                std::transform(sLower.begin(), sLower.end(), sLower.begin(), [](unsigned char ch) { return (char)std::tolower(ch); });
+                return sLower;
             }
         }
 
@@ -130,6 +158,113 @@ namespace GraphEngine {
             }
         }
 
+        std::vector<SOSMColumn> COSMSchema::LayerColumns(const SOSMLayerDef& def)
+        {
+            // osm_id identifies the feature, type is drawn by the map styles: always written
+            std::vector<SOSMColumn> columns = {Column(ColumnOsmId, true, true), Column(ColumnOsmType), Column(ColumnName),
+                                               Column(ColumnClass), Column(ColumnType, false, true)};
+            for(size_t i = 0; i < def.vecFields.size(); ++i)
+                columns.push_back(Column(def.vecFields[i].sName, def.vecFields[i].kind != OSMFieldText, false, def.vecFields[i].sKey));
+            return columns;
+        }
+
+        std::vector<SOSMColumn> COSMSchema::TableColumns(eOSMTableType type)
+        {
+            // the order is the one the tables are written in (OSMConvertSession)
+            switch(type)
+            {
+                case OSMTableRoutes:
+                    return {Column("osm_id", true, true), Column("route"), Column("name"), Column("ref"), Column("network"),
+                            Column("operator"), Column("colour"), Column("route_from"), Column("route_to")};
+                case OSMTableRestrictions:
+                    return {Column("osm_id", true, true), Column("restriction"), Column("from_way", true), Column("via_type"),
+                            Column("via_id", true), Column("to_way", true), Column("except_for")};
+                default:
+                    return {Column("osm_type"), Column("osm_id", true, true), Column("key"), Column("value")};
+            }
+        }
+
+        std::string COSMSchema::KeyColumnName(const std::string& sKey)
+        {
+            std::string sName;
+            sName.reserve(sKey.size());
+            for(unsigned char ch : sKey)
+                sName += (std::isalnum(ch) && ch < 0x80) || ch == '_' ? (char)ch : '_';
+            if(sName.empty() || std::isdigit((unsigned char)sName[0]))
+                sName = "k_" + sName;
+            return sName;
+        }
+
+        bool COSMSchema::IsLayerKey(const SOSMLayerDef& def, const std::string& sKey)
+        {
+            if(sKey == "name")
+                return true;
+            for(size_t i = 0; i < def.vecRules.size(); ++i)
+            {
+                if(def.vecRules[i].sKey == sKey || def.vecRules[i].sGroupKey == sKey)
+                    return true;
+            }
+            for(size_t i = 0; i < def.vecFields.size(); ++i)
+            {
+                if(def.vecFields[i].sKey == sKey)
+                    return true;
+            }
+            return false;
+        }
+
+        void COSMSchema::SetAnalyzedColumns(int nLayer, COSMLayer& layer, const std::unordered_map<std::string, uint64_t>& keyCounts) const
+        {
+            if(nLayer < 0 || nLayer >= (int)m_vecLayers.size())
+                throw CommonLib::CExcBase("OSM schema: layer index {0} is out of range", nLayer);
+            const SOSMLayerDef& def = m_vecLayers[nLayer];
+            const uint64_t nFeatures = layer.GetFeatureCount();
+            auto keyCount = [&keyCounts](const std::string& sKey) -> uint64_t
+            {
+                auto it = keyCounts.find(sKey);
+                return it == keyCounts.end() ? 0 : it->second;
+            };
+
+            // the converter / schema columns: every feature has osm_id, class, type ...
+            std::vector<SOSMColumn> columns = LayerColumns(def);
+            std::set<std::string> setNames = {"oid", "shape"};   // the columns of the table writer, SQLite names aren't case sensitive
+            for(size_t i = 0; i < columns.size(); ++i)
+            {
+                SOSMColumn& column = columns[i];
+                column.nCount = column.sName == ColumnName ? keyCount("name") : (column.sKey.empty() ? nFeatures : keyCount(column.sKey));
+                setNames.insert(Lower(column.sName));
+            }
+
+            // the OSM keys, the most frequent first
+            std::vector<std::pair<std::string, uint64_t> > keys;
+            const uint64_t nMinCount = (std::max)((uint64_t)1, nFeatures * MinTagColumnPerMille / 1000);
+            for(const auto& key : keyCounts)
+            {
+                if(key.second >= nMinCount && !key.first.empty() && !IsLayerKey(def, key.first))
+                    keys.push_back(key);
+            }
+            std::sort(keys.begin(), keys.end(), [](const std::pair<std::string, uint64_t>& a, const std::pair<std::string, uint64_t>& b)
+            {
+                return a.second != b.second ? a.second > b.second : a.first < b.first;
+            });
+            if(keys.size() > (size_t)MaxTagColumns)
+                keys.resize(MaxTagColumns);
+
+            for(size_t i = 0; i < keys.size(); ++i)
+            {
+                // addr:street and addr_street give the same name: the second one gets a number
+                std::string sBase = KeyColumnName(keys[i].first);
+                std::string sName = sBase;
+                for(int n = 2; setNames.count(Lower(sName)); ++n)
+                    sName = sBase + "_" + std::to_string(n);
+                setNames.insert(Lower(sName));
+
+                SOSMColumn column = Column(sName, false, false, keys[i].first);
+                column.nCount = keys[i].second;
+                columns.push_back(column);
+            }
+            layer.SetColumns(columns);
+        }
+
         const SOSMLayerDef* COSMSchema::FindLayer(const std::string& sName) const
         {
             int nIndex = FindLayerIndex(sName);
@@ -191,13 +326,13 @@ namespace GraphEngine {
                 std::vector<std::string> vecKeys;
                 for(size_t r = 0; r < def.vecRules.size(); ++r)
                     vecKeys.push_back(def.vecRules[r].sGroupKey.empty() ? def.vecRules[r].sKey : def.vecRules[r].sGroupKey);
-                ptrMap->AddLayer(std::make_shared<COSMLayer>(def.sName, def.sDisplayName, def.geometryType, vecKeys));
+                ptrMap->AddLayer(std::make_shared<COSMLayer>(def.sName, def.sDisplayName, def.geometryType, vecKeys, LayerColumns(def)));
             }
 
             std::vector<SOSMTableDef> tables = DefaultTables();
             for(size_t i = 0; i < tables.size(); ++i)
                 ptrMap->AddTable(std::make_shared<COSMTable>(tables[i].sName, tables[i].sDisplayName, tables[i].tableType,
-                                                             std::vector<std::string>(1, TableKey(tables[i].tableType))));
+                                                             std::vector<std::string>(1, TableKey(tables[i].tableType)), TableColumns(tables[i].tableType)));
             return ptrMap;
         }
 

@@ -13,6 +13,7 @@
 #include "../../../../GeoDatabase/GeoDatabaseSQlite/SQLiteWorkspace.h"
 #include "../../../../CartographyLib/Map.h"
 #include <algorithm>
+#include <cmath>
 #include <filesystem>
 #include <fstream>
 #include <random>
@@ -124,6 +125,69 @@ TEST_CASE("OSM flat node store", "[osm][stores]")
     REQUIRE(poles.Get(2, dLon, dLat));
     REQUIRE(dLon == 180.);
     REQUIRE(dLat == 90.);
+}
+
+TEST_CASE("OSM flat node store: sorted lookups by ranges", "[osm][stores]")
+{
+    // clusters of nodes far from each other (an extract): a range is read per cluster, the gaps between them aren't
+    std::vector<int64_t> ids;
+    for(int64_t nCluster = 0; nCluster < 20; ++nCluster)
+    {
+        for(int64_t i = 0; i < 3000; i += 3)
+            ids.push_back(nCluster * 5000000 + 1000 + i);
+    }
+    auto lonOf = [](int64_t id) { return (double)(id % 3600000) / 10000.0 - 180.; };
+    auto latOf = [](int64_t id) { return (double)(id % 1700000) / 10000.0 - 85.; };
+    COSMFlatNodeStore store(StoresDir().u8string());
+    for(int64_t id : ids)
+        store.Add(id, lonOf(id), latOf(id));
+    store.Finish();
+
+    // a small cache: the ranges leave it and are read again
+    std::unique_ptr<IOSMNodeLookup> ptrLookup = store.CreateLookup(16 * 1024 * 1024);
+    std::vector<int64_t> request(ids);
+    request.push_back(2);                 // no node
+    request.push_back(1000);              // a node
+    request.push_back(999999999999LL);    // beyond the file
+    std::sort(request.begin(), request.end());
+    std::vector<int32_t> lons(request.size()), lats(request.size());
+    std::vector<uint8_t> found(request.size());
+    ptrLookup->GetSortedE7(request.data(), request.size(), lons.data(), lats.data(), found.data());
+    for(size_t i = 0; i < request.size(); ++i)
+    {
+        bool bExists = std::binary_search(ids.begin(), ids.end(), request[i]);
+        REQUIRE((found[i] != 0) == bExists);
+        if(bExists)
+        {
+            REQUIRE(lons[i] == (int32_t)std::lround(lonOf(request[i]) * 1e7));
+            REQUIRE(lats[i] == (int32_t)std::lround(latOf(request[i]) * 1e7));
+        }
+    }
+    SOSMLookupStats stats = ptrLookup->TakeStats();
+    REQUIRE(stats.nReads == 20);         // one read per cluster
+    REQUIRE(stats.nBytesRead < 20 * 8 * 8192);
+
+    // the same ids again: from the cache
+    ptrLookup->GetSortedE7(request.data(), request.size(), lons.data(), lats.data(), found.data());
+    stats = ptrLookup->TakeStats();
+    REQUIRE(stats.nReads == 0);
+    REQUIRE(stats.nCacheHits > 0);
+
+    // the resolver: unsorted refs with duplicates are resolved in the id order and scattered back
+    std::vector<int64_t> refs = {ids[500], ids[3], 2, ids[500], ids[19999]};
+    COSMRefResolver resolver;
+    resolver.Add(refs.data(), 0, 2);
+    resolver.Add(refs.data(), 2, 3);
+    resolver.Resolve(*ptrLookup, refs.size());
+    REQUIRE(resolver.UniqueCount() == 4);
+    int32_t nLon = 0, nLat = 0;
+    REQUIRE(resolver.Get(0, nLon, nLat));
+    REQUIRE(nLon == (int32_t)std::lround(lonOf(ids[500]) * 1e7));
+    REQUIRE(resolver.Get(3, nLon, nLat));
+    REQUIRE(nLat == (int32_t)std::lround(latOf(ids[500]) * 1e7));
+    REQUIRE_FALSE(resolver.Get(2, nLon, nLat));
+    REQUIRE(resolver.Get(4, nLon, nLat));
+    REQUIRE(nLon == (int32_t)std::lround(lonOf(ids[19999]) * 1e7));
 }
 
 TEST_CASE("OSM node store type", "[osm][stores]")

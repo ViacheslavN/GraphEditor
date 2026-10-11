@@ -1,4 +1,5 @@
 #include "OSMTableWriter.h"
+#include <chrono>
 #include "../../../GeoDatabase/Field.h"
 #include "../../../GeoDatabase/Fields.h"
 #include "../../../GisGeometry/Envelope.h"
@@ -31,7 +32,10 @@ namespace GraphEngine {
 
                 addField(OIDField, GeoDatabase::dtInteger64, true);
                 for(size_t i = 0; i < m_vecFields.size(); ++i)
-                    addField(m_vecFields[i].sName, m_vecFields[i].type, false);
+                {
+                    if(!m_vecFields[i].bExcluded)
+                        addField(m_vecFields[i].sName, m_vecFields[i].type, false);
+                }
 
                 bool bSpatial = shapeType != CommonLib::shape_type_null;
                 if(bSpatial)
@@ -59,7 +63,7 @@ namespace GraphEngine {
                     else
                     {
                         int nField = FindField(sName);
-                        if(nField >= 0)
+                        if(nField >= 0 && !m_vecFields[nField].bExcluded)
                             m_vecColumns[nField] = col;
                     }
                 }
@@ -103,6 +107,16 @@ namespace GraphEngine {
             value.sValue = sValue;
         }
 
+        void COSMTableWriter::SetText(int nField, const char* pszValue)
+        {
+            if(nField < 0 || nField >= (int)m_vecValues.size())
+                return;
+            SValue& value = m_vecValues[nField];
+            value.bSet = true;
+            value.bText = true;
+            value.sValue.assign(pszValue ? pszValue : "");   // the buffer of the field is reused: no allocation per row
+        }
+
         void COSMTableWriter::SetShape(CommonLib::IGeoShapePtr ptrShape)
         {
             m_ptrShape = ptrShape;
@@ -120,6 +134,7 @@ namespace GraphEngine {
 
         void COSMTableWriter::Insert()
         {
+            auto start = std::chrono::steady_clock::now();
             try
             {
                 ++m_nRows;
@@ -135,7 +150,7 @@ namespace GraphEngine {
                         if(!value.bSet)
                             m_ptrInsert->BindBlob(col, nullptr, 0, true);   // NULL
                         else if(value.bText)
-                            m_ptrInsert->BindText(col, value.sValue, true);
+                            m_ptrInsert->BindText(col, value.sValue, false);   // no copy: the value lives until the step
                         else
                             m_ptrInsert->BindInt64(col, value.nValue);
                     }
@@ -165,15 +180,16 @@ namespace GraphEngine {
                             m_extent.yMax = (std::max)(m_extent.yMax, bb.yMax);
                         }
                         m_extent.type = CommonLib::bbox_type_normal;
-                        m_ptrInsert->BindShape(m_nShapeColumn, m_ptrShape, true);
+                        m_ptrInsert->BindShape(m_nShapeColumn, m_ptrShape, false);   // no copy: m_ptrShape lives until the step
                     }
                     else
                         m_ptrInsert->BindBlob(m_nShapeColumn, nullptr, 0, true);
                 }
+                m_ptrInsert->Next();
+                // after the step: the shape is bound without a copy
                 m_ptrShape.reset();
                 m_bShapeCompressed = false;
-
-                m_ptrInsert->Next();
+                m_dInsertSeconds += std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
             }
             catch (std::exception& exc)
             {

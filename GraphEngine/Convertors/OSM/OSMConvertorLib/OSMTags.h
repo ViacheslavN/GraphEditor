@@ -12,6 +12,8 @@ namespace GraphEngine {
             COSMTags(const readosm_tag* pTags, int nCount) : m_pTags(pTags), m_nCount(pTags ? nCount : 0) {}
 
             int Count() const { return m_nCount; }
+            const char* Key(int nIndex) const { return m_pTags[nIndex].key; }
+            const char* Value(int nIndex) const { return m_pTags[nIndex].value; }
 
             // value of the key, nullptr - no such tag
             const char* Get(const char* pszKey) const

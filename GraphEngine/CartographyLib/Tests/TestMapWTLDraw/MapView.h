@@ -38,6 +38,7 @@ public:
 	ALT_MSG_MAP( 1 )	//	Forwarded by frame
 		COMMAND_ID_HANDLER(ID_REDRAW_MAP, OnRedrawMap)
 		COMMAND_ID_HANDLER(ID_FULL_ZOOM, OnFullZoom)
+		COMMAND_ID_HANDLER(ID_STOP_DRAWING, OnStopDrawing)
 		COMMAND_ID_HANDLER(ID_ZOOM_TO_LAYER, OnZoomToLayer)
 		COMMAND_ID_HANDLER(ID_ZOOM_IN, OnZoomIn)
 		COMMAND_ID_HANDLER(ID_ZOOM_OUT, OnZoomOut)
@@ -83,6 +84,7 @@ public:
 	LRESULT OnConvertFromOSM(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnRemoveAllLayers(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnClearSelection(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
+	LRESULT OnStopDrawing(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnView3D(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnTilt(WORD /*wNotifyCode*/, WORD wID, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnRotate(WORD /*wNotifyCode*/, WORD wID, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
@@ -103,6 +105,7 @@ public:
 
 	// pseudo 3D (navigator) view
 	bool Is3DMode() const;
+	bool IsDrawing() const;
 	void Set3DMode(bool b3D);
 	void ChangeTilt(double dDelta);
 	void ChangeRotation(double dDelta);

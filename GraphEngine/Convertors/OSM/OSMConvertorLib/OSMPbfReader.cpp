@@ -2,6 +2,7 @@
 #include "../../../CommonLib/filesystem/File.h"
 #include <zlib.h>
 #include <algorithm>
+#include <chrono>
 #include <condition_variable>
 #include <cstring>
 #include <deque>
@@ -180,6 +181,7 @@ namespace GraphEngine {
                 uint8_t            types = 0;
                 std::exception_ptr ptrError;
                 bool               bDone = false;
+                double             dDecodeSeconds = 0.;   // set by the decoding thread
 
                 void Reset()
                 {
@@ -534,6 +536,7 @@ namespace GraphEngine {
             private:
                 static void DecodeSafe(SBlock& block)
                 {
+                    auto start = std::chrono::steady_clock::now();
                     try
                     {
                         block.Decode();
@@ -542,6 +545,7 @@ namespace GraphEngine {
                     {
                         block.ptrError = std::current_exception();
                     }
+                    block.dDecodeSeconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
                 }
 
                 void Run()
@@ -800,6 +804,12 @@ namespace GraphEngine {
             }
             uint64_t nBytesDone = 0;
 
+            // where the time of the reading thread goes (SOSMReaderStats)
+            SOSMReaderStats stats;
+            stats.nThreads = nThreads;
+            typedef std::chrono::steady_clock TClock;
+            auto seconds = [](TClock::time_point start) { return std::chrono::duration<double>(TClock::now() - start).count(); };
+
             size_t nNextIndexed = 0;     // the next blob of the index
             uint64_t nOffset = 0;        // the next blob of the file (sequential reading)
             auto readNext = [&](SBlock& block) -> bool
@@ -842,12 +852,16 @@ namespace GraphEngine {
                         }
                         pBlock->Reset();
                         pBlock->nObjects = wanted;
-                        if(!readNext(*pBlock))
+                        TClock::time_point readStart = TClock::now();
+                        bool bRead = readNext(*pBlock);
+                        stats.dReadSeconds += seconds(readStart);
+                        if(!bRead)
                         {
                             vecFree.push_back(pBlock);
                             bEnd = true;
                             break;
                         }
+                        stats.nBytesRead += pBlock->info.nSize;
                         pool.Submit(pBlock);
                         inFlight.push_back(pBlock);
                     }
@@ -855,7 +869,10 @@ namespace GraphEngine {
                         break;
 
                     SBlock* pBlock = inFlight.front();
+                    TClock::time_point waitStart = TClock::now();
                     pool.Wait(pBlock);
+                    stats.dWaitSeconds += seconds(waitStart);
+                    stats.dDecodeSeconds += pBlock->dDecodeSeconds;
                     inFlight.pop_front();
                     if(pBlock->ptrError)
                         std::rethrow_exception(pBlock->ptrError);
@@ -867,11 +884,17 @@ namespace GraphEngine {
                         ptrNewIndex->blobs.push_back(info);
                     }
 
+                    TClock::time_point dispatchStart = TClock::now();
                     bool bContinue = Dispatch(*pBlock, handler);
+                    stats.dDispatchSeconds += seconds(dispatchStart);
+                    ++stats.nBlocks;
                     nBytesDone += pBlock->info.nSize;
                     vecFree.push_back(pBlock);
                     if(bContinue)
+                    {
+                        handler.OnReaderStats(stats);
                         bContinue = handler.OnProgress((std::min)(nBytesDone, nBytesTotal), nBytesTotal);
+                    }
                     if(!bContinue)
                     {
                         for(SBlock* pWait : inFlight)

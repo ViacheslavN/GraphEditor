@@ -31,11 +31,12 @@ namespace
 	{
 		switch(stage)
 		{
-			case OSMStageReadMap:       return L"Reading the map";
+			case OSMStageAnalyze:       return L"Analyzing the file";
 			case OSMStageNodes:         return L"Reading nodes and relations";
 			case OSMStageSortNodes:     return L"Indexing node coordinates";
 			case OSMStageWays:          return L"Reading ways";
 			case OSMStageMultipolygons: return L"Building multipolygons";
+			case OSMStageSplit:         return L"Splitting the file";
 			default:                    return L"Saving tables";
 		}
 	}
@@ -72,6 +73,36 @@ namespace
 	const double WaysEnd = 0.82;
 	const double MultipolygonsEnd = 0.88;
 	const double FinishStart1 = 0.85;
+
+	enum eItemColumns { ColWork, ColCount, ColData, ColBusy, ColInfo };
+
+	// 12.3 GB, 185 MB/s (of the stage time)
+	std::wstring DataItemText(uint64_t nBytes, double dStageSeconds)
+	{
+		if(nBytes == 0)
+			return std::wstring();
+		std::wstring sText = FormatBytes(nBytes);
+		if(dStageSeconds >= 1.)
+		{
+			wchar_t szRate[64];
+			swprintf(szRate, 64, L", %.0f MB/s", nBytes / (1024. * 1024) / dStageSeconds);
+			sText += szRate;
+		}
+		return sText;
+	}
+
+	// 12.3 s, 45% of the stage; a pool of threads: the CPU time and how many threads were busy on average
+	std::wstring BusyItemText(double dSeconds, bool bThreads, double dStageSeconds)
+	{
+		if(dSeconds <= 0.)
+			return std::wstring();
+		wchar_t szText[96];
+		if(bThreads)
+			swprintf(szText, 96, L"%.1f s CPU, x%.1f", dSeconds, dStageSeconds > 0 ? dSeconds / dStageSeconds : 0.);
+		else
+			swprintf(szText, 96, L"%.1f s, %.0f%%", dSeconds, dStageSeconds > 0 ? (std::min)(100., 100. * dSeconds / dStageSeconds) : 0.);
+		return szText;
+	}
 }
 
 COSMProgressDlg::COSMProgressDlg(const std::wstring& sCaption, TTask task, uint64_t nTotalNodes, uint64_t nTotalWays, uint64_t nTotalRelations) :
@@ -98,6 +129,14 @@ LRESULT COSMProgressDlg::OnInitDialog(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /
 
 	m_progressBar = GetDlgItem(IDC_PROGRESS_BAR);
 	m_progressBar.SetRange32(0, ProgressRange);
+
+	m_listItems = GetDlgItem(IDC_PROGRESS_ITEMS);
+	m_listItems.SetExtendedListViewStyle(LVS_EX_FULLROWSELECT | LVS_EX_GRIDLINES | LVS_EX_DOUBLEBUFFER);
+	m_listItems.InsertColumn(ColWork, L"Work", LVCFMT_LEFT, 190);
+	m_listItems.InsertColumn(ColCount, L"Count", LVCFMT_RIGHT, 100);
+	m_listItems.InsertColumn(ColData, L"Data", LVCFMT_RIGHT, 140);
+	m_listItems.InsertColumn(ColBusy, L"Busy", LVCFMT_RIGHT, 150);
+	m_listItems.InsertColumn(ColInfo, L"Details", LVCFMT_LEFT, 600);
 
 	m_start = std::chrono::steady_clock::now();
 	m_passStart = m_start;
@@ -130,14 +169,14 @@ LRESULT COSMProgressDlg::OnInitDialog(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /
 
 double COSMProgressDlg::TaskFraction(const SOSMProgress& progress) const
 {
-	// the part of the pass: the bytes of a .pbf file, the objects by the counts of the map (ReadMap) for an .osm file
+	// the part of the pass: the bytes of a .pbf file, the objects by the counts of the map (Analyze) for an .osm file
 	const bool bTwoPasses = progress.nPassCount > 1;
 	const bool bBytes = progress.nBytesTotal > 0;
 	const bool bCounts = m_nTotalNodes + m_nTotalWays + m_nTotalRelations > 0;
 	double dPass = -1.;
 	switch(progress.stage)
 	{
-		case OSMStageReadMap:
+		case OSMStageAnalyze:
 			return bBytes ? Fraction(progress.nBytesRead, progress.nBytesTotal) : -1.;
 		case OSMStageNodes:
 			if(bBytes)
@@ -155,6 +194,12 @@ double COSMProgressDlg::TaskFraction(const SOSMProgress& progress) const
 			return dPass < 0 ? -1. : SortEnd + (WaysEnd - SortEnd) * dPass;
 		case OSMStageMultipolygons:
 			return WaysEnd + (MultipolygonsEnd - WaysEnd) * Fraction(progress.nStepDone, progress.nStepTotal);
+		case OSMStageSplit:
+			// one pass over a sorted file, the second pass of an unsorted one (the nodes before it)
+			if(!bBytes)
+				return -1.;
+			dPass = Fraction(progress.nBytesRead, progress.nBytesTotal);
+			return bTwoPasses ? SortEnd + (0.98 - SortEnd) * dPass : 0.98 * dPass;
 		default:
 		{
 			double dStart = bTwoPasses ? MultipolygonsEnd : FinishStart1;
@@ -259,9 +304,57 @@ void COSMProgressDlg::ShowProgress(const SOSMProgress& progress)
 	sCounts += L"    Relations: " + FormatCount(progress.nRelations);
 	if(m_nTotalRelations)
 		sCounts += L" / " + FormatCount(m_nTotalRelations);
-	if(progress.stage != OSMStageReadMap)
+	if(progress.stage != OSMStageAnalyze)
 		sCounts += L"\nWritten features / records: " + FormatCount(progress.nFeatures);
+	if(progress.dStageSeconds > 0)
+		sCounts += L"    The stage: " + FormatTime(progress.dStageSeconds);
 	SetDlgItemText(IDC_PROGRESS_COUNTS, sCounts.c_str());
+	ShowItems(progress);
+}
+
+void COSMProgressDlg::ShowItems(const SOSMProgress& progress)
+{
+	struct SRow
+	{
+		std::wstring sCells[ColInfo + 1];
+	};
+	std::vector<SRow> rows;
+	for(const SOSMStageSummary& stage : progress.vecStages)
+	{
+		SRow row;
+		row.sCells[ColWork] = L"[done] " + DialogUtils::Utf8ToWide(stage.sMessage);
+		row.sCells[ColBusy] = FormatTime(stage.dSeconds);
+		rows.push_back(row);
+	}
+	for(const SOSMProgressItem& item : progress.vecItems)
+	{
+		SRow row;
+		row.sCells[ColWork] = DialogUtils::Utf8ToWide(item.sName);
+		row.sCells[ColCount] = item.nCount ? FormatCount(item.nCount) : std::wstring();
+		row.sCells[ColData] = DataItemText(item.nBytes, progress.dStageSeconds);
+		row.sCells[ColBusy] = BusyItemText(item.dSeconds, item.bThreads, progress.dStageSeconds);
+		row.sCells[ColInfo] = DialogUtils::Utf8ToWide(item.sInfo);
+		rows.push_back(row);
+	}
+
+	// the rows are updated in place (no flicker), the number of rows changes with the stage
+	m_listItems.SetRedraw(FALSE);
+	while(m_listItems.GetItemCount() > (int)rows.size())
+		m_listItems.DeleteItem(m_listItems.GetItemCount() - 1);
+	for(size_t i = 0; i < rows.size(); ++i)
+	{
+		int nItem = (int)i;
+		if(nItem >= m_listItems.GetItemCount())
+			m_listItems.InsertItem(nItem, rows[i].sCells[ColWork].c_str());
+		for(int nCol = ColWork; nCol <= ColInfo; ++nCol)
+		{
+			wchar_t szOld[1024] = {0};
+			m_listItems.GetItemText(nItem, nCol, szOld, 1024);
+			if(rows[i].sCells[nCol] != szOld)
+				m_listItems.SetItemText(nItem, nCol, rows[i].sCells[nCol].c_str());
+		}
+	}
+	m_listItems.SetRedraw(TRUE);
 }
 
 void COSMProgressDlg::ShowElapsed()
@@ -288,7 +381,10 @@ LRESULT COSMProgressDlg::OnTimer(UINT /*uMsg*/, WPARAM wParam, LPARAM /*lParam*/
 LRESULT COSMProgressDlg::OnProgress(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/)
 {
 	if(m_ptrUpdater.get())
-		ShowProgress(m_ptrUpdater->Take());
+	{
+		m_lastProgress = m_ptrUpdater->Take();
+		ShowProgress(m_lastProgress);
+	}
 	return 0;
 }
 
@@ -297,6 +393,8 @@ LRESULT COSMProgressDlg::OnTaskDone(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*l
 	if(m_thread.joinable())
 		m_thread.join();
 	KillTimer(TimeTimerId);
+	if(m_ptrUpdater.get())
+		m_lastProgress = m_ptrUpdater->Take();   // the final state (the summary of the last stage)
 	ShowElapsed();
 
 	// canceled: the task stops with the "canceled" exception (if it finished anyway, it is done)

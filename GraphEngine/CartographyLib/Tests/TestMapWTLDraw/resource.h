@@ -37,7 +37,7 @@
 #define IDD_OSM_PROGRESS                108
 #define IDC_OSM_PATH                    1160
 #define IDC_OSM_BROWSE                  1161
-#define IDC_OSM_READ                    1162
+#define IDC_OSM_ANALYZE                 1162
 #define IDC_OSM_INFO                    1163
 #define IDC_OSM_DATASETS                1164
 #define IDC_OSM_SELECT_ALL              1165
@@ -134,6 +134,10 @@
 #define IDC_OSM_TEMP_DIR                1254
 #define IDC_OSM_TEMP_BROWSE             1255
 #define IDC_OSM_TEMP_INFO               1256
+#define IDC_PROGRESS_ITEMS              1257
+#define IDC_OSM_SPLIT                   1258
+#define IDC_OSM_KEEP_NODES              1259
+#define IDC_OSM_WRITE_BUFFER            1260
 #define IDC_TABS                        1010
 #define IDC_SELECTOR_TYPE               1011
 #define IDC_SYMB_FIELD                  1012
@@ -195,6 +199,7 @@
 #define ID_ROTATE_LEFT                  32787
 #define ID_ROTATE_RIGHT                 32788
 #define ID_RESET_ROTATION               32789
+#define ID_STOP_DRAWING                 32799
 #define ID_ADD_RASTER                   32790
 #define ID_ZOOM_TO_LAYER                32791
 #define ID_CONVERT_FROM_OSM             32792
@@ -210,8 +215,8 @@
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        201
-#define _APS_NEXT_COMMAND_VALUE         32799
-#define _APS_NEXT_CONTROL_VALUE         1257
+#define _APS_NEXT_COMMAND_VALUE         32800
+#define _APS_NEXT_CONTROL_VALUE         1261
 #define _APS_NEXT_SYMED_VALUE           114
 #endif
 #endif

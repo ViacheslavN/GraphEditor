@@ -1,17 +1,21 @@
 #include "OSMConvertSession.h"
 #include "OSMReader.h"
 #include "OSMTableWriter.h"
+#include "OSMFeatureWriter.h"
 #include "OSMWayStore.h"
 #include "OSMTempFile.h"
 #include "OSMProgressThrottle.h"
 #include "OSMMapStyle.h"
 #include "OSMConvertor.h"
 #include <algorithm>
+#include <atomic>
+#include <map>
 #include <chrono>
 #include <condition_variable>
 #include <deque>
 #include <mutex>
 #include <thread>
+#include <unordered_map>
 #include <filesystem>
 #include <cstdlib>
 #include <cstring>
@@ -22,164 +26,24 @@ namespace GraphEngine {
         namespace
         {
             const uint64_t ProgressStep = 100000;
-            const char* LayerPrefix = "layer:";
-            const char* TablePrefix = "table:";
 
-            typedef std::vector<std::pair<std::string, std::string> > TTagList;
-
-            // the tags of a stored object as readosm tags (for COSMTags)
-            class CStoredTags
-            {
-            public:
-                explicit CStoredTags(const TTagList& tags)
-                {
-                    m_tags.reserve(tags.size());
-                    for(size_t i = 0; i < tags.size(); ++i)
-                    {
-                        readosm_tag tag = {tags[i].first.c_str(), tags[i].second.c_str()};
-                        m_tags.push_back(tag);
-                    }
-                }
-                COSMTags Tags() const { return COSMTags(m_tags.empty() ? nullptr : &m_tags[0], (int)m_tags.size()); }
-
-            private:
-                std::vector<readosm_tag> m_tags;
-            };
-
-            bool ParseInteger(const char* pszValue, int64_t& nValue)
-            {
-                if(!pszValue)
-                    return false;
-                while(*pszValue == ' ')
-                    ++pszValue;
-                const char* p = pszValue;
-                if(*p == '-' || *p == '+')
-                    ++p;
-                if(*p < '0' || *p > '9')
-                    return false;
-                nValue = strtoll(pszValue, nullptr, 10);
-                return true;
-            }
-
-            bool IsYes(const char* pszValue)
-            {
-                return pszValue && (strcmp(pszValue, "yes") == 0 || strcmp(pszValue, "true") == 0 || strcmp(pszValue, "1") == 0);
-            }
-
-            char MemberType(int nType)
-            {
-                switch(nType)
-                {
-                    case READOSM_MEMBER_NODE: return 'n';
-                    case READOSM_MEMBER_WAY:  return 'w';
-                    default:                  return 'r';
-                }
-            }
-
-            // a feature table of a thematic layer: osm_id, osm_type, name, class (the key), type (the value), the fields of the layer
-            class CFeatureWriter
-            {
-            public:
-                CFeatureWriter(const SOSMLayerDef& def, const std::string& sTableName, const std::string& sNameKey,
-                               GeoDatabase::IDatabaseWorkspacePtr ptrWorkspace, GeoDatabase::ITransactionPtr ptrTransaction,
-                               Geometry::ISpatialReferencePtr ptrSpatRef, std::shared_ptr<GeometryCompression::CShapeCompressor> ptrCompressor,
-                               const std::string& sTempDir) :
-                        m_def(def), m_sNameKey(sNameKey)
-                {
-                    std::vector<COSMTableWriter::SField> vecFields = {
-                            {"osm_id", GeoDatabase::dtInteger64}, {"osm_type", GeoDatabase::dtString}, {"name", GeoDatabase::dtString},
-                            {"class", GeoDatabase::dtString}, {"type", GeoDatabase::dtString}};
-                    for(size_t i = 0; i < def.vecFields.size(); ++i)
-                        vecFields.push_back({def.vecFields[i].sName, def.vecFields[i].kind == OSMFieldText ? GeoDatabase::dtString : GeoDatabase::dtInteger64});
-
-                    CommonLib::eShapeType shapeType = def.geometryType == OSMGeometryPoint ? CommonLib::shape_type_point :
-                                                      def.geometryType == OSMGeometryLine ? CommonLib::shape_type_polyline : CommonLib::shape_type_polygon;
-                    m_ptrWriter = std::make_shared<COSMTableWriter>(ptrWorkspace, ptrTransaction, sTableName, vecFields, shapeType, ptrSpatRef);
-                    m_ptrWriter->SetCompressor(ptrCompressor);
-                    // packed once at the end, much faster than row by row; 64 MB of boxes per layer in memory
-                    m_ptrWriter->SetBulkSpatialIndex(sTempDir, 64ull * 1024 * 1024);
-                }
-
-                void Write(int64_t nId, char cType, const SOSMMatch& match, const COSMTags& tags, CommonLib::IGeoShapePtr ptrShape)
-                {
-                    SetFields(nId, cType, match, tags);
-                    m_ptrWriter->SetShape(ptrShape);
-                    m_ptrWriter->Insert();
-                }
-
-                // the geometry is a compressed blob (the parallel ways pass)
-                void WriteBlob(int64_t nId, char cType, const SOSMMatch& match, const COSMTags& tags, const uint8_t* pBlob, size_t nBlobSize)
-                {
-                    SetFields(nId, cType, match, tags);
-                    m_ptrWriter->SetShapeBlob(pBlob, nBlobSize);
-                    m_ptrWriter->Insert();
-                }
-
-                void SetFields(int64_t nId, char cType, const SOSMMatch& match, const COSMTags& tags)
-                {
-                    m_ptrWriter->SetInt64(0, nId);
-                    m_ptrWriter->SetText(1, std::string(1, cType));
-                    const char* pszName = m_sNameKey.empty() ? nullptr : tags.Get(m_sNameKey.c_str());
-                    if(!pszName || !*pszName)
-                        pszName = tags.Get("name");
-                    if(pszName && *pszName)
-                        m_ptrWriter->SetText(2, pszName);
-                    m_ptrWriter->SetText(3, match.sKey);
-                    m_ptrWriter->SetText(4, match.sValue);
-
-                    for(size_t i = 0; i < m_def.vecFields.size(); ++i)
-                    {
-                        const SOSMFieldDef& field = m_def.vecFields[i];
-                        const char* pszValue = tags.Get(field.sKey.c_str());
-                        int nField = 5 + (int)i;
-                        switch(field.kind)
-                        {
-                            case OSMFieldText:
-                                if(pszValue && *pszValue)
-                                    m_ptrWriter->SetText(nField, pszValue);
-                                break;
-                            case OSMFieldInteger:
-                            {
-                                int64_t nValue = 0;
-                                if(ParseInteger(pszValue, nValue))
-                                    m_ptrWriter->SetInt64(nField, nValue);
-                                break;
-                            }
-                            case OSMFieldBool:
-                                m_ptrWriter->SetInt64(nField, IsYes(pszValue) ? 1 : 0);
-                                break;
-                            case OSMFieldOneway:
-                                m_ptrWriter->SetInt64(nField, IsYes(pszValue) ? 1 :
-                                        (pszValue && (strcmp(pszValue, "-1") == 0 || strcmp(pszValue, "reverse") == 0)) ? -1 : 0);
-                                break;
-                        }
-                    }
-                }
-
-                COSMTableWriterPtr Writer() const { return m_ptrWriter; }
-
-            private:
-                const SOSMLayerDef& m_def;
-                std::string         m_sNameKey;
-                COSMTableWriterPtr  m_ptrWriter;
-            };
-
-            typedef std::shared_ptr<CFeatureWriter> CFeatureWriterPtr;
+            typedef COSMStoredTags CStoredTags;
+            typedef TOSMTagList TTagList;
+            typedef COSMFeatureWriter CFeatureWriter;
+            typedef COSMFeatureWriterPtr CFeatureWriterPtr;
 
             // a layer of the schema in the current run
             struct SLayerRun
             {
                 IOSMLayerPtr      ptrLayer;     // null - removed from the OSM map
-                bool              bSelected = false;   // converted now, earlier or enabled: the tags of its objects go to the tags table
-                CFeatureWriterPtr ptrWriter;    // converted now
+                CFeatureWriterPtr ptrWriter;    // converted (not excluded): the tags of its objects go to the tags table
             };
 
             // a table of the current run
             struct STableRun
             {
                 IOSMTablePtr      ptrTable;
-                bool              bSelected = false;
-                COSMTableWriterPtr ptrWriter;
+                COSMTableWriterPtr ptrWriter;   // converted (not excluded)
                 COSMTableWriterPtr ptrMembers;  // routes
             };
 
@@ -232,7 +96,7 @@ namespace GraphEngine {
                 return true;
             }
 
-            // the state of one conversion run (Convert / ConvertDataset) shared by the passes
+            // the state of the conversion shared by the passes
             class CRun
             {
             public:
@@ -270,8 +134,213 @@ namespace GraphEngine {
                 void Send()
                 {
                     progress.nFeatures = nFeatures;
+                    if(bStageStarted)
+                    {
+                        progress.dStageSeconds = StageSeconds();
+                        progress.vecItems = BuildItems();
+                    }
                     if(ptrProgress.get())
                         ptrProgress->UpdateStatusInfo(progress);
+                }
+
+                // ---- the progress details: SOSMProgress::vecItems of the current stage, vecStages of the finished ones
+
+                double StageSeconds() const
+                {
+                    return std::chrono::duration<double>(std::chrono::steady_clock::now() - stageStart).count();
+                }
+
+                template<class F>
+                void ForEachWriter(F func) const
+                {
+                    for(const SLayerRun& layer : vecLayers)
+                    {
+                        if(layer.ptrWriter.get())
+                            func(layer.ptrWriter->Writer().get());
+                    }
+                    for(const STableRun* pTable : {&routes, &restrictions, &tagsTable})
+                    {
+                        if(pTable->ptrWriter.get())
+                            func(pTable->ptrWriter.get());
+                        if(pTable->ptrMembers.get())
+                            func(pTable->ptrMembers.get());
+                    }
+                }
+
+                // rows / insert seconds of the writer in the current stage
+                std::pair<uint64_t, double> WriterDelta(const COSMTableWriter* pWriter) const
+                {
+                    if(!pWriter)
+                        return std::make_pair((uint64_t)0, 0.);
+                    std::pair<uint64_t, double> start(0, 0.);
+                    auto it = writerStart.find(pWriter);
+                    if(it != writerStart.end())
+                        start = it->second;
+                    return std::make_pair(pWriter->GetRowCount() - start.first, pWriter->GetInsertSeconds() - start.second);
+                }
+
+                void BeginStage(eOSMStage stage, const std::string& sMessage)
+                {
+                    if(bStageStarted && stage == curStage)
+                        return;
+                    EndStage();
+                    bStageStarted = true;
+                    curStage = stage;
+                    sStageMessage = sMessage;
+                    stageStart = std::chrono::steady_clock::now();
+                    reader = SOSMReaderStats();
+                    writerStart.clear();
+                    ForEachWriter([this](const COSMTableWriter* pWriter)
+                                  { writerStart[pWriter] = std::make_pair(pWriter->GetRowCount(), pWriter->GetInsertSeconds()); });
+                    storeStart = pNodes ? pNodes->GetStats() : SOSMStoreStats();
+                }
+
+                void EndStage()
+                {
+                    if(!bStageStarted)
+                        return;
+                    SOSMStageSummary summary;
+                    summary.stage = curStage;
+                    summary.sMessage = sStageMessage;
+                    summary.dSeconds = StageSeconds();
+                    summary.vecItems = BuildItems();
+                    progress.vecStages.push_back(summary);
+                    bStageStarted = false;
+                }
+
+                // the end of the conversion: the last stage is summarized
+                void Done()
+                {
+                    progress.nStepDone = progress.nStepTotal;
+                    EndStage();
+                    progress.vecItems.clear();
+                    progress.dStageSeconds = 0.;
+                    progress.stage = OSMStageFinish;
+                    progress.sMessage = "Done";
+                    throttle.Reset();
+                    Send();
+                }
+
+                static void AddItem(std::vector<SOSMProgressItem>& items, const std::string& sName, const std::string& sInfo,
+                                    uint64_t nCount, uint64_t nBytes, double dSeconds, bool bThreads = false)
+                {
+                    SOSMProgressItem item;
+                    item.sName = sName;
+                    item.sInfo = sInfo;
+                    item.nCount = nCount;
+                    item.nBytes = nBytes;
+                    item.dSeconds = dSeconds;
+                    item.bThreads = bThreads;
+                    items.push_back(item);
+                }
+
+                // the feature tables of the layers of a geometry type: rows and insert time in the stage
+                void AddLayerWriters(std::vector<SOSMProgressItem>& items, const char* pszName, eOSMGeometryType type) const
+                {
+                    std::string sTables;
+                    uint64_t nRows = 0;
+                    double dSeconds = 0.;
+                    for(size_t i = 0; i < vecLayers.size(); ++i)
+                    {
+                        const SLayerRun& layer = vecLayers[i];
+                        if(!layer.ptrWriter.get() || schema.Layers()[i].geometryType != type)
+                            continue;
+                        std::pair<uint64_t, double> delta = WriterDelta(layer.ptrWriter->Writer().get());
+                        nRows += delta.first;
+                        dSeconds += delta.second;
+                        sTables += (sTables.empty() ? "" : ", ") + layer.ptrLayer->GetTableName();
+                    }
+                    if(!sTables.empty())
+                        AddItem(items, pszName, "rows -> " + sTables + " (insert: compression, SQLite)", nRows, 0, dSeconds);
+                }
+
+                void AddTableWriter(std::vector<SOSMProgressItem>& items, const char* pszName, const STableRun& table) const
+                {
+                    if(!table.ptrWriter.get())
+                        return;
+                    std::pair<uint64_t, double> delta = WriterDelta(table.ptrWriter.get());
+                    std::string sTables = table.ptrWriter->GetTableName();
+                    if(table.ptrMembers.get())
+                    {
+                        std::pair<uint64_t, double> members = WriterDelta(table.ptrMembers.get());
+                        delta.first += members.first;
+                        delta.second += members.second;
+                        sTables += ", " + table.ptrMembers->GetTableName();
+                    }
+                    AddItem(items, pszName, "rows -> " + sTables + " (SQLite)", delta.first, 0, delta.second);
+                }
+
+                std::vector<SOSMProgressItem> BuildItems() const
+                {
+                    std::vector<SOSMProgressItem> items;
+                    switch(curStage)
+                    {
+                        case OSMStageNodes:
+                        {
+                            AddReaderItems(items, reader, sPath);
+                            SOSMStoreStats store = pNodes ? pNodes->GetStats() : SOSMStoreStats();
+                            std::string sInfo = bStoreNodes ? "coordinates -> " + store.sType + " node store " + (store.sPath.empty() ? std::string("(in memory)") : store.sPath)
+                                                            : std::string("the coordinates aren't stored (no line / polygon layers)");
+                            AddItem(items, "Nodes", sInfo + " (written by a background thread)", progress.nNodes,
+                                    store.nBytesWritten - storeStart.nBytesWritten, store.dIOSeconds - storeStart.dIOSeconds);
+                            if(store.dWaitSeconds > 0)
+                                AddItem(items, "Waiting for the node writer", "the reading thread waits: the disk writes slower than the file is read",
+                                        0, 0, store.dWaitSeconds - storeStart.dWaitSeconds);
+                            AddLayerWriters(items, "Point features", OSMGeometryPoint);
+                            std::string sRelations = std::to_string(nMultipolygons) + " multipolygons of the polygon layers";
+                            if(ptrMultipolygons.get())
+                                sRelations += " -> " + (ptrMultipolygons->Path().empty() ? std::string("(buffer)") : ptrMultipolygons->Path());
+                            AddItem(items, "Relations", sRelations, progress.nRelations, ptrMultipolygons.get() ? ptrMultipolygons->Size() : 0,
+                                    ptrMultipolygons.get() ? ptrMultipolygons->WriteSeconds() : 0.);
+                            AddTableWriter(items, "Routes", routes);
+                            AddTableWriter(items, "Turn restrictions", restrictions);
+                            AddTableWriter(items, "Tags table", tagsTable);
+                            break;
+                        }
+                        case OSMStageSortNodes:
+                        {
+                            SOSMStoreStats store = pNodes ? pNodes->GetStats() : SOSMStoreStats();
+                            AddItem(items, "Node store", store.sType + " " + (store.sPath.empty() ? std::string("(in memory)") : store.sPath) +
+                                    " (sorting / merging the runs, mapping the file)", progress.nNodes,
+                                    store.nBytesWritten - storeStart.nBytesWritten, store.dIOSeconds - storeStart.dIOSeconds);
+                            break;
+                        }
+                        case OSMStageWays:
+                        {
+                            AddReaderItems(items, reader, sPath);
+                            AddItem(items, "Ways", "copied into batches for the geometry threads", progress.nWays, 0, 0.);
+                            AddItem(items, "Geometry", std::to_string(nWorkerThreads) + " threads: node lookups (count), compression; CPU time of all of them; missing nodes " +
+                                    std::to_string(nMissingNodes), nNodeLookups.load(), 0, nWorkerNs.load() / 1e9, true);
+                            {
+                                std::lock_guard<std::mutex> lock(lookupMutex);
+                                AddItem(items, "Node lookups", "unique ids of the batches (count), sorted; reads of the node store: " +
+                                        std::to_string(lookupStats.nReads) + ", cache hits " + std::to_string(lookupStats.nCacheHits) +
+                                        "; time of all the threads", nUniqueIds, lookupStats.nBytesRead, dLookupSeconds, true);
+                                AddItem(items, "Node store reads", "the time of the reads in the lookups (all the threads)", lookupStats.nReads,
+                                        lookupStats.nBytesRead, lookupStats.dReadSeconds, true);
+                            }
+                            AddItem(items, "Waiting for the geometry threads", "the reading thread waits for a batch", 0, 0, dWaitWorkers);
+                            AddLayerWriters(items, "Line features", OSMGeometryLine);
+                            AddLayerWriters(items, "Polygon features", OSMGeometryPolygon);
+                            if(ptrWays.get())
+                                AddItem(items, "Multipolygon member ways", "points -> " + (ptrWays->PointsPath().empty() ? std::string("(buffer)") : ptrWays->PointsPath()),
+                                        ptrWays->Count(), ptrWays->BytesWritten(), ptrWays->WriteSeconds());
+                            AddTableWriter(items, "Tags table", tagsTable);
+                            break;
+                        }
+                        case OSMStageMultipolygons:
+                        {
+                            AddItem(items, "Multipolygons", "read from " + (ptrMultipolygons.get() ? ptrMultipolygons->Path() : std::string()), progress.nStepDone, 0, 0.);
+                            AddItem(items, "Member way geometry", "read from " + (ptrWays.get() ? ptrWays->PointsPath() : std::string()), nWayGets, 0, dWayGetSeconds);
+                            AddItem(items, "Building polygons", "rings assembled, failed: " + std::to_string(nPolygonsFailed), nPolygonsBuilt, 0, dBuildSeconds);
+                            AddLayerWriters(items, "Polygon features", OSMGeometryPolygon);
+                            break;
+                        }
+                        default:
+                            items = finishItems;
+                            break;
+                    }
+                    return items;
                 }
 
                 // the start of a pass over the file
@@ -294,6 +363,7 @@ namespace GraphEngine {
 
                 void Report(eOSMStage stage, const std::string& sMessage)
                 {
+                    BeginStage(stage, sMessage);
                     progress.stage = stage;
                     progress.sMessage = sMessage;
                     throttle.Reset();
@@ -306,18 +376,15 @@ namespace GraphEngine {
                         throw CommonLib::CExcBase("OSM conversion is canceled");
                 }
 
-                // the object belongs to a selected dataset: its tags are written to the tags table
+                // the object belongs to a converted dataset: its tags are written to the tags table
                 bool IsSelectedLayer(const SOSMMatch& match) const
                 {
-                    if(!match.IsValid())
-                        return false;
-                    const SLayerRun& layer = vecLayers[match.nLayer];
-                    return layer.bSelected && layer.ptrLayer->IsValueEnabled(match.sKey, match.sValue);
+                    return LayerWriter(match) != nullptr;
                 }
 
                 static bool IsSelectedTable(const STableRun& table, const char* pszKey, const char* pszValue)
                 {
-                    return pszValue && table.bSelected && table.ptrTable->IsValueEnabled(pszKey, pszValue);
+                    return pszValue && table.ptrWriter.get() && table.ptrTable->IsValueEnabled(pszKey, pszValue);
                 }
 
                 // the feature goes to a table of this run
@@ -388,6 +455,39 @@ namespace GraphEngine {
                 COSMIdSet                   memberWays;
                 std::unique_ptr<COSMWayStore> ptrWays;
                 COSMProgressThrottle        throttle;
+
+                // the progress details
+                std::string                 sPath;              // the OSM file
+                SOSMReaderStats             reader;             // the reading in the current pass
+                int                         nWorkerThreads = 0; // the ways pass
+                std::atomic<uint64_t>       nWorkerNs{0};
+                std::atomic<uint64_t>       nNodeLookups{0};
+                double                      dWaitWorkers = 0.;
+                mutable std::mutex          lookupMutex;        // the node lookups of the workers
+                SOSMLookupStats             lookupStats;
+                uint64_t                    nUniqueIds = 0;
+                double                      dLookupSeconds = 0.;
+
+                void AddLookupStats(const SOSMLookupStats& stats, uint64_t nUnique, double dSeconds)
+                {
+                    std::lock_guard<std::mutex> lock(lookupMutex);
+                    lookupStats.Add(stats);
+                    nUniqueIds += nUnique;
+                    dLookupSeconds += dSeconds;
+                }
+                uint64_t                    nWayGets = 0;       // the multipolygons
+                double                      dWayGetSeconds = 0.;
+                uint64_t                    nPolygonsBuilt = 0;
+                uint64_t                    nPolygonsFailed = 0;
+                double                      dBuildSeconds = 0.;
+                std::vector<SOSMProgressItem> finishItems;      // the saving of the tables
+
+                bool                        bStageStarted = false;
+                eOSMStage                   curStage = OSMStageNodes;
+                std::string                 sStageMessage;
+                std::chrono::steady_clock::time_point stageStart;
+                std::map<const COSMTableWriter*, std::pair<uint64_t, double> > writerStart;   // rows, insert seconds at the start of the stage
+                SOSMStoreStats              storeStart;
             };
 
             // pass 1: nodes (coordinates, points) and relations (routes, restrictions, multipolygons)
@@ -430,6 +530,11 @@ namespace GraphEngine {
                 virtual bool OnProgress(uint64_t nBytesRead, uint64_t nBytesTotal)
                 {
                     return m_run.ReadProgress(nBytesRead, nBytesTotal);
+                }
+
+                virtual void OnReaderStats(const SOSMReaderStats& stats)
+                {
+                    m_run.reader = stats;
                 }
 
                 virtual bool OnRelation(const readosm_relation& relation)
@@ -487,79 +592,36 @@ namespace GraphEngine {
                     ++m_run.nMultipolygons;
                 }
 
-                static void SetText(COSMTableWriter& writer, const COSMTags& tags, int nField, const char* pszKey)
+                const std::vector<SOSMMember>& Members(const readosm_relation& relation)
                 {
-                    const char* pszValue = tags.Get(pszKey);
-                    if(pszValue && *pszValue)
-                        writer.SetText(nField, pszValue);
+                    m_vecMembers.resize(relation.member_count > 0 ? (size_t)relation.member_count : 0);
+                    for(size_t i = 0; i < m_vecMembers.size(); ++i)
+                    {
+                        const readosm_member& member = relation.members[i];
+                        m_vecMembers[i] = SOSMMember{OSMMemberTypeChar(member.member_type), member.id, member.role};
+                    }
+                    return m_vecMembers;
                 }
 
                 void WriteRoute(const readosm_relation& relation, const COSMTags& tags, const char* pszRoute)
                 {
-                    // osm_id, route, name, ref, network, operator, colour, route_from, route_to
-                    COSMTableWriter& writer = *m_run.routes.ptrWriter;
-                    writer.SetInt64(0, relation.id);
-                    writer.SetText(1, pszRoute);
-                    const char* pszName = m_run.settings.sNameLanguage.empty() ? nullptr : tags.Get(("name:" + m_run.settings.sNameLanguage).c_str());
-                    if(pszName && *pszName)
-                        writer.SetText(2, pszName);
-                    else
-                        SetText(writer, tags, 2, "name");
-                    SetText(writer, tags, 3, "ref");
-                    SetText(writer, tags, 4, "network");
-                    SetText(writer, tags, 5, "operator");
-                    SetText(writer, tags, 6, "colour");
-                    SetText(writer, tags, 7, "from");
-                    SetText(writer, tags, 8, "to");
-                    writer.Insert();
+                    const std::vector<SOSMMember>& members = Members(relation);
+                    OSMWriteRoute(*m_run.routes.ptrWriter, *m_run.routes.ptrMembers, relation.id, tags, pszRoute, m_run.settings.sNameLanguage,
+                                  members.data(), (int)members.size());
                     ++m_run.nFeatures;
-
-                    // route_id, seq, member_type, member_id, role
-                    COSMTableWriter& members = *m_run.routes.ptrMembers;
-                    for(int i = 0; i < relation.member_count; ++i)
-                    {
-                        const readosm_member& member = relation.members[i];
-                        members.SetInt64(0, relation.id);
-                        members.SetInt64(1, i);
-                        members.SetText(2, std::string(1, MemberType(member.member_type)));
-                        members.SetInt64(3, member.id);
-                        if(member.role && *member.role)
-                            members.SetText(4, member.role);
-                        members.Insert();
-                    }
                 }
 
                 void WriteRestriction(const readosm_relation& relation, const COSMTags& tags, const char* pszRestriction)
                 {
-                    // osm_id, restriction, from_way, via_type, via_id, to_way, except_for
-                    COSMTableWriter& writer = *m_run.restrictions.ptrWriter;
-                    writer.SetInt64(0, relation.id);
-                    writer.SetText(1, pszRestriction);
-                    bool bVia = false;
-                    for(int i = 0; i < relation.member_count; ++i)
-                    {
-                        const readosm_member& member = relation.members[i];
-                        if(!member.role)
-                            continue;
-                        if(strcmp(member.role, "from") == 0 && member.member_type == READOSM_MEMBER_WAY)
-                            writer.SetInt64(2, member.id);
-                        else if(strcmp(member.role, "via") == 0 && !bVia)    // a chain of via ways: the first one
-                        {
-                            writer.SetText(3, std::string(1, MemberType(member.member_type)));
-                            writer.SetInt64(4, member.id);
-                            bVia = true;
-                        }
-                        else if(strcmp(member.role, "to") == 0 && member.member_type == READOSM_MEMBER_WAY)
-                            writer.SetInt64(5, member.id);
-                    }
-                    SetText(writer, tags, 6, "except");
-                    writer.Insert();
+                    const std::vector<SOSMMember>& members = Members(relation);
+                    OSMWriteRestriction(*m_run.restrictions.ptrWriter, relation.id, tags, pszRestriction, members.data(), (int)members.size());
                     ++m_run.nFeatures;
                 }
 
             private:
                 CRun& m_run;
                 std::vector<int64_t> m_vecWays;
+                std::vector<SOSMMember> m_vecMembers;
             };
 
             // pass 2: ways (lines, polygons, members of the multipolygons) in parallel:
@@ -581,7 +643,8 @@ namespace GraphEngine {
                         nThreads = nCores > 1 ? (int)nCores - 1 : 1;
                     }
                     nThreads = (std::min)(nThreads, 32);
-                    m_nMaxInFlight = (size_t)nThreads * 2 + 2;
+                    m_nMaxInFlight = (size_t)nThreads + 2;    // the batches are big (BatchRefs)
+                    m_run.nWorkerThreads = nThreads;
 
                     // the OSM integers go to the blob as they are: 1e-7 degrees = 7 decimals of longitude / latitude
                     m_bIntegers = m_ptrCompressor.get() && !m_run.projection.IsWebMercator() && m_ptrCompressor->GetParams().nScaleExponent == 7;
@@ -622,6 +685,11 @@ namespace GraphEngine {
                     return m_run.ReadProgress(nBytesRead, nBytesTotal);
                 }
 
+                virtual void OnReaderStats(const SOSMReaderStats& stats)
+                {
+                    m_run.reader = stats;
+                }
+
                 virtual bool OnWay(const readosm_way& way)
                 {
                     ++m_run.progress.nWays;
@@ -658,9 +726,10 @@ namespace GraphEngine {
                 }
 
             private:
-                static const size_t BatchWays = 4096;
-                static const size_t BatchRefs = 512 * 1024;
-                static const size_t BatchText = 4 * 1024 * 1024;
+                // big batches: the more node ids are sorted together, the more of them are read by one read of the node store
+                static const size_t BatchWays = 65536;
+                static const size_t BatchRefs = 2 * 1024 * 1024;
+                static const size_t BatchText = 16 * 1024 * 1024;
 
                 struct SWay
                 {
@@ -727,6 +796,8 @@ namespace GraphEngine {
                 struct SWorker
                 {
                     std::unique_ptr<IOSMNodeLookup> ptrLookup;
+                    COSMRefResolver resolver;              // the node refs of the batch, resolved at once
+                    std::vector<uint32_t> needed;          // the ways of the batch which need the geometry
                     std::unique_ptr<GeometryCompression::CShapeCompressor> ptrCompressor;
                     std::vector<readosm_tag> tags;
                     TOSMPoints points;
@@ -775,8 +846,10 @@ namespace GraphEngine {
                 {
                     SBatch* pBatch = m_inFlight.front();
                     {
+                        auto start = std::chrono::steady_clock::now();
                         std::unique_lock<std::mutex> lock(m_mutex);
                         m_cvDone.wait(lock, [pBatch]() { return pBatch->bDone; });
+                        m_run.dWaitWorkers += std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
                     }
                     m_inFlight.pop_front();
                     m_vecFree.push_back(pBatch);
@@ -814,6 +887,7 @@ namespace GraphEngine {
                             pBatch = m_queue.front();
                             m_queue.pop_front();
                         }
+                        auto start = std::chrono::steady_clock::now();
                         try
                         {
                             Process(worker, *pBatch);
@@ -822,6 +896,8 @@ namespace GraphEngine {
                         {
                             pBatch->ptrError = std::current_exception();
                         }
+                        m_run.nWorkerNs.fetch_add((uint64_t)std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - start).count(),
+                                                  std::memory_order_relaxed);
                         {
                             std::lock_guard<std::mutex> lock(m_mutex);
                             pBatch->bDone = true;
@@ -850,7 +926,15 @@ namespace GraphEngine {
                 // the workers: everything but the writing
                 void Process(SWorker& worker, SBatch& batch)
                 {
+                    uint64_t nLookups = 0;
+                    struct SCount
+                    {
+                        std::atomic<uint64_t>& total;
+                        uint64_t& n;
+                        ~SCount() { total.fetch_add(n, std::memory_order_relaxed); }
+                    } count{m_run.nNodeLookups, nLookups};
                     batch.results.assign(batch.ways.size(), SResult());
+                    worker.needed.clear();
                     for(size_t w = 0; w < batch.ways.size(); ++w)
                     {
                         const SWay& way = batch.ways[w];
@@ -877,11 +961,45 @@ namespace GraphEngine {
                         }
                         if(!(pLine || pPolygon || bMember) || !worker.ptrLookup)
                             continue;
+                        nLookups += nRefs;
+                        // the geometry after all the node refs are resolved
+                        result.pLine = pLine;
+                        result.line = line;
+                        result.pPolygon = pPolygon;
+                        result.polygon = polygon;
+                        result.nMemberCount = bMember ? 1 : 0;
+                        worker.needed.push_back((uint32_t)w);
+                    }
 
+                    // the node refs of the batch: sorted, every id once, the store is read in the id order
+                    worker.resolver.Clear();
+                    for(uint32_t w : worker.needed)
+                        worker.resolver.Add(batch.refs.data(), batch.ways[w].nRefStart, batch.ways[w].nRefCount);
+                    if(!worker.needed.empty())
+                    {
+                        auto lookupStart = std::chrono::steady_clock::now();
+                        worker.resolver.Resolve(*worker.ptrLookup, batch.refs.size(),
+                                                [this]() { return !m_run.ptrCancel.get() || m_run.ptrCancel->Continue(); });
+                        m_run.AddLookupStats(worker.ptrLookup->TakeStats(), worker.resolver.UniqueCount(),
+                                             std::chrono::duration<double>(std::chrono::steady_clock::now() - lookupStart).count());
+                    }
+
+                    for(uint32_t w : worker.needed)
+                    {
+                        const SWay& way = batch.ways[w];
+                        SResult& result = batch.results[w];
+                        CFeatureWriter* pLine = result.pLine;
+                        CFeatureWriter* pPolygon = result.pPolygon;
+                        SOSMMatch line = result.line, polygon = result.polygon;
+                        bool bMember = result.nMemberCount != 0;
+                        result.pLine = nullptr;
+                        result.pPolygon = nullptr;
+                        result.nMemberCount = 0;
+                        const int64_t* pRefs = batch.refs.data() + way.nRefStart;
                         if(m_bIntegers)
-                            ProcessIntegers(worker, batch, result, pRefs, nRefs, pLine, line, pPolygon, polygon, bMember);
+                            ProcessIntegers(worker, batch, result, pRefs, way.nRefCount, pLine, line, pPolygon, polygon, bMember);
                         else
-                            ProcessDoubles(worker, batch, result, pRefs, nRefs, pLine, line, pPolygon, polygon, bMember);
+                            ProcessDoubles(worker, batch, result, pRefs, way.nRefCount, pLine, line, pPolygon, polygon, bMember);
                     }
                 }
 
@@ -890,16 +1008,17 @@ namespace GraphEngine {
                 {
                     TOSMPoints& points = worker.points;
                     points.clear();
+                    const size_t nBase = (size_t)(pRefs - batch.refs.data());
                     for(uint32_t i = 0; i < nRefs; ++i)
                     {
-                        double dLon, dLat;
-                        if(!worker.ptrLookup->Get(pRefs[i], dLon, dLat))
+                        int32_t nLon, nLat;
+                        if(!worker.resolver.Get(nBase + i, nLon, nLat))
                         {
                             ++batch.nMissingNodes;
                             continue;
                         }
                         CommonLib::GisXYPoint pt;
-                        m_run.projection.Project(dLon, dLat, pt.x, pt.y);
+                        m_run.projection.Project(nLon / 1e7, nLat / 1e7, pt.x, pt.y);
                         points.push_back(pt);
                     }
                     const uint32_t nPoints = (uint32_t)points.size();
@@ -954,10 +1073,11 @@ namespace GraphEngine {
                     std::vector<int64_t>& ys = worker.ys;
                     xs.clear();
                     ys.clear();
+                    const size_t nBase = (size_t)(pRefs - batch.refs.data());
                     for(uint32_t i = 0; i < nRefs; ++i)
                     {
                         int32_t nLon, nLat;
-                        if(!worker.ptrLookup->GetE7(pRefs[i], nLon, nLat))
+                        if(!worker.resolver.Get(nBase + i, nLon, nLat))
                         {
                             ++batch.nMissingNodes;
                             continue;
@@ -1068,80 +1188,37 @@ namespace GraphEngine {
         }
 
         COSMConvertSession::COSMConvertSession(const COSMSchema& schema, const SOSMConvertSettings& settings, IOSMMapPtr ptrOSMMap,
-                                               Cartography::IMapPtr ptrMap, GeoDatabase::IDatabaseWorkspacePtr ptrWorkspace) :
-                m_schema(schema), m_settings(settings), m_ptrOSMMap(ptrOSMMap), m_ptrMap(ptrMap), m_ptrWorkspace(ptrWorkspace),
+                                               const CLayerColumnExcludeList& excludeList, Cartography::IMapPtr ptrMap,
+                                               GeoDatabase::IDatabaseWorkspacePtr ptrWorkspace) :
+                m_schema(schema), m_settings(settings), m_ptrOSMMap(ptrOSMMap), m_excludeList(excludeList), m_ptrMap(ptrMap), m_ptrWorkspace(ptrWorkspace),
                 m_projection(settings.bWebMercator)
         {
             if(!m_ptrOSMMap.get())
-                throw CommonLib::CExcBase("OSM convert session: the OSM map is null");
+                throw CommonLib::CExcBase("OSM conversion: the OSM map is null");
             if(!m_ptrWorkspace.get())
-                throw CommonLib::CExcBase("OSM convert session: the workspace is null");
+                throw CommonLib::CExcBase("OSM conversion: the workspace is null");
         }
 
         COSMConvertSession::~COSMConvertSession()
         {
-            try
-            {
-                Close();
-            }
-            catch (...)
-            {
-            }
+
         }
 
-        void COSMConvertSession::Close()
+        bool COSMConvertSession::IsConverted(const IOSMDataset& dataset) const
         {
-            m_ptrNodes.reset();
+            // a map made by Analyze knows the empty datasets, a map without counts (CreateMap) converts everything
+            if(m_excludeList.IsLayerExcluded(dataset.GetName()))
+                return false;
+            return !m_ptrOSMMap->IsScanned() || dataset.GetFeatureCount() > 0;
         }
 
-        std::string COSMConvertSession::DatasetKey(const IOSMDatasetPtr& ptrDataset) const
-        {
-            bool bLayer = std::dynamic_pointer_cast<IOSMLayer>(ptrDataset).get() != nullptr;
-            return (bLayer ? LayerPrefix : TablePrefix) + ptrDataset->GetName();
-        }
-
-        bool COSMConvertSession::IsConverted(IOSMDatasetPtr ptrDataset) const
-        {
-            return ptrDataset.get() && m_setConverted.count(DatasetKey(ptrDataset)) > 0;
-        }
-
-        // the datasets without features (by ReadMap) are skipped, ConvertDataset creates also an empty table;
-        // a map which isn't scanned (CreateMap) has no counts: all the enabled datasets are converted
         void COSMConvertSession::Convert(IProgressUpdaterPtr ptrProgress, Display::ITrackCancelPtr ptrCancel)
         {
-            const bool bScanned = m_ptrOSMMap->IsScanned();
-            std::vector<IOSMDatasetPtr> vecDatasets;
-            for(int i = 0; i < m_ptrOSMMap->GetLayerCount(); ++i)
-            {
-                IOSMLayerPtr ptrLayer = m_ptrOSMMap->GetLayer(i);
-                if(ptrLayer->GetEnabled() && (!bScanned || ptrLayer->GetFeatureCount() > 0) && !IsConverted(ptrLayer))
-                    vecDatasets.push_back(ptrLayer);
-            }
-            for(int i = 0; i < m_ptrOSMMap->GetTableCount(); ++i)
-            {
-                IOSMTablePtr ptrTable = m_ptrOSMMap->GetTable(i);
-                if(ptrTable->GetEnabled() && (!bScanned || ptrTable->GetFeatureCount() > 0) && !IsConverted(ptrTable))
-                    vecDatasets.push_back(ptrTable);
-            }
-            ConvertDatasets(vecDatasets, !bScanned, ptrProgress, ptrCancel);
-        }
-
-        void COSMConvertSession::ConvertDataset(IOSMDatasetPtr ptrDataset, IProgressUpdaterPtr ptrProgress, Display::ITrackCancelPtr ptrCancel)
-        {
-            if(!ptrDataset.get())
-                throw CommonLib::CExcBase("OSM convert session: the dataset is null");
-            if(IsConverted(ptrDataset))
-                return;
-            ConvertDatasets(std::vector<IOSMDatasetPtr>(1, ptrDataset), false, ptrProgress, ptrCancel);
-        }
-
-        void COSMConvertSession::ConvertDatasets(const std::vector<IOSMDatasetPtr>& vecDatasets, bool bSkipEmptyLayers, IProgressUpdaterPtr ptrProgress, Display::ITrackCancelPtr ptrCancel)
-        {
-            if(vecDatasets.empty())
-                return;
-
+            // the layers without features aren't added to the map when the counts aren't known (their tables are created)
+            const bool bSkipEmptyLayers = !m_ptrOSMMap->IsScanned();
             GeoDatabase::ITransactionPtr ptrTransaction;
             bool bBulkMode = false;
+            std::unique_ptr<IOSMNodeStore> ptrNodes;   // the node coordinates (temporary files), deleted at the end
             try
             {
                 CRun run(m_schema, m_settings, m_projection, ptrProgress, ptrCancel);
@@ -1156,79 +1233,56 @@ namespace GraphEngine {
                     ptrCompressor = std::make_shared<GeometryCompression::CShapeCompressor>(COSMConvertor::CompressParams(m_settings, m_ptrOSMMap));
                 }
 
-                // the layers of the schema: which are in the OSM map, selected (for the tags table), converted now
+                // the layers of the schema which are in the OSM map; the tables
                 for(size_t i = 0; i < m_schema.Layers().size(); ++i)
-                {
-                    SLayerRun& layer = run.vecLayers[i];
-                    layer.ptrLayer = m_ptrOSMMap->FindLayer(m_schema.Layers()[i].sName);
-                    layer.bSelected = layer.ptrLayer.get() && (layer.ptrLayer->GetEnabled() || IsConverted(layer.ptrLayer));
-                }
+                    run.vecLayers[i].ptrLayer = m_ptrOSMMap->FindLayer(m_schema.Layers()[i].sName);
                 for(int i = 0; i < m_ptrOSMMap->GetTableCount(); ++i)
                 {
                     IOSMTablePtr ptrTable = m_ptrOSMMap->GetTable(i);
                     STableRun& table = ptrTable->GetTableType() == OSMTableRoutes ? run.routes :
                                        ptrTable->GetTableType() == OSMTableRestrictions ? run.restrictions : run.tagsTable;
                     table.ptrTable = ptrTable;
-                    table.bSelected = ptrTable->GetEnabled() || IsConverted(ptrTable);
                 }
+
+                bool bAny = false;
+                for(size_t i = 0; i < run.vecLayers.size() && !bAny; ++i)
+                    bAny = run.vecLayers[i].ptrLayer.get() && IsConverted(*run.vecLayers[i].ptrLayer);
+                for(int i = 0; i < m_ptrOSMMap->GetTableCount() && !bAny; ++i)
+                    bAny = IsConverted(*m_ptrOSMMap->GetTable(i));
+                if(!bAny)
+                    return;
 
                 // the database settings for the speed while the transaction lasts
                 m_ptrWorkspace->SetBulkLoadMode(true);
                 bBulkMode = true;
                 ptrTransaction = m_ptrWorkspace->StartTransaction(GeoDatabase::ttModify);
 
+                // the writers of the converted datasets
                 std::vector<IOSMLayerPtr> vecRunLayers;
-                for(size_t d = 0; d < vecDatasets.size(); ++d)
+                for(size_t i = 0; i < run.vecLayers.size(); ++i)
                 {
-                    IOSMDatasetPtr ptrDataset = vecDatasets[d];
-                    if(IOSMLayerPtr ptrLayer = std::dynamic_pointer_cast<IOSMLayer>(ptrDataset))
-                    {
-                        int nIndex = m_schema.FindLayerIndex(ptrLayer->GetName());
-                        if(nIndex < 0)
-                            throw CommonLib::CExcBase("The layer {0} isn't in the schema", ptrLayer->GetName());
-                        const SOSMLayerDef& def = m_schema.Layers()[nIndex];
-                        SLayerRun& layer = run.vecLayers[nIndex];
-                        layer.ptrLayer = ptrLayer;
-                        layer.bSelected = true;
-                        layer.ptrWriter = std::make_shared<CFeatureWriter>(def, ptrLayer->GetTableName(), sNameKey, m_ptrWorkspace, ptrTransaction, ptrSpatRef, ptrCompressor, m_settings.sTempDir);
-                        run.bLines = run.bLines || def.geometryType != OSMGeometryPoint;
-                        run.bPolygons = run.bPolygons || def.geometryType == OSMGeometryPolygon;
-                        run.bPoints = run.bPoints || def.geometryType == OSMGeometryPoint;
-                        vecRunLayers.push_back(ptrLayer);
-                    }
-                    else if(IOSMTablePtr ptrTable = std::dynamic_pointer_cast<IOSMTable>(ptrDataset))
+                    SLayerRun& layer = run.vecLayers[i];
+                    if(!layer.ptrLayer.get() || !IsConverted(*layer.ptrLayer))
+                        continue;
+                    const SOSMLayerDef& def = m_schema.Layers()[i];
+                    layer.ptrWriter = std::make_shared<CFeatureWriter>(def, *layer.ptrLayer, m_excludeList, sNameKey, m_ptrWorkspace, ptrTransaction,
+                                                                       ptrSpatRef, ptrCompressor, m_settings.sTempDir);
+                    run.bLines = run.bLines || def.geometryType != OSMGeometryPoint;
+                    run.bPolygons = run.bPolygons || def.geometryType == OSMGeometryPolygon;
+                    run.bPoints = run.bPoints || def.geometryType == OSMGeometryPoint;
+                    vecRunLayers.push_back(layer.ptrLayer);
+                }
+                for(STableRun* pTable : {&run.routes, &run.restrictions, &run.tagsTable})
+                {
+                    if(!pTable->ptrTable.get() || !IsConverted(*pTable->ptrTable))
+                        continue;
+                    pTable->ptrWriter = OSMCreateTableWriter(m_ptrWorkspace, ptrTransaction, *pTable->ptrTable, m_excludeList);
+                    if(pTable == &run.routes)
                     {
                         typedef COSMTableWriter::SField F;
-                        const std::string& sName = ptrTable->GetTableName();
-                        switch(ptrTable->GetTableType())
-                        {
-                            case OSMTableRoutes:
-                                run.routes.ptrTable = ptrTable;
-                                run.routes.bSelected = true;
-                                run.routes.ptrWriter = std::make_shared<COSMTableWriter>(m_ptrWorkspace, ptrTransaction, sName, std::vector<F>{
-                                        {"osm_id", GeoDatabase::dtInteger64}, {"route", GeoDatabase::dtString}, {"name", GeoDatabase::dtString},
-                                        {"ref", GeoDatabase::dtString}, {"network", GeoDatabase::dtString}, {"operator", GeoDatabase::dtString},
-                                        {"colour", GeoDatabase::dtString}, {"route_from", GeoDatabase::dtString}, {"route_to", GeoDatabase::dtString}});
-                                run.routes.ptrMembers = std::make_shared<COSMTableWriter>(m_ptrWorkspace, ptrTransaction, sName + "_members", std::vector<F>{
-                                        {"route_id", GeoDatabase::dtInteger64}, {"seq", GeoDatabase::dtInteger64}, {"member_type", GeoDatabase::dtString},
-                                        {"member_id", GeoDatabase::dtInteger64}, {"role", GeoDatabase::dtString}});
-                                break;
-                            case OSMTableRestrictions:
-                                run.restrictions.ptrTable = ptrTable;
-                                run.restrictions.bSelected = true;
-                                run.restrictions.ptrWriter = std::make_shared<COSMTableWriter>(m_ptrWorkspace, ptrTransaction, sName, std::vector<F>{
-                                        {"osm_id", GeoDatabase::dtInteger64}, {"restriction", GeoDatabase::dtString}, {"from_way", GeoDatabase::dtInteger64},
-                                        {"via_type", GeoDatabase::dtString}, {"via_id", GeoDatabase::dtInteger64}, {"to_way", GeoDatabase::dtInteger64},
-                                        {"except_for", GeoDatabase::dtString}});
-                                break;
-                            default:
-                                run.tagsTable.ptrTable = ptrTable;
-                                run.tagsTable.bSelected = true;
-                                run.tagsTable.ptrWriter = std::make_shared<COSMTableWriter>(m_ptrWorkspace, ptrTransaction, sName, std::vector<F>{
-                                        {"osm_type", GeoDatabase::dtString}, {"osm_id", GeoDatabase::dtInteger64},
-                                        {"key", GeoDatabase::dtString}, {"value", GeoDatabase::dtString}});
-                                break;
-                        }
+                        pTable->ptrMembers = std::make_shared<COSMTableWriter>(m_ptrWorkspace, ptrTransaction, pTable->ptrTable->GetTableName() + "_members", std::vector<F>{
+                                {"route_id", GeoDatabase::dtInteger64}, {"seq", GeoDatabase::dtInteger64}, {"member_type", GeoDatabase::dtString},
+                                {"member_id", GeoDatabase::dtInteger64}, {"role", GeoDatabase::dtString}});
                     }
                 }
 
@@ -1250,14 +1304,16 @@ namespace GraphEngine {
                 run.progress.nPassCount = bWays ? 2 : 1;
 
                 // pass 1: nodes and relations
-                if(run.bLines && !HasNodeStore())
+                if(run.bLines)
                 {
                     // the flat store for a continent / the planet, the sorted one for an extract (see eOSMNodeStore)
-                    m_ptrNodes = IOSMNodeStore::Create(m_settings.nodeStore, m_ptrOSMMap->GetPath(), nFileSize, m_settings.sTempDir,
-                                                       (uint64_t)m_settings.nNodeCacheMB * 1024 * 1024);
+                    ptrNodes = IOSMNodeStore::Create(m_settings.nodeStore, m_ptrOSMMap->GetPath(), nFileSize, m_settings.sTempDir,
+                                                     (uint64_t)m_settings.nNodeCacheMB * 1024 * 1024, (uint64_t)m_settings.nNodeWriteBufferMB * 1024 * 1024);
+                    ptrNodes->SetContinue([&run]() { return !run.ptrCancel.get() || run.ptrCancel->Continue(); });
                     run.bStoreNodes = true;
                 }
-                run.pNodes = m_ptrNodes.get();
+                run.pNodes = ptrNodes.get();
+                run.sPath = m_ptrOSMMap->GetPath();
 
                 run.StartPass(1, OSMStageNodes, "Reading nodes and relations");
                 {
@@ -1271,7 +1327,7 @@ namespace GraphEngine {
                 {
                     run.progress.nPass = 0;
                     run.Report(OSMStageSortNodes, "Indexing node coordinates");
-                    m_ptrNodes->Finish([&run](uint64_t nNodes)
+                    ptrNodes->Finish([&run](uint64_t nNodes)
                                        {
                                            run.progress.nNodes = nNodes;
                                            if(run.throttle.IsTime())
@@ -1315,30 +1371,40 @@ namespace GraphEngine {
                             throw CommonLib::CExcBase("The multipolygon file is damaged: relation {0}", mp.nId);
                         ways.resize(mp.vecWays.size());
                         size_t nWays = 0;
+                        auto getStart = std::chrono::steady_clock::now();
                         for(size_t w = 0; w < mp.vecWays.size(); ++w)
                         {
                             if(run.ptrWays->Get(mp.vecWays[w], ways[nWays]))
                                 ++nWays;
                         }
+                        auto buildStart = std::chrono::steady_clock::now();
+                        run.dWayGetSeconds += std::chrono::duration<double>(buildStart - getStart).count();
+                        run.nWayGets += mp.vecWays.size();
                         ways.resize(nWays);
 
+                        CommonLib::IGeoShapePtr ptrShape;
                         if(COSMGeometry::BuildMultipolygon(ways, rings, outer))
+                            ptrShape = COSMGeometry::CreatePolygon(rings, outer);
+                        run.dBuildSeconds += std::chrono::duration<double>(std::chrono::steady_clock::now() - buildStart).count();
+                        if(ptrShape.get())
                         {
-                            CommonLib::IGeoShapePtr ptrShape = COSMGeometry::CreatePolygon(rings, outer);
-                            if(ptrShape.get())
-                            {
-                                CStoredTags tags(mp.tags);
-                                run.vecLayers[mp.match.nLayer].ptrWriter->Write(mp.nId, 'r', mp.match, tags.Tags(), ptrShape);
-                                ++run.nFeatures;
-                            }
+                            ++run.nPolygonsBuilt;
+                            CStoredTags tags(mp.tags);
+                            run.vecLayers[mp.match.nLayer].ptrWriter->Write(mp.nId, 'r', mp.match, tags.Tags(), ptrShape);
+                            ++run.nFeatures;
                         }
+                        else
+                            ++run.nPolygonsFailed;
                         if(!run.Step())
                             throw CommonLib::CExcBase("OSM conversion is canceled");
                     }
                 }
 
+                run.EndStage();   // the details of the multipolygons / ways use the temporary files
                 run.ptrMultipolygons.reset();
                 run.ptrWays.reset();
+                run.pNodes = nullptr;
+                ptrNodes.reset();   // the node coordinates aren't needed any more: the temporary files are deleted
                 run.StartSteps(OSMStageFinish, "Saving tables", vecRunLayers.size());
                 std::vector<GeoDatabase::ITablePtr> vecTables(vecRunLayers.size());
                 std::vector<uint64_t> vecRowCounts(vecRunLayers.size());
@@ -1348,9 +1414,12 @@ namespace GraphEngine {
                     run.progress.nStepDone = i;
                     run.Report(OSMStageFinish, "Building the spatial index: " + vecRunLayers[i]->GetDisplayName());
                     run.CheckCancel();
+                    auto start = std::chrono::steady_clock::now();
                     layer.ptrWriter->Writer()->Finish();
                     vecTables[i] = layer.ptrWriter->Writer()->GetTable();
                     vecRowCounts[i] = layer.ptrWriter->Writer()->GetRowCount();
+                    CRun::AddItem(run.finishItems, "Spatial index: " + vecRunLayers[i]->GetDisplayName(), "packed from the boxes -> " + vecRunLayers[i]->GetTableName(),
+                                  vecRowCounts[i], 0, std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count());
                 }
                 for(STableRun* pTable : {&run.routes, &run.restrictions, &run.tagsTable})
                 {
@@ -1360,27 +1429,39 @@ namespace GraphEngine {
                         pTable->ptrMembers->Finish();
                 }
 
+                // the small scale layers read only their rows: the indexes of their query columns
+                for(size_t i = 0; i < vecRunLayers.size(); ++i)
+                {
+                    if(COSMMapStyle::OverviewLayers(vecRunLayers[i]->GetName()).empty() || vecRowCounts[i] == 0)
+                        continue;
+                    run.Report(OSMStageFinish, "Indexing the small scale layers: " + vecRunLayers[i]->GetDisplayName());
+                    run.CheckCancel();
+                    double dSeconds = OSMCreateOverviewIndexes(ptrTransaction, *vecRunLayers[i], vecTables[i]);
+                    CRun::AddItem(run.finishItems, "Index of the small scale layers: " + vecRunLayers[i]->GetDisplayName(),
+                                  "the query columns of the overview layers -> " + vecRunLayers[i]->GetTableName(), 0, 0, dSeconds);
+                }
+
+                run.Report(OSMStageFinish, "Committing the transaction");
+                auto commitStart = std::chrono::steady_clock::now();
                 ptrTransaction->Commit();
+                CRun::AddItem(run.finishItems, "Commit", "the database file", 0, 0, std::chrono::duration<double>(std::chrono::steady_clock::now() - commitStart).count());
                 ptrTransaction.reset();
                 bBulkMode = false;
                 m_ptrWorkspace->SetBulkLoadMode(false);
 
-                for(size_t d = 0; d < vecDatasets.size(); ++d)
-                    m_setConverted.insert(DatasetKey(vecDatasets[d]));
-
                 if(m_ptrMap.get() && m_settings.bAddLayersToMap)
                 {
+                    COSMMapLayers mapLayers(m_ptrMap, m_projection);
                     for(size_t i = 0; i < vecRunLayers.size(); ++i)
                     {
                         // Convert of a map without counts creates the tables of all the layers: the empty ones aren't shown
                         if(bSkipEmptyLayers && vecRowCounts[i] == 0)
                             continue;
-                        AddMapLayer(*vecRunLayers[i], vecTables[i]);
+                        mapLayers.AddLayer(*vecRunLayers[i], vecTables[i]);
                     }
                 }
 
-                run.progress.nStepDone = run.progress.nStepTotal;
-                run.Report(OSMStageFinish, "Done");
+                run.Done();
             }
             catch (std::exception& exc)
             {
@@ -1408,39 +1489,6 @@ namespace GraphEngine {
                 CommonLib::CExcBase::RegenExc("Failed to convert OSM map {0}", m_ptrOSMMap->GetPath(), exc);
                 throw;
             }
-        }
-
-        void COSMConvertSession::AddMapLayer(const IOSMLayer& osmLayer, GeoDatabase::ITablePtr ptrTable)
-        {
-            if(!m_ptrMap->GetSpatialReference().get())
-            {
-                m_ptrMap->SetSpatialReference(m_projection.CreateSpatialReference());
-                m_ptrMap->SetMapUnits(m_projection.GetUnits());
-            }
-            if(!m_ptrMap->GetBackgroundSymbol().get())
-                m_ptrMap->SetBackgroundSymbol(COSMMapStyle::CreateBackground());
-
-            Cartography::IFeatureLayerPtr ptrLayer = COSMMapStyle::CreateLayer(osmLayer, ptrTable);
-            int nRank = COSMMapStyle::LayerRank(osmLayer.GetName());
-
-            // under the first added layer with a higher rank (index 0 is drawn first)
-            Cartography::ILayersPtr ptrLayers = m_ptrMap->GetLayers();
-            int nInsert = -1;
-            for(int i = 0; i < ptrLayers->GetLayerCount() && nInsert < 0; ++i)
-            {
-                Cartography::ILayerPtr ptrMapLayer = ptrLayers->GetLayer(i);
-                for(size_t j = 0; j < m_vecMapLayers.size(); ++j)
-                {
-                    if(m_vecMapLayers[j].second == ptrMapLayer && m_vecMapLayers[j].first > nRank)
-                    {
-                        nInsert = i;
-                        break;
-                    }
-                }
-            }
-
-            ptrLayers->InsertLayer(ptrLayer, nInsert);
-            m_vecMapLayers.push_back(std::make_pair(nRank, Cartography::ILayerPtr(ptrLayer)));
         }
     }
 }

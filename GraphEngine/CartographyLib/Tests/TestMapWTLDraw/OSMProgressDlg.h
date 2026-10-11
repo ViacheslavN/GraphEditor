@@ -33,6 +33,8 @@ public:
 	// DoModal: IDOK - done, IDCANCEL - canceled by the user, IDABORT - failed (GetError)
 	const std::wstring& GetError() const { return m_sError; }
 	double GetElapsedSeconds() const { return m_dElapsed; }
+	// the last state of the task: the finished stages with their details (SOSMProgress::vecStages), for a report
+	const GraphEngine::Convertors::SOSMProgress& GetLastProgress() const { return m_lastProgress; }
 
 	BEGIN_MSG_MAP(COSMProgressDlg)
 		MESSAGE_HANDLER(WM_INITDIALOG, OnInitDialog)
@@ -86,6 +88,8 @@ private:
 	// the line about the data: the pass, the bytes read of the file, the speed and the time left of the pass
 	std::wstring DataText(const GraphEngine::Convertors::SOSMProgress& progress);
 	void ShowElapsed();
+	// the list: the finished stages, the items of the current one
+	void ShowItems(const GraphEngine::Convertors::SOSMProgress& progress);
 
 private:
 	std::wstring m_sCaption;
@@ -108,6 +112,8 @@ private:
 	std::chrono::steady_clock::time_point m_passStart;
 
 	CProgressBarCtrl m_progressBar;
+	CListViewCtrl m_listItems;
+	GraphEngine::Convertors::SOSMProgress m_lastProgress;
 };
 
 #endif

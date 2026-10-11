@@ -1,6 +1,7 @@
 #pragma once
 #include "OSMMap.h"
 #include "OSMTags.h"
+#include <unordered_map>
 
 namespace GraphEngine {
     namespace Convertors {
@@ -64,6 +65,19 @@ namespace GraphEngine {
         class COSMSchema
         {
         public:
+            // the columns of a layer table made by the converter
+            static const char* ColumnOsmId;     // osm_id
+            static const char* ColumnOsmType;   // osm_type: n / w / r
+            static const char* ColumnName;      // name (name:<language> when it exists)
+            static const char* ColumnClass;     // the key of the matched rule (highway, amenity ...)
+            static const char* ColumnType;      // the value (residential, cafe ...), the map styles draw by it
+
+            // Analyze: the OSM keys of a layer become its columns, sorted by the number of features: at most MaxTagColumns
+            // of the keys met at least on MinTagColumnPerMille / 1000 of the features (the rest are typos and rare keys,
+            // they are in the tags table)
+            static const int MaxTagColumns = 200;
+            static const int MinTagColumnPerMille = 1;
+
             COSMSchema();   // the default thematic layers
             explicit COSMSchema(const std::vector<SOSMLayerDef>& vecLayers);
 
@@ -76,8 +90,18 @@ namespace GraphEngine {
             // the key of the table hierarchy: "route", "restriction", "key"
             static const char* TableKey(eOSMTableType type);
 
-            // the OSM map with the layers of the schema and their keys (no values yet)
+            // the OSM map with the layers of the schema, their keys (no values yet) and the converter / schema columns
             COSMMapPtr CreateMap() const;
+
+            // osm_id, osm_type, name, class, type and the fields of the layer
+            static std::vector<SOSMColumn> LayerColumns(const SOSMLayerDef& def);
+            static std::vector<SOSMColumn> TableColumns(eOSMTableType type);
+            // the column for an OSM key: addr:street -> addr_street (letters, digits, '_')
+            static std::string KeyColumnName(const std::string& sKey);
+            // the key is a column of the layer anyway (name, the keys of the rules, the fields): it isn't a tag column
+            static bool IsLayerKey(const SOSMLayerDef& def, const std::string& sKey);
+            // Analyze: the columns of the layer by the number of the features having every OSM key
+            void SetAnalyzedColumns(int nLayer, COSMLayer& layer, const std::unordered_map<std::string, uint64_t>& keyCounts) const;
 
             SOSMMatch MatchNode(const COSMTags& tags) const;
             // closed - the first and the last node are the same (at least 4 nodes)

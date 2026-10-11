@@ -1,4 +1,5 @@
 #include "OSMNodeStore.h"
+#include <chrono>
 #include "../../../CommonLib/exception/exc_base.h"
 #include <algorithm>
 #include <cstdint>
@@ -131,7 +132,10 @@ namespace GraphEngine {
                 std::sort(m_buffer.begin(), m_buffer.end(), [](const SNode& a, const SNode& b) { return a.id < b.id; });
 
             m_vecRuns.push_back(m_nFileNodes);
+            auto start = std::chrono::steady_clock::now();
             Write(m_ptrFile, m_nFileNodes, m_buffer.data(), m_buffer.size());
+            m_dIOSeconds += std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
+            m_nBytesWritten += m_buffer.size() * sizeof(SNode);
             m_nFileNodes += m_buffer.size();
             m_buffer.clear();
         }
@@ -225,7 +229,9 @@ namespace GraphEngine {
                         return false;
                     size_t nRead = (size_t)(std::min)((uint64_t)nRunBuffer, run.nEnd - run.nPos);
                     run.buffer.resize(nRead);
+                    auto start = std::chrono::steady_clock::now();
                     Read(m_ptrFile, run.nPos, run.buffer.data(), nRead);
+                    m_dIOSeconds += std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
                     run.nPos += nRead;
                     run.nBufferPos = 0;
                     return true;
@@ -251,7 +257,10 @@ namespace GraphEngine {
                 uint64_t nWritten = 0;
                 auto flush = [&]()
                 {
+                    auto start = std::chrono::steady_clock::now();
                     Write(ptrMerged, nWritten, out.data(), out.size());
+                    m_dIOSeconds += std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
+                    m_nBytesWritten += out.size() * sizeof(SNode);
                     nWritten += out.size();
                     out.clear();
                 };
@@ -424,13 +433,28 @@ namespace GraphEngine {
                     size_t nRead = (size_t)(std::min)((uint64_t)BlockSize, m_store.m_nFileNodes - nStart);
                     slot.nodes.resize(nRead);
                     slot.nBlock = UINT64_MAX;
+                    auto start = std::chrono::steady_clock::now();
                     COSMNodeStore::Read(m_ptrFile, nStart, slot.nodes.data(), nRead);
+                    m_stats.dReadSeconds += std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
+                    ++m_stats.nReads;
+                    m_stats.nBytesRead += nRead * sizeof(SNode);
                     slot.nBlock = nBlock;
                 }
+                else
+                    ++m_stats.nCacheHits;
                 return Search(slot.nodes.data(), slot.nodes.size(), nId);
             }
 
+        public:
+            virtual SOSMLookupStats TakeStats() override
+            {
+                SOSMLookupStats stats = m_stats;
+                m_stats = SOSMLookupStats();
+                return stats;
+            }
+
         private:
+            SOSMLookupStats m_stats;
             const COSMNodeStore& m_store;
             CommonLib::file::TFilePtr m_ptrFile;
             std::vector<SSlot> m_cache;   // direct mapped by the block number
@@ -481,14 +505,65 @@ namespace GraphEngine {
         }
 
         std::unique_ptr<IOSMNodeStore> IOSMNodeStore::Create(eOSMNodeStore type, const std::string& sOSMPath, uint64_t nFileSize,
-                                                             const std::string& sTempDir, uint64_t nMemoryBytes)
+                                                             const std::string& sTempDir, uint64_t nMemoryBytes, uint64_t nFlatBufferBytes)
         {
             if(ResolveType(type, sOSMPath, nFileSize) == OSMNodeStoreFlat)
-                return std::unique_ptr<IOSMNodeStore>(new COSMFlatNodeStore(sTempDir));
+                return std::unique_ptr<IOSMNodeStore>(new COSMFlatNodeStore(sTempDir, nFlatBufferBytes ? nFlatBufferBytes : COSMFlatNodeStore::DefaultBufferBytes));
             // a .pbf has about 150 million nodes per GB (the buffer is reserved, it doesn't grow by copying)
             bool bPbf = sOSMPath.size() >= 4 && (sOSMPath.compare(sOSMPath.size() - 4, 4, ".pbf") == 0 || sOSMPath.compare(sOSMPath.size() - 4, 4, ".PBF") == 0);
             uint64_t nExpected = bPbf ? nFileSize / 1024 * 150 : 0;
             return std::unique_ptr<IOSMNodeStore>(new COSMNodeStore(sTempDir, nMemoryBytes, nExpected));
+        }
+
+        // ---------------- COSMRefResolver
+
+        void COSMRefResolver::Clear()
+        {
+            m_pairs.clear();
+        }
+
+        void COSMRefResolver::Add(const int64_t* pRefs, uint32_t nStart, uint32_t nCount)
+        {
+            for(uint32_t i = 0; i < nCount; ++i)
+                m_pairs.push_back(std::make_pair(pRefs[nStart + i], nStart + i));
+        }
+
+        void COSMRefResolver::Resolve(IOSMNodeLookup& lookup, size_t nTotalRefs, const std::function<bool()>& fnContinue)
+        {
+            // the ids in the order of the store, every id once
+            std::sort(m_pairs.begin(), m_pairs.end());
+            m_ids.clear();
+            for(size_t i = 0; i < m_pairs.size(); ++i)
+            {
+                if(m_ids.empty() || m_ids.back() != m_pairs[i].first)
+                    m_ids.push_back(m_pairs[i].first);
+            }
+            m_lons.resize(m_ids.size());
+            m_lats.resize(m_ids.size());
+            m_found.resize(m_ids.size());
+            // by chunks: a cancel is noticed soon even when every id is a read of a hard disk
+            for(size_t nPos = 0; nPos < m_ids.size(); nPos += ResolveChunk)
+            {
+                if(fnContinue && !fnContinue())
+                    throw CommonLib::CExcBase("OSM conversion is canceled");
+                size_t nCount = (std::min)(ResolveChunk, m_ids.size() - nPos);
+                lookup.GetSortedE7(m_ids.data() + nPos, nCount, m_lons.data() + nPos, m_lats.data() + nPos, m_found.data() + nPos);
+            }
+
+            // back to the refs
+            m_refLons.resize(nTotalRefs);
+            m_refLats.resize(nTotalRefs);
+            m_refFound.assign(nTotalRefs, 0);
+            size_t nId = 0;
+            for(size_t i = 0; i < m_pairs.size(); ++i)
+            {
+                while(m_ids[nId] != m_pairs[i].first)
+                    ++nId;
+                uint32_t nRef = m_pairs[i].second;
+                m_refFound[nRef] = m_found[nId];
+                m_refLons[nRef] = m_lons[nId];
+                m_refLats[nRef] = m_lats[nId];
+            }
         }
     }
 }

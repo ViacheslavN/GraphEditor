@@ -94,5 +94,26 @@ namespace GraphEngine {
                 throw CommonLib::CExcBase("Failed to read OSM file {0}: {1}", sPath, ErrorText(nRet));
             return true;
         }
+
+        void AddReaderItems(std::vector<SOSMProgressItem>& vecItems, const SOSMReaderStats& stats, const std::string& sPath)
+        {
+            if(stats.nBlocks == 0)
+                return;   // an .osm file (expat): no details
+            auto add = [&vecItems](const char* pszName, const std::string& sInfo, uint64_t nCount, uint64_t nBytes, double dSeconds, bool bThreads)
+            {
+                SOSMProgressItem item;
+                item.sName = pszName;
+                item.sInfo = sInfo;
+                item.nCount = nCount;
+                item.nBytes = nBytes;
+                item.dSeconds = dSeconds;
+                item.bThreads = bThreads;
+                vecItems.push_back(item);
+            };
+            add("Reading the file", sPath + " (the reading thread)", stats.nBlocks, stats.nBytesRead, stats.dReadSeconds, false);
+            add("Decoding blocks", std::to_string(stats.nThreads) + " threads, CPU time of all of them", stats.nBlocks, 0, stats.dDecodeSeconds, true);
+            add("Waiting for decoded blocks", "the reading thread waits for the decoding threads", 0, 0, stats.dWaitSeconds, false);
+            add("Processing objects", "the handler on the reading thread (the file isn't read meanwhile): the items below", 0, 0, stats.dDispatchSeconds, false);
+        }
     }
 }

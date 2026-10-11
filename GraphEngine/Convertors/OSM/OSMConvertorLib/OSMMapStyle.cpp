@@ -1,4 +1,6 @@
 #include "OSMMapStyle.h"
+#include <cmath>
+#include "OSMSchema.h"
 #include "../../../CartographyLib/layers/FeatureLayer.h"
 #include "../../../CartographyLib/renders/FeatureRenderer.h"
 #include "../../../CartographyLib/renders/LabelRenderer.h"
@@ -160,7 +162,6 @@ namespace GraphEngine {
                 {
                     TColor outline(196, 182, 171);
                     style.ptrSelector = Simple(Fill(TColor(217, 208, 201), &outline, 0.1));
-                    style.dMinScale = 25000.;
                     style.ptrLabelSelector = Simple(Text(2., TColor(90, 80, 70, 255)));
                     style.dLabelMinScale = 5000.;
                     style.labeling.m_nPriority = 6;
@@ -276,11 +277,11 @@ namespace GraphEngine {
                 else if(sName == "pois")
                 {
                     style.ptrSelector = Simple(Marker(TColor(214, 118, 35), 1.4));
-                    style.dMinScale = 15000.;
                     style.ptrLabelSelector = Simple(Text(2.1, TColor(120, 70, 20, 255)));
                     style.dLabelMinScale = 7500.;
                     style.labeling.m_nPriority = 4;
                 }
+                style.dMinScale = COSMMapStyle::MinScale(sName);
                 return style;
             }
 
@@ -293,6 +294,44 @@ namespace GraphEngine {
                     default:                 return Fill(TColor(220, 220, 220));
                 }
             }
+        }
+
+        double COSMMapStyle::ZoomScale(int nZoom)
+        {
+            return std::round(559082264.0 / std::pow(2.0, nZoom));
+        }
+
+        double COSMMapStyle::MinScale(const std::string& sLayerName)
+        {
+            // OpenStreetMap Carto: the zoom from which the most of the features of the layer are drawn
+            // (its main features start earlier: they are the overview layers)
+            struct SZoom { const char* pszLayer; int nZoom; };
+            static const SZoom zooms[] = {
+                    {"boundaries", 8},     // countries z1+, states z4+ (overview), the other levels z10+
+                    {"places", 10},        // cities z6+ (overview), towns z8+, villages z12+
+                    {"water", 10},         // the big lakes from z6
+                    {"railways", 10},      // main lines from z8
+                    {"waterways", 12},     // rivers from z8, canals z12, streams z13
+                    {"landuse", 12},       // forests from z8, most landuse z10+
+                    {"roads", 13},         // motorways / trunks from z5, primary z8, residential / service z13+
+                    {"buildings", 14},
+                    {"pois", 16}};
+            for(const SZoom& zoom : zooms)
+            {
+                if(sLayerName == zoom.pszLayer)
+                    return ZoomScale(zoom.nZoom);
+            }
+            return 0.;
+        }
+
+        std::vector<SOSMOverviewLayer> COSMMapStyle::OverviewLayers(const std::string& sLayerName)
+        {
+            std::vector<SOSMOverviewLayer> layers;
+            if(sLayerName == "boundaries")
+                layers.push_back({"Countries and states", "admin_level IN (2,4)", "admin_level"});
+            else if(sLayerName == "places")
+                layers.push_back({"Cities", "type = 'city'", "type"});
+            return layers;
         }
 
         int COSMMapStyle::LayerRank(const std::string& sLayerName)
@@ -339,13 +378,15 @@ namespace GraphEngine {
             ptrRenderer->SetSymbolSelector(style.ptrSelector);
             ptrLayer->AddRenderer(ptrRenderer);
 
-            if(style.ptrLabelSelector.get())
+            // the labels are the names: no labels when the column name is excluded (no table - a style saved for later: with the labels)
+            bool bNames = !ptrTable.get() || (ptrTable->GetFields().get() && ptrTable->GetFields()->FindField(COSMSchema::ColumnName) >= 0);
+            if(style.ptrLabelSelector.get() && bNames)
             {
                 std::shared_ptr<Cartography::CLabelRenderer> ptrLabels = std::make_shared<Cartography::CLabelRenderer>(style.ptrLabelSelector);
                 ptrLabels->SetMinimumScale(style.dLabelMinScale);
                 ptrLabels->SetClassIndex(LayerRank(osmLayer.GetName()));
                 ptrLayer->SetLabelRenderer(ptrLabels);
-                ptrLayer->SetLabelFieldName("name");
+                ptrLayer->SetLabelFieldName(COSMSchema::ColumnName);
                 ptrLayer->SetLabelingOptions(style.labeling);
             }
             return ptrLayer;
