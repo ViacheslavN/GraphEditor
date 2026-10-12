@@ -84,9 +84,8 @@ TEST_CASE("CUInt128 Add without overflow", "[int128]")
 	REQUIRE(v.m_lo == 42);
 }
 
-TEST_CASE("CUInt128 Add carries into the high word", "[int128][!mayfail]")
+TEST_CASE("CUInt128 Add carries into the high word", "[int128]")
 {
-	// Add() has a "TO DO" on carry handling; this documents the intended semantics.
 	CUInt128 v = Make(0, uint64_t(-1));
 	v.Add(1);
 	CHECK(v.m_lo == 0);

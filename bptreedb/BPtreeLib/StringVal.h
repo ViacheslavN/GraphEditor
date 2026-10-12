@@ -19,7 +19,8 @@ namespace bptreedb
 		StringValue& operator= (const StringValue&);
 		StringValue& operator= (StringValue&&);
 
-		uint32_t Length() const;
+		uint32_t Length() const;      // with the terminating zero (0 only for a default constructed value)
+		uint32_t StrLen() const { return m_nLen != 0 ? m_nLen - 1 : 0; }
 		const byte_t * CStr() const;
 		byte_t * Str();
 	private:
@@ -49,9 +50,6 @@ namespace bptreedb
 		}
 		bool EQ(const StringValue& _Left, const StringValue& _Right) const
 		{
-			if (_Left.Length() != _Right.Length())
-				return false;
-
 			return StrValcmp(_Left.CStr(), _Right.CStr()) == 0;
 		}
 

@@ -1,4 +1,5 @@
 #pragma once
+#include "DeVector.h"
 
 #include "AllocsSet.h"
 #include "../../CommonLib/CommonLib.h"
@@ -20,7 +21,7 @@ namespace bptreedb
 		typedef _TKey TKey;
 		typedef _TCompressor TCompressor;
 		typedef CommonLib::STLAllocator<TKey> TAlloc;
-		typedef std::vector<TKey, TAlloc> TKeyMemSet;
+		typedef TDeVector<TKey, TAlloc> TKeyMemSet;
  
 
 		BPTreeLeafNodeSetBase(TAllocsSetPtr pAllocsSet, bool bMulti, uint32_t nPageSize, TCompressorParamsBasePtr pParams) :
@@ -169,6 +170,18 @@ namespace bptreedb
 			if (!comp.EQ(m_KeyMemSet[nIndex], key))
 				throw CommonLib::CExcBase("Failed to remove: key not found");
 
+			RemoveByIndex(nIndex);
+		}
+
+		uint32_t SplitCount()
+		{
+			return Count() / 2;
+		}
+
+		// removal from the tree: nIndex is the index binary_search returned for key
+		template<class TComp>
+		void RemoveKey(TComp& comp, int32_t nIndex, const TKey& key)
+		{
 			RemoveByIndex(nIndex);
 		}
 

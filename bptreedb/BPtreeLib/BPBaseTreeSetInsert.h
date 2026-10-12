@@ -79,7 +79,7 @@ void BPSETBASE_DECLARATION::CheckLeafNode(TBPTreeNodePtr &pNode)
 		
 		TBPTreeNodePtr pCheckNode = GetParentNode(pNode);
 		TBPTreeNodePtr pNewRightLeafNode = NewNode(true, true);
-		SplitLeafNode(pNode, pNewRightLeafNode, pCheckNode, m_bMinSplit ? 1 : pNode->Count() / 2);
+		SplitLeafNode(pNode, pNewRightLeafNode, pCheckNode, m_bMinSplit ? 1 : pNode->LeafSplitCount());
 
 		while (pCheckNode->IsNeedSplit())
 		{

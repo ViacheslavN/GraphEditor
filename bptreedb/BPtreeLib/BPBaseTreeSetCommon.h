@@ -358,7 +358,11 @@ void BPSETBASE_DECLARATION::SaveNode(TBPTreeNodePtr& pNode)
 				}
 			}
 
+			// the split may have loaded nodes (neighbour, parent) through the same m_cachePage:
+			// restore the address and the stream before saving again
 			m_cachePage->Erase(0);
+			m_cachePage->SetAddr(nAddr);
+			stream.AttachBuffer(m_cachePage->GetPayLoadData(), m_cachePage->GetSize());
 			stream.Seek(0, CommonLib::soFromBegin);
 			{
 				CommonLib::CPrefCounterHolder holder(m_pBPTreePerfCounter, isLeaf ? eSaveLeafNode : eSaveInnerNode);
@@ -375,6 +379,35 @@ void BPSETBASE_DECLARATION::SaveNode(TBPTreeNodePtr& pNode)
 		CommonLib::CExcBase::RegenExcT("[TBPlusTreeSetBase] failed to save node addr: {0},  count: {1}, leaf: {2}", nAddr, nInCount, isLeaf, exc);
 	}
 
+}
+
+BPSETBASE_TEMPLATE_PARAMS
+uint32_t BPSETBASE_DECLARATION::TrySaveNode(TBPTreeNodePtr& pNode)
+{
+	try
+	{
+		m_cachePage->Erase(0);
+		CommonLib::CFxMemoryWriteStream stream;
+		stream.AttachBuffer(m_cachePage->GetPayLoadData(), m_cachePage->GetSize());
+		m_cachePage->SetAddr(pNode->GetAddr());
+
+		uint32_t nCount = 0;
+		{
+			CommonLib::CPrefCounterHolder holder(m_pBPTreePerfCounter, pNode->IsLeaf() ? eSaveLeafNode : eSaveInnerNode);
+			nCount = pNode->Save(&stream, &m_Context);
+		}
+		if (nCount != 0)
+			return nCount;
+
+		m_pStorage->SavePage(m_cachePage);
+		pNode->SetFlags(CHANGE_NODE, false);
+		return 0;
+	}
+	catch (std::exception& exc)
+	{
+		CommonLib::CExcBase::RegenExcT("[TBPlusTreeSetBase] failed to save node addr: {0}", pNode->GetAddr(), exc);
+		throw;
+	}
 }
 
 BPSETBASE_TEMPLATE_PARAMS
@@ -415,6 +448,8 @@ void BPSETBASE_DECLARATION::Flush()
 	try
 	{
 		CommonLib::CPrefCounterHolder holder(m_pBPTreePerfCounter, eFlush);
+		if (m_pRoot.get() == nullptr)
+			return;    // nothing was loaded or changed
 		m_bLockRemoveItemFromCache = true; // TO DO use RAII
 
 		while (m_pRoot->GetFlags() & CHANGE_NODE || m_NodeCache.Size() > 0)
@@ -471,13 +506,10 @@ void BPSETBASE_DECLARATION::SetBPTreePerfCounter(CommonLib::TPrefCounterPtr pBPT
 BPSETBASE_TEMPLATE_PARAMS
 BPSETBASE_TYPENAME_DECLARATION::TBPTreeNodePtr BPSETBASE_DECLARATION::GetMinimumNode(TBPTreeNodePtr pNode)
  {
+	// the leftmost leaf of the subtree; null if the subtree has no leaves (an inner node without children)
 	TBPTreeNodePtr pMinNode = pNode;
-	while (!pMinNode->IsLeaf())
-	{
-
-		pMinNode = GetNode(pNode->Less());
-		pNode = pMinNode;
-	}
+	while (pMinNode.get() && !pMinNode->IsLeaf())
+		pMinNode = GetNode(pMinNode->Less());
 
 	return pMinNode;
  }
@@ -486,4 +518,93 @@ BPSETBASE_TEMPLATE_PARAMS
 uint32_t BPSETBASE_DECLARATION::GetNodePageSize() const
 {
 	return m_cachePage->GetSize();
+}
+
+BPSETBASE_TEMPLATE_PARAMS
+void BPSETBASE_DECLARATION::CheckTreeStructure()
+{
+	try
+	{
+		if (m_pRoot.get() == nullptr)
+			LoadTree();
+		int32_t nLeafDepth = -1;
+		CheckSubtree(m_pRoot, nullptr, nullptr, 0, nLeafDepth);
+	}
+	catch (std::exception& exc)
+	{
+		CommonLib::CExcBase::RegenExcT("[TBPlusTreeSetBase] CheckTreeStructure failed", exc);
+		throw;
+	}
+}
+
+BPSETBASE_TEMPLATE_PARAMS
+BPSETBASE_TYPENAME_DECLARATION::TBPTreeNodePtr BPSETBASE_DECLARATION::PeekNodeForCheck(int64_t nAddr)
+{
+	if (nAddr == m_nRootAddr)
+		return m_pRoot;
+
+	TBPTreeNodePtr pNode = GetNodeFromCache(nAddr, true);
+	if (pNode.get())
+		return pNode;
+
+	storage::IFilePagePtr pPage = m_pStorage->ReadPage(nAddr);
+	CommonLib::CReadMemoryStream stream;
+	stream.AttachBuffer(pPage->GetPayLoadData(), pPage->GetSize());
+	return LoadNode<TBPTreeNode>(&stream, m_pAllocsSet, m_bMulti, GetNodePageSize(), nAddr, m_pCompressParams, &m_Context);
+}
+
+BPSETBASE_TEMPLATE_PARAMS
+void BPSETBASE_DECLARATION::CheckSubtree(TBPTreeNodePtr pNode, const TKey* pLo, const TKey* pHi, uint32_t nDepth, int32_t& nLeafDepth)
+{
+	if (!pNode.get())
+		throw CommonLib::CExcBase("missing node at depth {0}", nDepth);
+
+	const int64_t nAddr = pNode->GetAddr();
+	const uint32_t nCount = pNode->Count();
+
+	auto checkKeys = [&]()
+	{
+		for (uint32_t i = 0; i < nCount; ++i)
+		{
+			const TKey& k = pNode->Key(i);
+			if (pLo && m_comp.LE(k, *pLo))
+				throw CommonLib::CExcBase("node {0}: key {1} below the separator {2}", nAddr, i, *pLo);
+			if (pHi && !m_comp.LE(k, *pHi))
+				throw CommonLib::CExcBase("node {0}: key {1} not below the next separator {2}", nAddr, i, *pHi);
+			if (i > 0 && !m_comp.LE(pNode->Key(i - 1), k))
+				throw CommonLib::CExcBase("node {0}: keys not sorted at {1}", nAddr, i);
+		}
+	};
+
+	if (pNode->IsLeaf())
+	{
+		if (nCount == 0 && nAddr != m_nRootAddr)
+			throw CommonLib::CExcBase("empty leaf {0}", nAddr);
+		if (nLeafDepth == -1)
+			nLeafDepth = (int32_t)nDepth;
+		else if (nLeafDepth != (int32_t)nDepth)
+			throw CommonLib::CExcBase("leaf {0} at depth {1}, other leaves at {2}", nAddr, nDepth, nLeafDepth);
+		checkKeys();
+		return;
+	}
+
+	if (pNode->Less() == EMPTY_PAGE_ADDR)
+		throw CommonLib::CExcBase("inner node {0} without Less", nAddr);
+	checkKeys();
+
+	// copies: children are loaded while this node is walked
+	std::vector<TKey> keys;
+	std::vector<TLink> links;
+	keys.reserve(nCount);
+	links.reserve(nCount);
+	for (uint32_t i = 0; i < nCount; ++i)
+	{
+		keys.push_back(pNode->Key(i));
+		links.push_back(pNode->Link(i));
+	}
+	const TLink nLess = pNode->Less();
+
+	CheckSubtree(PeekNodeForCheck(nLess), pLo, nCount ? &keys[0] : pHi, nDepth + 1, nLeafDepth);
+	for (uint32_t i = 0; i < nCount; ++i)
+		CheckSubtree(PeekNodeForCheck(links[i]), &keys[i], i + 1 < nCount ? &keys[i + 1] : pHi, nDepth + 1, nLeafDepth);
 }

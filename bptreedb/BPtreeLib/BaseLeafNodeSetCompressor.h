@@ -1,4 +1,5 @@
 #pragma once
+#include "DeVector.h"
 
 #include "Compressor/CompressorParams.h"
 #include "../../CommonLib/CommonLib.h"
@@ -18,7 +19,7 @@ namespace bptreedb
 			typedef _TKey TKey;
 			typedef _TKeyEncoder TKeyEncoder;
 			typedef CommonLib::STLAllocator<TKey> TKeyAlloc;
-			typedef std::vector<TKey, TKeyAlloc> TKeyMemSet;
+			typedef TDeVector<TKey, TKeyAlloc> TKeyMemSet;
 
 
 			TBaseLeafNodeSetCompressor(uint32_t nPageSize, TAllocsSetPtr pAllocsSet, TCompressorParamsBasePtr  pParams, ECompressNodeType type) : m_nCount(0),

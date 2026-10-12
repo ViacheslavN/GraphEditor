@@ -319,7 +319,7 @@ TEST_CASE("Cache with shared_ptr objects", "[cache]")
 	cache.AddElem(2, p2);
 
 	REQUIRE(p1.use_count() == 2);
-	REQUIRE(*cache.GetElem(1) == "one");
+	REQUIRE(*cache.GetElem(1, true) == "one");   // no recency change: 1 stays the oldest
 	REQUIRE(cache.GetElem(3) == nullptr);
 
 	TStrPtr evicted = cache.RemoveBack();

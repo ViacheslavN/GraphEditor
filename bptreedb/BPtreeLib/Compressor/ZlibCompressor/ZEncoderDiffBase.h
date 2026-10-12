@@ -1,4 +1,5 @@
 #pragma once
+#include "../../DeVector.h"
 #include "../CompressorParams.h"
 #include "../../../../CommonLib/CommonLib.h"
 #include "../../../../CommonLib/exception/exc_base.h"
@@ -24,7 +25,7 @@ namespace bptreedb
 
 		typedef _TValue TValue;
 		typedef CommonLib::STLAllocator<TValue> TAlloc;
-		typedef std::vector<TValue, TAlloc> TValueMemSet;
+		typedef TDeVector<TValue, TAlloc> TValueMemSet;
 		typedef _TEncoder  TEncoder;
 		typedef _TDecoder  TDecoder;
 

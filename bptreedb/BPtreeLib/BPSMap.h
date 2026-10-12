@@ -20,7 +20,7 @@ namespace bptreedb
 	public:
 
 		typedef TBPlusTreeSetBase<StringValue, _TComp, _TStorage, _TInnerNode, _TLeafNode, _TNodeHolder> TBase;
-		typedef typename _TValue TValue;
+		typedef _TValue TValue;
 		typedef typename TBase::TKey  TKey;
 		typedef typename TBase::TComp	   TComp;
 		typedef typename TBase::TLink  TLink;
@@ -38,7 +38,7 @@ namespace bptreedb
 
 		typedef TBPMapIterator<StringValue, TValue, TBPTreeNode, TBase> iterator;
 
-		template <class _TKey, class _TNodeHolder, class _TBTree>
+		template <class _TKey2, class _TNodeHolder2, class _TBTree>
 		friend class TBPTreeStatistics;
 
 		typedef TBPTreeStatistics<StringValue, TBPTreeNode, TBase> TreeStatistics;
@@ -81,6 +81,49 @@ namespace bptreedb
 				CommonLib::CExcBase::RegenExcT("[TBPSMap] failed insert", exc);
 			}
 		}
+
+		// string value (TValue = StringValue)
+		void insert(const char *pszKey, uint32_t nKeyLen, const char *pszValue, uint32_t nValueLen)
+		{
+			insert(pszKey, nKeyLen, MakeString(pszValue, nValueLen));
+		}
+
+		void insert(const std::string& key, const std::string& value)
+		{
+			insert(key.c_str(), (uint32_t)key.size(), value.c_str(), (uint32_t)value.size());
+		}
+
+		bool remove(const char *pszUtf8, uint32_t strLen)
+		{
+			StringValue key = MakeKey(pszUtf8, strLen);
+			return TBase::remove(key);
+		}
+
+		bool remove(const std::string& key)
+		{
+			return remove(key.c_str(), (uint32_t)key.size());
+		}
+
+		iterator find(const std::string& key)
+		{
+			return find(key.c_str(), (uint32_t)key.size());
+		}
+
+		// a string in the tree's string allocator (keys and string values)
+		StringValue MakeString(const char *pszUtf8, uint32_t strLen) const
+		{
+			if (strLen > m_nMaxStr)
+				throw CommonLib::CExcBase("Exceeding the maximum size {0}, length {1}", m_nMaxStr, strLen);
+
+			return StringValue((const byte_t*)pszUtf8, strLen, m_StringAlloc);
+		}
+
+		StringValue MakeKey(const char *pszUtf8, uint32_t strLen) const
+		{
+			return MakeString(pszUtf8, strLen);
+		}
+
+		uint32_t MaxStringLen() const { return m_nMaxStr; }
 
 		virtual TBPTreeNodePtr AllocateNewNode( int64_t nAddr, bool bLeaf)
 		{

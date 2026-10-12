@@ -285,6 +285,24 @@ namespace bptreedb
 			return 0;
 		}
 
+		// how many elements a split of a leaf moves to the new right node
+		uint32_t LeafSplitCount()
+		{
+			if (!IsLeaf())
+				throw CommonLib::CExcBase("BTNode holder LeafSplitCount()  Node addr {0} isn't a leaf node", m_nAddr);
+
+			return m_pLeafNode->SplitCount();
+		}
+
+		template<class TComp>
+		void RemoveLeafKey(TComp& comp, int32_t nIndex, const TKey& key)
+		{
+			if (!IsLeaf())
+				throw CommonLib::CExcBase("BTNode holder RemoveLeafKey()  Node addr {0} isn't a leaf node", m_nAddr);
+
+			m_pLeafNode->RemoveKey(comp, nIndex, key);
+		}
+
 		void UnionWithLeafNode(std::shared_ptr<TBPNodeHolder>  pNode, bool bLeft,  int *nCheckIndex = 0)
 		{
 			if (!IsLeaf())
@@ -424,6 +442,14 @@ namespace bptreedb
 			return m_pInnerNode->UpdateKey(nIndex, Key);
 		}
 
+		void SetLink(int32_t nIndex, TLink nLink)
+		{
+			if (IsLeaf())
+				throw CommonLib::CExcBase(" Node addr {0} isn't a inner node", m_nAddr);
+
+			m_pInnerNode->UpdateLink(nIndex, nLink);
+		}
+
 	protected:
 		bool m_IsLeaf;
 		int64_t m_nAddr;
@@ -433,4 +459,4 @@ namespace bptreedb
 		IBPTreeNode *m_pCurNode;
 
 	};
-}
+}

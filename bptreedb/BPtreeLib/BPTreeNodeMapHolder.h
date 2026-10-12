@@ -36,6 +36,14 @@ namespace bptreedb
 			this->m_pLeafNode->insert(comp, key, val, nInsertInIndex);
 		}
 
+		void AppendInLeaf(const TKey& key, const TValue& val)
+		{
+			if (!this->IsLeaf())
+				throw CommonLib::CExcBase("BTNode holder AppendInLeaf()  Node addr {0} isn't a leaf node", this->m_nAddr);
+
+			this->m_pLeafNode->AppendSorted(key, val);
+		}
+
 		const TValue& Value(uint32_t nIndex) const
 		{
 			if (!this->IsLeaf())

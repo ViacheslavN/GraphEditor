@@ -50,7 +50,10 @@ namespace bptreedb
 
 			void Add(uint32_t nVal)
 			{
-				m_lo += nVal; //TO DO
+				uint64_t lo = m_lo + nVal;
+				if (lo < m_lo)          // overflow of the low word: carry into the high word
+					++m_hi;
+				m_lo = lo;
 			}
 
 
@@ -74,4 +77,4 @@ namespace bptreedb
 
 		};
 	}
-}
+}

@@ -149,33 +149,18 @@ namespace bptreedb
 
 			uint32_t Size() const { return m_nSize; }
 
+			// frees all nodes from the head (m_pBegin) along m_pNext; the old version started at the tail
+			// (m_pBack, whose m_pNext is null), freed only that node and leaked the others
 			void Clear()
 			{
-
-				if (m_pBegin == NULL || m_pBack == NULL)
-					return;
-
-				TNode* pNode = m_pBack;
-				TNode* pNextNode = pNode->m_pNext;
-				if (!pNextNode)
+				TNode* pNode = m_pBegin;
+				while (pNode)
 				{
-					pNode->~TListNode();
-					m_pAlloc->Free(pNode);
-					m_pBegin = nullptr;
-					m_pBack = nullptr;
-					return;
-				}
-
-				while (pNextNode)
-				{
+					TNode* pNextNode = pNode->m_pNext;
 					pNode->~TListNode();
 					m_pAlloc->Free(pNode);
 					pNode = pNextNode;
-					pNextNode = pNextNode->m_pNext;
 				}
-
-				pNode->~TListNode();
-				m_pAlloc->Free(pNode);
 
 				m_pBegin = nullptr;
 				m_pBack = nullptr;
@@ -193,17 +178,15 @@ namespace bptreedb
 
 				TNode* pElem = new (m_pAlloc->Alloc(sizeof(TNode))) TNode(val);
 
+				// insert after pNode: link both neighbours; after the tail the new node becomes the tail
+				// (the old version didn't link pNode -> pElem in the middle and moved m_pBegin at the tail)
 				pElem->m_pNext = pNode->m_pNext;
 				pElem->m_pPrev = pNode;
 				if (pNode->m_pNext)
-				{
 					pNode->m_pNext->m_pPrev = pElem;
-				}
 				else
-				{
-					m_pBegin = pElem;
-					pNode->m_pNext = pElem;
-				}
+					m_pBack = pElem;
+				pNode->m_pNext = pElem;
 
 				m_nSize++;
 				return iterator(pElem);
@@ -268,4 +251,4 @@ namespace bptreedb
 		};
 
 	}
-}
+}

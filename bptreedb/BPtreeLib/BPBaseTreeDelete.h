@@ -84,7 +84,7 @@ void BPSETBASE_DECLARATION::RemoveFromLeafNode(TBPTreeNodePtr pNode, int32_t nIn
 		int32_t nFoundIndex;
 		TBPTreeNodePtr pParentNode = GetParentNode(pNode, &nFoundIndex);
 
-		pNode->RemoveByIndex(nIndex);
+		pNode->RemoveLeafKey(m_comp, nIndex, key);
 		pNode->SetFlags(CHANGE_NODE, true);
 
 		if (pNode->GetAddr() == m_nRootAddr || !pParentNode.get())
@@ -95,12 +95,12 @@ void BPSETBASE_DECLARATION::RemoveFromLeafNode(TBPTreeNodePtr pNode, int32_t nIn
 			if (pNode->Count() == 0)
 			{
 				pParentNode->RemoveByIndex(nFoundIndex);
-				pParentNode->SetFlags(CHECK_REM_NODE, true);
+				pParentNode->SetFlags(CHANGE_NODE | CHECK_REM_NODE, true);
 			}
 			else if (nIndex == 0)
 			{
 				pParentNode->UpdateKey(nFoundIndex, pNode->Key(0));
-				pParentNode->SetFlags(CHECK_REM_NODE, true);
+				pParentNode->SetFlags(CHANGE_NODE | CHECK_REM_NODE, true);
 			}
 
 		}
@@ -108,16 +108,21 @@ void BPSETBASE_DECLARATION::RemoveFromLeafNode(TBPTreeNodePtr pNode, int32_t nIn
 		{
 			if (pNode->Count() == 0)
 			{
-
-			//	if (pParentNode->Count() > 0)
+				if (pParentNode->Count() > 0)
 				{
 					TLink link = pParentNode->Link(0);
 					pParentNode->SetLess(link);
 					pParentNode->RemoveByIndex(0);
 									   
-					pParentNode->SetFlags(CHECK_REM_NODE, true);
+					pParentNode->SetFlags(CHANGE_NODE | CHECK_REM_NODE, true);
 				}
-
+				else
+				{
+					// the leaf was the parent's only child: the parent has no children now,
+					// RemoveFromInnerNode removes it from its own parent (or empties the root)
+					pParentNode->SetLess(EMPTY_PAGE_ADDR);
+					pParentNode->SetFlags(CHANGE_NODE | CHECK_REM_NODE, true);
+				}
 			}
 		}
 
@@ -146,7 +151,7 @@ void BPSETBASE_DECLARATION::RemoveFromLeafNode(TBPTreeNodePtr pNode, int32_t nIn
 				pPrevNode->SetFlags(CHANGE_NODE, true);
 			}
 
-			DropNode(pNode);
+			DeleteNode(pNode);   // unlinked from the parent and the leaf chain: free the page (DropNode saved it)
 			return 	RemoveFromInnerNode(pParentNode, key);
 		}
 
@@ -159,6 +164,9 @@ void BPSETBASE_DECLARATION::RemoveFromLeafNode(TBPTreeNodePtr pNode, int32_t nIn
 
 		if (pParentNode->Less() == pNode->GetAddr())
 		{
+			if (pParentNode->Count() == 0)     // the only child: no sibling to merge with
+				return RemoveFromInnerNode(pParentNode, key);
+
 			pDonorNode = GetNode(pParentNode->Link(0));
 			bUnion = pNode->PossibleUnion(pDonorNode);
 			if (!bUnion)
@@ -336,7 +344,14 @@ void BPSETBASE_DECLARATION::RemoveFromInnerNode(TBPTreeNodePtr pCheckNode, const
 			 
 			if (!pParentNode.get())
 			{
-				if (!pCheckNode->Count())
+				if (!pCheckNode->Count() && pCheckNode->Less() == EMPTY_PAGE_ADDR)
+				{
+					// the last child is gone: the tree is empty, the root becomes an empty leaf
+					pCheckNode->Clear();
+					pCheckNode->TransformToLeaf(m_pAllocsSet, m_bMulti, m_nNodePageSize, m_pCompressParams);
+					pCheckNode->SetFlags(ROOT_NODE | CHANGE_NODE, true);
+				}
+				else if (!pCheckNode->Count())
 				{
 					TBPTreeNodePtr pNode = GetNode(pCheckNode->Less());
 
@@ -345,12 +360,13 @@ void BPSETBASE_DECLARATION::RemoveFromInnerNode(TBPTreeNodePtr pCheckNode, const
 						pCheckNode->Clear();
 						pCheckNode->TransformToLeaf(m_pAllocsSet, m_bMulti, m_nNodePageSize, m_pCompressParams);
 						pCheckNode->UnionWithLeafNode(pNode, false);
-						pCheckNode->SetFlags(ROOT_NODE, true);
+						pCheckNode->SetFlags(ROOT_NODE | CHANGE_NODE, true);
 					}
 					else
 					{
 						pCheckNode->SetLess(EMPTY_PAGE_ADDR);
 						pCheckNode->UnionWithInnerNode(pNode, NULL, true);
+						pCheckNode->SetFlags(CHANGE_NODE, true);
 					}
 					m_NodeCache.Remove(pNode->GetAddr());
 					DeleteNode(pNode);
@@ -363,13 +379,16 @@ void BPSETBASE_DECLARATION::RemoveFromInnerNode(TBPTreeNodePtr pCheckNode, const
 			{
 				TBPTreeNodePtr pIndexNode = GetNode(pParentNode->Link(nFoundIndex));
 				TBPTreeNodePtr pMinNode = GetMinimumNode(pIndexNode);
-				pParentNode->UpdateKey(nFoundIndex, pMinNode->Key(0));
-				pParentNode->SetFlags(CHANGE_NODE, true);
+				if (pMinNode.get() && pMinNode->Count() != 0)   // an empty subtree is removed below
+				{
+					pParentNode->UpdateKey(nFoundIndex, pMinNode->Key(0));
+					pParentNode->SetFlags(CHANGE_NODE, true);
+				}
  
 			}
 			if (!(pCheckNode->GetFlags() & CHECK_REM_NODE))
 			{
-				pCheckNode = GetParentNode(pCheckNode);
+				pCheckNode = pParentNode;   // GetParentNode(pCheckNode) needs Key(0), pCheckNode may have no keys
 				continue;
 			}
 			pCheckNode->SetFlags(CHECK_REM_NODE, false);
@@ -380,25 +399,34 @@ void BPSETBASE_DECLARATION::RemoveFromInnerNode(TBPTreeNodePtr pCheckNode, const
 				continue;
 			}
 
-			if (pCheckNode->Count() == 0)
+			if (pCheckNode->Count() == 0 && pCheckNode->Less() == EMPTY_PAGE_ADDR)
 			{
-				
-				if (nFoundIndex == LESS_INDEX)
 				{
-					pParentNode->SetLess(pCheckNode->Less());
-				}
-				else
-				{
-					TBPTreeNodePtr pMinNode = GetMinimumNode(pCheckNode);
-					pParentNode->UpdateKey(nFoundIndex, pMinNode->Key(0));
-				}
+					// no children at all: remove the node from its parent
+					if (nFoundIndex == LESS_INDEX)
+					{
+						if (pParentNode->Count() > 0)
+						{
+							pParentNode->SetLess(pParentNode->Link(0));
+							pParentNode->RemoveByIndex(0);
+						}
+						else
+							pParentNode->SetLess(EMPTY_PAGE_ADDR);
+					}
+					else
+						pParentNode->RemoveByIndex(nFoundIndex);
 
-				pParentNode->SetFlags(CHANGE_NODE, true);
+					pParentNode->SetFlags(CHANGE_NODE | CHECK_REM_NODE, true);
+				}
 				DeleteNode(pCheckNode);
 
-				pCheckNode = pParentNode;//GetParentNode(pCheckNode);
+				pCheckNode = pParentNode;
 				continue;
 			}
+
+			// A node with one child left (Count() == 0, only Less) must not be replaced by that child in the
+			// parent: the subtree would move a level up (leaves at different depths). It merges with or
+			// borrows from a sibling below like any half empty node; only the root may lose a level.
 
 
 			TBPTreeNodePtr pDonorNode;
@@ -409,10 +437,8 @@ void BPSETBASE_DECLARATION::RemoveFromInnerNode(TBPTreeNodePtr pCheckNode, const
 
 			if (pParentNode->Less() == pCheckNode->GetAddr())
 			{
-				pDonorNode = GetNode(pParentNode->Link(0));
-				bUnion = pCheckNode->PossibleUnion(pDonorNode);
-				if (!bUnion)
-					bAlignment = pCheckNode->PossibleAlignment(pDonorNode);
+				if (pParentNode->Count() != 0)     // otherwise no sibling: pDonorNode stays null
+					pDonorNode = GetNode(pParentNode->Link(0));
 			}
 			else
 			{

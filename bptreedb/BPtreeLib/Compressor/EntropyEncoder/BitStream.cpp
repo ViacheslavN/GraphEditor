@@ -1,5 +1,6 @@
  #include "stdafx.h"
 #include "BitStream.h"
+#include <cstring>
 
 namespace bptreedb
 {
@@ -86,7 +87,13 @@ namespace bptreedb
 
 		uint32_t byte_offset = m_bit_pos >> 5;
 		byte_offset <<= 2;
-		*(uint64_t*)(m_buffer + byte_offset) |= (val & BIT_MASKS[bit_cnt]) << (m_bit_pos & 0x1f);
+		// the buffer position is only 4-byte aligned (and the buffer itself may not be aligned at all):
+		// memcpy instead of a uint64_t* access, which can fault on 32-bit ARM. The bit layout assumes a
+		// little-endian CPU (x86, ARM in Android/Windows/Linux)
+		uint64_t word;
+		memcpy(&word, m_buffer + byte_offset, sizeof(word));
+		word |= (val & BIT_MASKS[bit_cnt]) << (m_bit_pos & 0x1f);
+		memcpy(m_buffer + byte_offset, &word, sizeof(word));
 		m_bit_pos += bit_cnt;
 	}
 
@@ -111,7 +118,8 @@ namespace bptreedb
 		uint32_t byte_offset = m_bit_pos >> 5;
 		byte_offset <<= 2;
 
-		uint64_t val = *(uint64_t*)(m_buffer + byte_offset);
+		uint64_t val;
+		memcpy(&val, m_buffer + byte_offset, sizeof(val));   // unaligned position, see _WriteBits
 		val >>= m_bit_pos & 0x1f;
 		m_bit_pos += bit_cnt;
 
@@ -120,4 +128,4 @@ namespace bptreedb
 		return val;
 	}
 
-}
+}

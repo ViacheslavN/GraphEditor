@@ -1,4 +1,5 @@
 #pragma once
+#include "DeVector.h"
 
 #include "Compressor/CompressorParams.h"
 #include "../../CommonLib/CommonLib.h"
@@ -23,8 +24,8 @@ namespace bptreedb
 
 			typedef CommonLib::STLAllocator<TKey> TKeyAlloc;
 			typedef CommonLib::STLAllocator<TValue> TValueAlloc;
-			typedef std::vector<TKey, TKeyAlloc> TKeyMemSet;
-			typedef std::vector<TValue, TValueAlloc> TValueMemSet;
+			typedef TDeVector<TKey, TKeyAlloc> TKeyMemSet;
+			typedef TDeVector<TValue, TValueAlloc> TValueMemSet;
 
 
 			TBaseNodeCompressor(uint32_t nPageSize, TAllocsSetPtr pAllocsSet, TCompressorParamsBasePtr pParams, ECompressNodeType type) : m_nCount(0),
@@ -55,7 +56,8 @@ namespace bptreedb
 					if (!m_nCount)
 						return;
 
-					if (m_nCount > m_nPageSize *8)
+					// a node can hold up to m_nMaxCount entries (IsNeedSplit), which may be above 8 * page size
+					if (m_nCount > std::max<uint32_t>(m_nMaxCount, m_nPageSize * 8))
 						throw CommonLib::CExcBase(L"Wrong size {0}", m_nCount);
 
 					vecKeys.reserve(m_nCount);
@@ -94,7 +96,9 @@ namespace bptreedb
 					if (!nSize)
 						return 0;
 
-					uint32_t maxCompSize = (m_nPageSize - (uint32_t)pStream->Pos() - HeadSize()) / 2;
+					// keys may use all the space left, values get what keys leave (half and half failed
+					// nodes with long keys and short values, e.g. strings)
+					uint32_t maxCompSize = (m_nPageSize - (uint32_t)pStream->Pos() - HeadSize());
 
 	
 					m_KeyEncoder.BeginEncoding(vecKeys);
@@ -187,6 +191,26 @@ namespace bptreedb
 				return RowSize() + HeadSize();
 			}
 
+			uint32_t GetMaxCount() const { return m_nMaxCount; }
+
+			// How many first elements fit in the page by the compressor estimate: the statistics are
+			// rebuilt element by element (as Recalc does) until the size reaches the page.
+			// Leaves the statistics of that prefix, the caller recalculates them.
+			uint32_t CalcFitCount(const TKeyMemSet& vecKeys, const TValueMemSet& vecValues)
+			{
+				Clear();
+				for (uint32_t i = 0, sz = (uint32_t)vecKeys.size(); i < sz; ++i)
+				{
+					m_nCount += 1;
+					m_KeyEncoder.AddSymbol(m_nCount, i, vecKeys[i], vecKeys);
+					m_ValueEncoder.AddSymbol(m_nCount, i, vecValues[i], vecValues);
+					if (IsNeedSplit())
+						return i;
+				}
+				return (uint32_t)vecKeys.size();
+			}
+			uint32_t GetPageSize() const { return m_nPageSize; }
+
 			virtual bool IsNeedSplit() const
 			{
 				if (m_nCount > m_nMaxCount) //max bits for elem
@@ -228,7 +252,7 @@ namespace bptreedb
 			
 			bool PossibleUnion(TBaseNodeCompressor& pCompressor) const
 			{
-				if ((m_nCount + pCompressor.m_nCount) > m_nPageSize * 8) //max bits for elem
+				if ((m_nCount + pCompressor.m_nCount) > m_nMaxCount) // same limit as IsNeedSplit
 					return false;
 
 				return (RowSize() + pCompressor.RowSize()) < (m_nPageSize - HeadSize());
@@ -243,7 +267,10 @@ namespace bptreedb
 			bool IsHalfEmpty() const
 			{
 				// compressed size, see PossibleAlignment
-				return RowSize() < (m_nPageSize - HeadSize()) / 2;
+				// a node is underfilled when it is below half by compressed size AND by element count:
+				// a well compressed node may stay small in bytes while it is full by count (m_nMaxCount),
+				// rebalancing it on every remove would cost O(count) per remove
+				return RowSize() < (m_nPageSize - HeadSize()) / 2 && m_nCount < m_nMaxCount / 2;
 			}
 
 			void Clear()

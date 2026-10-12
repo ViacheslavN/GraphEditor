@@ -5,6 +5,8 @@
 #include "../../CommonLib/alloc/alloc.h"
 #include "../../CommonLib/alloc/simpleAlloc.h"
 #include "../../CommonLib/alloc/stl_alloc.h"
+#include <stack>
+#include <set>
 
 
 namespace bptreedb
@@ -50,63 +52,65 @@ namespace bptreedb
 
 		}
 
+		// Walks the whole tree and counts the nodes and the keys exactly (every leaf is loaded; the node
+		// cache is trimmed after every leaf, so memory stays bounded). The old version multiplied the
+		// key count of the first leaf of an inner node by the number of its children.
 		void CalcNodesInTree(IReadTreeCancel *pCancel = nullptr)
 		{
 			try
 			{
-
 				m_bFinishRead = false;
 				Clear();
 
 				TBTreeNodePtr pRootNode = m_pTree->Root();
-
 				if (!pRootNode.get())
 					throw CommonLib::CExcBase("Root not found");
 
-
 				if (pRootNode->IsLeaf())
 				{
-					m_nLeafNodeCount += 1;
+					m_nLeafNodeCount = 1;
+					m_nKeyCount = pRootNode->Count();
 					m_bFinishRead = true;
+					return;
 				}
-				else
-					m_nInnerNodeCount += 1;
 
+				m_nInnerNodeCount = 1;
 				std::stack<SNodeInfo> nNodes;
-
 				nNodes.push(SNodeInfo(pRootNode, -1));
 
-				TBTreeNodePtr pNode;
 				while (!nNodes.empty())
 				{
-					auto& node = nNodes.top();
-					if (node.nPos == node.pBTNode->Count())
+					if (pCancel && pCancel->IsCancel())
+						return;
+
+					SNodeInfo& node = nNodes.top();
+					if (node.nPos == (int32_t)node.pBTNode->Count())
 					{
 						nNodes.pop();
 						continue;
 					}
 
 					int32_t nPos = node.nPos++;
+					TLink nLink = nPos == -1 ? node.pBTNode->Less() : node.pBTNode->Link(nPos);
+					TBTreeNodePtr pNode = m_pTree->GetNode(nLink);
+					if (!pNode.get())
+						throw CommonLib::CExcBase("node {0} not found", nLink);
 
-
-
-					pNode = m_pTree->GetNode(nPos == -1 ? node.pBTNode->Less() : node.pBTNode->Link(nPos));
-					if (!pNode->IsLeaf())
+					if (pNode->IsLeaf())
 					{
-						if (nPos == -1)
-						{
-							m_nInnerNodeCount += (node.pBTNode->Count() + 1);
-						}
-
-						nNodes.push(SNodeInfo(pNode, -1));
+						m_nLeafNodeCount += 1;
+						m_nKeyCount += pNode->Count();
+						m_setHeights.insert(nNodes.size());       // inner levels above the leaf (as before)
+						m_pTree->CheckCache();
 						continue;
 					}
 
-					node.nPos = node.pBTNode->Count();
-					m_setHeights.insert(nNodes.size());
-					CountLeafNode(node.pBTNode, pNode);
+					m_nInnerNodeCount += 1;
+					nNodes.push(SNodeInfo(pNode, -1));
 				}
-				
+
+				if (!m_setHeights.empty())
+					m_nHeight = *m_setHeights.rbegin();
 				m_bFinishRead = true;
 			}
 			catch (std::exception& exc)
@@ -126,11 +130,6 @@ namespace bptreedb
 			m_setHeights.clear();
 		}
 
-		void CountLeafNode(TBTreeNodePtr pParentNode, TBTreeNodePtr pNode)
-		{
-			m_nLeafNodeCount += (pParentNode->Count() + 1);
-			m_nKeyCount += (pParentNode->Count() + 1) *pNode->Count();
-		}
 		
 
 

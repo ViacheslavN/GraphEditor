@@ -1,4 +1,5 @@
 #pragma once
+#include "DeVector.h"
 
 #include "../../CommonLib/CommonLib.h"
 #include "../../CommonLib/exception/exc_base.h"
@@ -23,8 +24,8 @@ public:
 
 	typedef CommonLib::STLAllocator<TKey> TKeyAlloc;
 	typedef CommonLib::STLAllocator<TLink> TLinkAlloc;
-	typedef std::vector<TKey, TKeyAlloc> TKeyMemSet;
-	typedef std::vector<TLink, TLinkAlloc> TLinkMemSet;
+	typedef TDeVector<TKey, TKeyAlloc> TKeyMemSet;
+	typedef TDeVector<TLink, TLinkAlloc> TLinkMemSet;
 
 
 	BPTreeInnerNode(TAllocsSetPtr pAllocsSet, bool bMulti, uint32_t nPageSize, TCompressorParamsBasePtr pParams) :
@@ -168,6 +169,12 @@ public:
 	template<class TComp>
 	TLink lower_bound(const TComp& comp, const TKey& key, int32_t& nIndex)
 	{
+		if (m_innerKeyMemSet.empty())   // only Less (possible during a delete or after a bulk load)
+		{
+			nIndex = -1;
+			return m_nLess;
+		}
+
 		auto it = std::lower_bound(m_innerKeyMemSet.begin(), m_innerKeyMemSet.end(), key, comp);
 		if (it == m_innerKeyMemSet.end())
 		{
@@ -437,9 +444,20 @@ public:
 
 	bool AlignmentOf(BPTreeInnerNode* pNode, const TKey& LessMin, bool bLeft)
 	{
-		int nCnt = int(((m_innerKeyMemSet.size() + pNode->m_innerKeyMemSet.size())) / 2 - m_innerKeyMemSet.size());
-
-		if (nCnt < 1 && !m_innerKeyMemSet.empty())
+		// nCnt children move from pNode to this node (one of them through Less): this node gets nCnt keys,
+		// pNode keeps size - nCnt keys. A node without keys (only Less) takes at least one child, pNode must
+		// keep at least one key. (Before: an empty node with a 1-key donor gave nCnt == 0 and read the link
+		// one past the end of the donor, a stale link to a deleted node.)
+		const int nSize = (int)m_innerKeyMemSet.size();
+		const int nDonorSize = (int)pNode->m_innerKeyMemSet.size();
+		int nCnt = (nSize + nDonorSize) / 2 - nSize;
+		if (nCnt < 1)
+		{
+			if (nSize != 0)
+				return false;
+			nCnt = 1;
+		}
+		if (nCnt > nDonorSize - 1)
 			return false;
 
 		uint32_t newSize = (uint32_t)pNode->m_innerLinkMemSet.size() - nCnt;
@@ -548,4 +566,4 @@ public:
 	TCompressor  m_Compressor;
 	uint32_t m_nPageSize;
 };
-}
+}

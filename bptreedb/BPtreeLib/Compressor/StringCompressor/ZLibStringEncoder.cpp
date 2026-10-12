@@ -18,6 +18,9 @@ namespace bptreedb
 			m_nMaxLen = pParams->GetIntParam("MaxLen", m_nMaxLen);
 			m_nDecBufferSize = pParams->GetIntParam("DecBuffer", m_nDecBufferSize);
 		}
+		if (m_compressRate <= 0)
+			m_compressRate = 1;
+		m_dRatio = (double)m_compressRate;
 	}
 
 	CZlibStringComp::~CZlibStringComp()
@@ -40,12 +43,16 @@ namespace bptreedb
 	void CZlibStringComp::UpdateSymbol(int nIndex, StringValue& newValue, const StringValue& oldValue, const TValueMemSet& vecValues)
 	{
 		m_nRowSize -= oldValue.Length();
-		m_nRowSize -= newValue.Length();
+		m_nRowSize += newValue.Length();
 	}
 
+	// estimate: raw size / compression ratio. The ratio starts with the param compressRate and is
+	// replaced by the real one of this node after every encode / decode (5% margin, zlib header 8 bytes)
 	uint32_t CZlibStringComp::GetCompressSize() const
 	{
-		return m_nRowSize / m_compressRate;
+		if (m_nCount == 0)
+			return 0;
+		return (uint32_t)((double)m_nRowSize / m_dRatio * 1.05) + 8;
 	}
 
 	void CZlibStringComp::BeginEncoding(const TValueMemSet& vecValues)
@@ -58,7 +65,7 @@ namespace bptreedb
 		try
 		{
 			if (m_nCount != vecValues.size())
-				throw CommonLib::CExcBase("CZlibStringComp encoder wrong size, count: {0}, values size: {0}", m_nCount, vecValues.size());
+				throw CommonLib::CExcBase("CZlibStringComp encoder wrong size, count: {0}, values size: {1}", m_nCount, vecValues.size());
 
 
 			uint32_t streamSize = uint32_t(pStream->Size() - pStream->Pos());
@@ -81,15 +88,18 @@ namespace bptreedb
 				}
 			}
 
-			if (zStream.GetAvailOut() == 0)
+			// Z_STREAM_END: everything is written; Z_OK / Z_BUF_ERROR: the output buffer is full
+			int res = zStream.Deflate(Z_FINISH);
+			if (res != Z_STREAM_END)
+			{
+				if (res != Z_OK && res != Z_BUF_ERROR)
+					throw CommonLib::CExcBase("deflate finish error {0}", res);
 				return (uint32_t)(vecValues.size()) / 2;
+			}
 
-			zStream.FinishCompress();
-
-			if (zStream.GetAvailOut() == 0)
-				return (uint32_t)(vecValues.size()) / 2;
-
-			pStream->Seek(streamSize - zStream.GetAvailOut(), CommonLib::soFromCurrent);
+			uint32_t nCompSize = streamSize - zStream.GetAvailOut();
+			pStream->Seek(nCompSize, CommonLib::soFromCurrent);
+			UpdateRatio(nCompSize);
 
 		}
 		catch (std::exception& exc)
@@ -114,25 +124,33 @@ namespace bptreedb
 
 			uint32_t readCount = 0;
 			std::vector<byte_t> stringPart;
+			uint64_t nRawSize = 0;
 
-			while (zStream.GetAvailIn() != 0)
+			// inflate until the end of the zlib stream: with all input consumed inflate can still have
+			// output to give (the last output buffer was full), so the input size isn't the condition
+			int res = Z_OK;
+			while (res != Z_STREAM_END)
 			{
 				zStream.AttachOut(pCompBuf, m_nDecBufferSize);
-				zStream.Decompress();
+				res = zStream.Inflate(Z_NO_FLUSH);
+				if (res != Z_OK && res != Z_STREAM_END)
+					throw CommonLib::CExcBase("inflate error {0}", res);
 
-				if (zStream.GetAvailOut() == 0)
-				{
-					ProcessDecodeBuffer(pCompBuf, m_nDecBufferSize, stringPart, readCount, nCount, vecValues);
-				}
+				uint32_t nOut = m_nDecBufferSize - zStream.GetAvailOut();
+				if (nOut != 0)
+					ProcessDecodeBuffer(pCompBuf, nOut, stringPart, readCount, nCount, vecValues);
+				nRawSize += nOut;
+
+				if (res != Z_STREAM_END && nOut == 0 && zStream.GetAvailIn() == 0)
+					throw CommonLib::CExcBase("truncated data");
 			}
 
-			if (zStream.GetAvailOut() != 0)
-			{
-				ProcessDecodeBuffer(pCompBuf, m_nDecBufferSize - zStream.GetAvailOut(), stringPart, readCount, nCount, vecValues);
-			}
-
+			if (readCount != nCount || !stringPart.empty())
+				throw CommonLib::CExcBase("wrong count of strings {0}, expected {1}", readCount, nCount);
 
 			m_nCount = nCount;
+			m_nRowSize = (uint32_t)nRawSize;
+			UpdateRatio(nCompSize);
 			pStream->Seek(nCompSize, CommonLib::soFromCurrent);
 
 		}
@@ -173,7 +191,7 @@ namespace bptreedb
 
 				memcpy(pStrBuf, buffer + beginpos, copySize);
 
-				vecValues.push_back(value);
+				vecValues.push_back(std::move(value));
 
 				beginpos = i + 1;
 
@@ -185,6 +203,12 @@ namespace bptreedb
 			strPart.resize(bufSize - beginpos);
 			memcpy(strPart.data(), buffer + beginpos, strPart.size());
 		}
+	}
+
+	void CZlibStringComp::UpdateRatio(uint32_t nCompSize)
+	{
+		if (nCompSize != 0 && m_nRowSize > 256)   // small nodes say little about the data
+			m_dRatio = (double)m_nRowSize / (double)nCompSize;
 	}
 
 	void CZlibStringComp::Clear()

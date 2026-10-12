@@ -132,10 +132,19 @@ public:
 		m_dataBuffer.m_endIdx = m_dataBuffer.m_startIdx + nCountElem;
 		m_dataBuffer.m_DataBuf.clear();
 
-		for (size_t i = 0; i < nCountElem; ++i)
+		if (m_valueCreator->GetValueSize() == sizeof(TValue))
 		{
-			TValue value = m_valueCreator->ReadValue(m_pDataFile);
-			m_dataBuffer.m_DataBuf.push_back(value);
+			// raw values: one read for the whole block instead of a read call per value
+			m_dataBuffer.m_DataBuf.resize(nCountElem);
+			m_pDataFile->Read((byte_t*)m_dataBuffer.m_DataBuf.data(), nCountElem * sizeof(TValue));
+		}
+		else
+		{
+			for (size_t i = 0; i < nCountElem; ++i)
+			{
+				TValue value = m_valueCreator->ReadValue(m_pDataFile);
+				m_dataBuffer.m_DataBuf.push_back(value);
+			}
 		}
 
 

@@ -1,4 +1,5 @@
 #include "pch.h"
+#include <chrono>
 #include "../../../UtilsLib/DataGenerator/TestDataGenerator.h"
 #include "../../../UtilsLib/DataGenerator/Random/IntegerValueGenerator.h"
 #include "../../../UtilsLib/DataGenerator/Random/RandomIntegerValueGenerator.h"
@@ -61,7 +62,7 @@ uint64_t CreateBPTreeMap(CommonLib::IAllocPtr pAlloc, uint32_t nPageSize, TStora
 		TBPTree tree(-1, pStorage, pAlloc, 10, nPageSize, false, minSplit);
 
 
-		int nMaxCount = 8192 * 8;
+		int nMaxCount = getenv("MAXCOUNT") ? atoi(getenv("MAXCOUNT")) : 8192 * 8;
 
 		bptreedb::TCompressorParamsBasePtr pCompParmas(new bptreedb::CompressorParamsBase());
 		bptreedb::TCompressorParamsPtr pCompInnerKey(new bptreedb::CompressorParams());
@@ -84,6 +85,12 @@ uint64_t CreateBPTreeMap(CommonLib::IAllocPtr pAlloc, uint32_t nPageSize, TStora
 		pCompLeafKey->SetIntParam("compressLevel", 3);
 		pCompLeafKey->SetIntParam("compressRate", 4);
 		pCompLeafKey->SetIntParam("MaxCount", nMaxCount);
+		if (getenv("COUNTMODE"))
+			pCompLeafKey->SetIntParam("CountLimitMode", 1);
+		if (getenv("SPLITFIT"))
+			pCompLeafKey->SetIntParam("SplitAtFit", 1);
+		if (getenv("PENDING"))
+			pCompLeafKey->SetIntParam("PendingLimit", atoi(getenv("PENDING")));
 
 		pCompParmas->AddCompressParams(pCompLeafKey, bptreedb::eLeafKey);
 
@@ -140,6 +147,58 @@ void InsertBPTreeMap(CommonLib::IAllocPtr pAlloc, uint32_t nPageSize, CommonLib:
 	catch (std::exception& exe)
 	{
 		CommonLib::CExcBase::RegenExc("Failed to insert BPTreeMap", exe);
+		throw;
+	}
+}
+
+
+// Bulk load of [nBegin, nEnd): pairs (key, idx) sorted by key, then TBPMap::BulkLoad
+template <class TBPTree, class TStorage>
+void BulkLoadBPTreeMap(CommonLib::IAllocPtr pAlloc, uint32_t nPageSize, CommonLib::TPrefCounterPtr pPerf, TStorage pStorage, int64_t nBPTreePage, uint32_t nNodeCache, int64_t nBegin, int64_t nEnd, bool minSplit, TDataGeneratorPtr pDataGenerator)
+{
+	try
+	{
+		int64_t nCount = abs(nEnd - nBegin);
+		CommonLib::CLogInfo info(Log, "BulkLoadBPTreeMap count: {0}", nCount);
+
+		std::vector<std::pair<int64_t, int64_t>> data;
+		data.reserve((size_t)nCount);
+		for (int64_t i = nBegin; i < nEnd; i++)
+			data.emplace_back((int64_t)pDataGenerator->GetValue((uint32_t)i), i);
+
+		auto t0 = std::chrono::steady_clock::now();
+		std::sort(data.begin(), data.end());
+		auto t1 = std::chrono::steady_clock::now();
+
+		struct TSource
+		{
+			const std::vector<std::pair<int64_t, int64_t>>& m_data;
+			size_t m_nPos{ 0 };
+			bool Next(int64_t& key, int64_t& value)
+			{
+				if (m_nPos >= m_data.size())
+					return false;
+				key = m_data[m_nPos].first;
+				value = m_data[m_nPos].second;
+				++m_nPos;
+				return true;
+			}
+		} source{ data };
+
+		TBPTree tree(nBPTreePage, pStorage, pAlloc, nNodeCache, nPageSize, false, minSplit);
+		tree.SetBPTreePerfCounter(pPerf);
+		uint64_t nLoaded = tree.BulkLoad(source);
+		auto t2 = std::chrono::steady_clock::now();
+
+		Log.InfoT("bulk load: sort {0} s, build {1} s, elements {2}",
+			std::chrono::duration<double>(t1 - t0).count(), std::chrono::duration<double>(t2 - t1).count(), nLoaded);
+		if (getenv("CHECKTREE"))
+			tree.CheckTreeStructure();
+		info.Complete("BulkLoadBPTreeMap finish");
+	}
+	catch (std::exception& exe)
+	{
+		CommonLib::CExcBase::RegenExc("Failed to bulk load BPTreeMap", exe);
 		throw;
 	}
 }
@@ -247,6 +306,14 @@ void DeleteFromBPTreeMap(CommonLib::IAllocPtr pAlloc, uint32_t nPageSize, Common
 		{
 			int64_t val = (int64_t)pDataGenerator->GetValue((uint32_t)i);
 			bool bRemoved = tree.remove(val);
+
+			// CHECKEVERY=N: validate the whole tree after every N-th remove (slow, for debugging)
+			static int64_t s_nCheckEvery = getenv("CHECKEVERY") ? atoll(getenv("CHECKEVERY")) : 0;
+			if (s_nCheckEvery && (i - nBegin) % s_nCheckEvery == 0)
+			{
+				try { tree.CheckTreeStructure(); }
+				catch (std::exception& e) { CommonLib::CExcBase::RegenExcT("tree check failed after remove idx {0} key {1}", i, val, e); throw; }
+			}
 
 			if (bRemoved != bMustExist)
 				throw CommonLib::CExcBase("remove({0}) returned {1}, idx {2}", val, std::string(bRemoved ? "true" : "false"), i);
@@ -422,7 +489,10 @@ int TestBPMap(uint32_t nPageSize, int64_t nCount, TDataGeneratorPtr pDataGenerat
 
 		// 2. insert [nBegin, nEnd)
 		runStep(false, [&](bptreedb::storage::IFilePagerPtr pager) {
-			InsertBPTreeMap<TBPMapType, bptreedb::storage::IFilePagerPtr>(pAlloc, nPageSize, pBPTreePerf, pager, nBPTreePage, nNodeCache, nBegin, nEnd, minSplit, pDataGenerator);
+			if (getenv("BULK"))
+				BulkLoadBPTreeMap<TBPMapType, bptreedb::storage::IFilePagerPtr>(pAlloc, nPageSize, pBPTreePerf, pager, nBPTreePage, nNodeCache, nBegin, nEnd, minSplit, pDataGenerator);
+			else
+				InsertBPTreeMap<TBPMapType, bptreedb::storage::IFilePagerPtr>(pAlloc, nPageSize, pBPTreePerf, pager, nBPTreePage, nNodeCache, nBegin, nEnd, minSplit, pDataGenerator);
 		});
 		{
 			CommonLib::file::TFilePtr file = CommonLib::file::CFileCreator::OpenFile(storagePath.c_str(), CommonLib::file::ofmOpenExisting, CommonLib::file::arRead, CommonLib::file::smNoMode, CommonLib::file::oftBinary);
@@ -456,6 +526,12 @@ int TestBPMap(uint32_t nPageSize, int64_t nCount, TDataGeneratorPtr pDataGenerat
 		runStep(false, [&](bptreedb::storage::IFilePagerPtr pager) {
 			TravelTree<TBPMapType, bptreedb::storage::IFilePagerPtr>(pAlloc, nPageSize, pBPTreePerf, pager, nBPTreePage, nBegin, nEnd, pDataGenerator);
 		});
+
+		if (getenv("STOPAFTERTRAVEL"))
+		{
+			testInfo.Complete("TestBPMap stopped after travel, generator: {0}", testName);
+			return 0;
+		}
 
 		// 6. remove first half [nBegin, nMid)
 		runStep(false, [&](bptreedb::storage::IFilePagerPtr pager) {
@@ -658,7 +734,7 @@ int TestBPMapBase()
 	TDataGeneratorPtr pDataRandomGenerator(new TTestRandomDataGenerator((uint32_t)nEnd, dataPath+ TDataGeneratorName<TTestRandomDataGenerator>::Get() + L".data"));
 	pDataRandomGenerator->Open();
 
-	nFailed += TestBPMapSignPattern<TBPMapNumLen>(32768, 2000000);
+	if(getenv("FULL") && (!getenv("ONLYRESTR") || getenv("SIGN"))) nFailed += TestBPMapSignPattern<TBPMapNumLen>(32768, 2000000);
 
 
 
@@ -666,17 +742,20 @@ int TestBPMapBase()
 	for (uint32_t nPageSize : { 8192u })
 	{
 
+		if (!getenv("NOCOMPONLY"))
 		{
 			CommonLib::CLogInfo info(Log, "Test  for correctness");
-			nFailed += TestBPMap<TRestrictedBPMap>(nPageSize, 1000000, pDataRandomGenerator, "random");
-			nFailed += TestBPMap<TRestrictedBPMap>(nPageSize, 1000000, pDataGenerator, "order");
+			if(getenv("FULL")) nFailed += TestBPMap<TRestrictedBPMap>(nPageSize, getenv("CNT") ? atoi(getenv("CNT")) : 1000000, pDataRandomGenerator, "random");
+			if(getenv("ONLYRESTR")) return nFailed;
+			if(getenv("FULL")) nFailed += TestBPMap<TRestrictedBPMap>(nPageSize, 1000000, pDataGenerator, "order");
 
 			info.Complete();
 		}
 
+		if (!getenv("NOCOMPONLY"))
 		{
 			CommonLib::CLogInfo info(Log, "Test with compression");
-			nFailed += TestBPMap<TBPMapNumLen>(nPageSize, nCount, pDataRandomGenerator, "random");
+			if(!getenv("ORDERONLY")) nFailed += TestBPMap<TBPMapNumLen>(nPageSize, nCount, pDataRandomGenerator, "random");
 			nFailed += TestBPMap<TBPMapNumLen>(nPageSize, nCount, pDataGenerator, "order");
 
 			info.Complete();
@@ -684,8 +763,8 @@ int TestBPMapBase()
 
 		{
 			CommonLib::CLogInfo info(Log, "Test without compression");
-			nFailed += TestBPMap< TBPMapNoComp >(nPageSize, nCount, pDataRandomGenerator, "random");
-			nFailed += TestBPMap< TBPMapNoComp>(nPageSize, nCount, pDataGenerator, "order");
+			if(!getenv("NONOCOMP")) nFailed += TestBPMap< TBPMapNoComp >(nPageSize, nCount, pDataRandomGenerator, "random");
+			if(!getenv("NONOCOMP")) nFailed += TestBPMap< TBPMapNoComp>(nPageSize, nCount, pDataGenerator, "order");
 
 			info.Complete();
 		}

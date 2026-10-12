@@ -125,8 +125,18 @@ namespace bptreedb
 		TBPTreeNodePtr GetParentNodeByKey(TBPTreeNodePtr pNode, const TKey& key, int32_t* nElementPos = nullptr);
 		void DropNode(TBPTreeNodePtr& pNode);
 		void SaveNode(TBPTreeNodePtr& pNode);
+		uint32_t TrySaveNode(TBPTreeNodePtr& pNode);   // writes the node if it fits, otherwise returns Save's count and writes nothing
 	
 		TBPTreeNodePtr GetMinimumNode(TBPTreeNodePtr pNode);
+	public:
+		// Validation (tests/debugging): walks the whole tree and throws on a broken invariant:
+		// keys of child i in [Key(i), Key(i+1)), Less below Key(0), sorted nodes, all leaves at the same
+		// depth, no empty leaf except the root, every inner node has Less. Reads the nodes that aren't in
+		// the cache straight from the storage, the cache isn't changed.
+		void CheckTreeStructure();
+	protected:
+		void CheckSubtree(TBPTreeNodePtr pNode, const TKey* pLo, const TKey* pHi, uint32_t nDepth, int32_t& nLeafDepth);
+		TBPTreeNodePtr PeekNodeForCheck(int64_t nAddr);
 
 		template <class TNodeHolder>
 		std::shared_ptr<TNodeHolder> LoadNode(CommonLib::IMemoryReadStream *pStream, TAllocsSetPtr pAllocsSet, bool bMulti, uint32_t nPageSize, int64_t nAddr, TCompressorParamsBasePtr pCompressParams, CBPTreeContext *pContext)
@@ -221,4 +231,4 @@ namespace bptreedb
 #include "BPBaseTreeSearch.h"
 #include "BPBaseTreeDelete.h"
 
-}
+}

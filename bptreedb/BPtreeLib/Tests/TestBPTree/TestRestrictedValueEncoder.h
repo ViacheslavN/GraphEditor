@@ -1,4 +1,5 @@
 #pragma once
+#include "../../DeVector.h"
 #include "pch.h"
 #include "../../Compressor/CompressorParams.h"
 
@@ -11,7 +12,7 @@ namespace bptreedb
 
         typedef _TValue TValue;
         typedef CommonLib::STLAllocator<TValue> TAlloc;
-        typedef std::vector<TValue, TAlloc> TValueMemSet;
+        typedef TDeVector<TValue, TAlloc> TValueMemSet;
 
 
         TTestRestrictedValueEncoder(TAllocsSetPtr pAllocsSet, TCompressorParamsBasePtr pParams, ECompressParams type) : m_nCount(0)

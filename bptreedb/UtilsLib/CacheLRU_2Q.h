@@ -247,7 +247,7 @@ namespace bptreedb
 					}
 					else
 					{
-						listIt.Next();
+						listIt.Back();   // towards the newer elements (m_pPrev); Next() from the tail is null
 					}
 				}
 
@@ -268,4 +268,4 @@ namespace bptreedb
 		};
 
 	}
-}
+}

@@ -1,4 +1,5 @@
 #pragma once
+#include "../../DeVector.h"
 #include "../CompressorParams.h"
 #include "../../../../CommonLib/CommonLib.h"
 #include "../../../../CommonLib/exception/exc_base.h"
@@ -26,7 +27,7 @@ namespace bptreedb
 		};
 
 		typedef CommonLib::STLAllocator<StringValue> TAlloc;
-		typedef std::vector<StringValue, TAlloc> TValueMemSet;
+		typedef TDeVector<StringValue, TAlloc> TValueMemSet;
 
 
 		CZlibStringComp(TAllocsSetPtr pAllocsSet, TCompressorParamsBasePtr pParamsBase, ECompressParams type);
@@ -42,6 +43,7 @@ namespace bptreedb
 		void Clear();
 		uint32_t Count() const;
 	private:
+		void UpdateRatio(uint32_t nCompSize);
 		void ProcessDecodeBuffer(const byte_t* buffer, uint32_t bufSize, std::vector<byte_t>& strPart, uint32_t& readCount, uint32_t count, TValueMemSet& vecValues);
 
 	private:
@@ -55,6 +57,7 @@ namespace bptreedb
 
 		int32_t m_compressLevel{ 9 };
 		int32_t m_compressRate{ 5 };
+		double m_dRatio{ 5.0 };          // compression ratio used for the size estimate
 	};
 
 }
