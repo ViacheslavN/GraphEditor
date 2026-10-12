@@ -15,9 +15,9 @@
 #include "../../../DisplayLib/Symbols/PictureFillSymbol.h"
 #include "../../../DisplayLib/GraphTypes/img/ReadPng.h"
 #include "../../../DisplayLib/GraphTypes/img/ReadJPG.h"
-#include "../../../CommonLib/str/StringEncoding.h"
-#include "../../../CommonLib/variant/VariantVisitor.h"
-#include "../../../CommonLib/SpatialData/GeoShape.h"
+#include "../../../../CommonLib/str/StringEncoding.h"
+#include "../../../../CommonLib/variant/VariantVisitor.h"
+#include "../../../../CommonLib/SpatialData/GeoShape.h"
 
 #include <algorithm>
 #include <functional>

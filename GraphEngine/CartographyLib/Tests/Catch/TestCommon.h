@@ -20,9 +20,9 @@
 #include "../../selectors/RangeSymbolSelector.h"
 #include "../../selection/Selection.h"
 
-#include "../../../CommonLib/Serialize/SerializeXML.h"
-#include "../../../CommonLib/xml/XMLNode.h"
-#include "../../../CommonLib/SpatialData/GeoShape.h"
+#include "../../../../CommonLib/Serialize/SerializeXML.h"
+#include "../../../../CommonLib/xml/XMLNode.h"
+#include "../../../../CommonLib/SpatialData/GeoShape.h"
 #include "../../../DisplayLib/Symbols/SimpleLineSymbol.h"
 #include "../../../DisplayLib/Symbols/TextSymbol.h"
 #include "../../../GeoDatabase/Field.h"

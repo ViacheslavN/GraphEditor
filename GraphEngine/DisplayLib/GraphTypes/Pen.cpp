@@ -1,6 +1,6 @@
 #include "CommonLib.h"
 #include "Pen.h"
-#include "../../CommonLib/stream/MemoryStream.h"
+#include "../../../CommonLib/stream/MemoryStream.h"
 
 
 namespace GraphEngine

@@ -1,7 +1,7 @@
 #include "TestingData.h"
-#include "../GeoDatabase/Field.h"
-#include "../GeoDatabase/Fields.h"
-#include "../GeoDatabase/FieldSet.h"
+#include "../../Field.h"
+#include "../../Fields.h"
+#include "../../FieldSet.h"
 
 
 std::string CTestingData::m_sDatabaseName = "TestDatabase";

@@ -1,12 +1,12 @@
 #include "SpatialReferenceProj4.h"
 #include "../ogr/ogr_spatialref.h"
 #include "../cpl/cpl_conv.h"
-#include "../../ThirdParty/Proj4/src/projects.h"
-#include "../../ThirdParty/Proj4/src/proj_api.h"
-#include "../../CommonLib/str/StrUtils.h"
-#include "../../CommonLib/alloc/simpleAlloc.h"
-#include "../../CommonLib/filesystem/File.h"
-#include "../../CommonLib/SpatialData/GeoShape.h"
+#include "../../../ThirdParty/Proj4/src/projects.h"
+#include "../../../ThirdParty/Proj4/src/proj_api.h"
+#include "../../../CommonLib/str/StrUtils.h"
+#include "../../../CommonLib/alloc/simpleAlloc.h"
+#include "../../../CommonLib/filesystem/File.h"
+#include "../../../CommonLib/SpatialData/GeoShape.h"
 #include "CodeProj.h"
 
 namespace GraphEngine {

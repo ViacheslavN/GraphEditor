@@ -7,7 +7,7 @@
 #include <string>
 #include <cwchar>
 #include <cstdlib>
-#include "../../../CommonLib/str/StringEncoding.h"
+#include "../../../../CommonLib/str/StringEncoding.h"
 
 namespace DialogUtils
 {

@@ -1,6 +1,6 @@
 #include "CommonLib.h"
 #include "Color.h"
-#include "../../CommonLib/exception/exc_base.h"
+#include "../../../CommonLib/exception/exc_base.h"
 
 namespace GraphEngine
 {

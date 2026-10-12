@@ -24,4 +24,4 @@ target_link_libraries(${PROJECT_NAME} PRIVATE   FreeType)
 target_link_libraries(${PROJECT_NAME} PRIVATE   Jpeg)
 
 
-target_include_directories(${PROJECT_NAME} PRIVATE ../../../ThirdParty/WTL)
+target_include_directories(${PROJECT_NAME} PRIVATE ../../../../ThirdParty/WTL)

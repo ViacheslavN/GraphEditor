@@ -1,7 +1,7 @@
 #pragma once
 
 #include "../TableBase.h"
-#include "../../CommonLib/sqlitelib/Database.h"
+#include "../../../CommonLib/sqlitelib/Database.h"
 #include "SQLiteUtils.h"
 #include "SQLiteSelectCursor.h"
 

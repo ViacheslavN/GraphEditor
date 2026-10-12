@@ -1,5 +1,5 @@
 #include "ShapefileRowCursor.h"
-#include "../../CommonLib/SpatialData/GeoShape.h"
+#include "../../../CommonLib/SpatialData/GeoShape.h"
 #include "ShapefileUtils.h"
 #include "../Row.h"
 #include "../Utils.h"

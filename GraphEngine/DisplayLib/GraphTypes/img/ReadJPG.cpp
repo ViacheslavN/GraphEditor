@@ -1,6 +1,6 @@
 #include "ReadJPG.h"
 #include <setjmp.h>
-#include "../../../ThirdParty/Jpeg/jpeglib.h"
+#include "../../../../ThirdParty/Jpeg/jpeglib.h"
 
 namespace GraphEngine {
     namespace Display {

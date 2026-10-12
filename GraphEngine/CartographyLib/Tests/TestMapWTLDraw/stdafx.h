@@ -24,7 +24,7 @@ extern CAppModule _Module;
 #include <atlctrlw.h>
 #include <atlsplit.h>
 
-#include "../../../CommonLib/CommonLib.h"
+#include "../../../../CommonLib/CommonLib.h"
 #include "../../../DisplayLib/DisplayLib.h"
 #include "../../Cartography.h"
 

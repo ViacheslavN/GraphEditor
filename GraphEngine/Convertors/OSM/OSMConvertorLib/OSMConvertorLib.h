@@ -3,7 +3,7 @@
 #include "../../../GeoDatabase/GeoDatabase.h"
 #include "../../../DisplayLib/DisplayLib.h"
 #include "../../../CartographyLib/Cartography.h"
-#include "../../../GeometryCompression/ShapeCompressor.h"
+#include "../../../../GeometryCompression/ShapeCompressor.h"
 #include "LayerColumnExcludeList.h"
 
 // OpenStreetMap (.osm XML, .osm.pbf) -> GraphEngine workspace and map.

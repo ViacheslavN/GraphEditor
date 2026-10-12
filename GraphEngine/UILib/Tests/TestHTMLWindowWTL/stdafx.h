@@ -22,7 +22,7 @@ extern CAppModule _Module;
 #include <atlctrls.h>
 #include <atldlgs.h>
 #include <atlctrlw.h>
-#include "../../../CommonLib/CommonLib.h"
+#include "../../../../CommonLib/CommonLib.h"
 
 
 #if defined _M_IX86

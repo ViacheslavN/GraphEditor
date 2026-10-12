@@ -1,5 +1,5 @@
 #include "GeoDatabaseUtils.h"
-#include "../CommonLib/str/convertToString.h"
+#include "../../CommonLib/str/convertToString.h"
 
 namespace GraphEngine {
     namespace GeoDatabase {

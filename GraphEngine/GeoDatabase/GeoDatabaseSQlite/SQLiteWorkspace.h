@@ -2,7 +2,7 @@
 
 #include "../GeoDatabase.h"
 #include "../WorkspaceBase.h"
-#include "../../CommonLib/sqlitelib/Database.h"
+#include "../../../CommonLib/sqlitelib/Database.h"
 
 namespace GraphEngine {
     namespace GeoDatabase {

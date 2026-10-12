@@ -1,8 +1,8 @@
 
 #include "ReadPng.h"
 
-#include "../../../CommonLib/compress/zlib/zlib.h"
-#include "../../../CommonLib/ThirdParty/Png/png.h"
+#include "../../../../CommonLib/compress/zlib/zlib.h"
+#include "../../../../CommonLib/ThirdParty/Png/png.h"
 
 namespace GraphEngine {
     namespace Display {

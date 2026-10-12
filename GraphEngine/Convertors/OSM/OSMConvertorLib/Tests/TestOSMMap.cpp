@@ -7,8 +7,8 @@
 
 #include "../OSMConvertor.h"
 #include "../OSMMap.h"
-#include "../../../../CommonLib/Serialize/SerializeXML.h"
-#include "../../../../CommonLib/xml/XMLNode.h"
+#include "../../../../../CommonLib/Serialize/SerializeXML.h"
+#include "../../../../../CommonLib/xml/XMLNode.h"
 
 #include <cstdio>
 #include <filesystem>

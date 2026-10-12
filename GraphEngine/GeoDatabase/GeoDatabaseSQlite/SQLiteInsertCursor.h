@@ -1,7 +1,7 @@
 #pragma once
 
 #include "../GeoDatabase.h"
-#include "../../CommonLib/sqlitelib/Database.h"
+#include "../../../CommonLib/sqlitelib/Database.h"
 #include "SQLiteRTreeBuilder.h"
 #include <memory>
 

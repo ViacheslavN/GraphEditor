@@ -17,7 +17,7 @@
 #include "../../../GeoDatabase/GeoDatabaseSQlite/SQLiteWorkspace.h"
 #include "../../../Convertors/OSM/OSMConvertorLib/OSMConvertor.h"
 #endif
-#include "../../../CommonLib/str/StringEncoding.h"
+#include "../../../../CommonLib/str/StringEncoding.h"
 
 #include <cmath>
 #include <cstdio>

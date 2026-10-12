@@ -1,14 +1,14 @@
 #pragma once
 #include "GeoDatabase.h"
-#include "../CommonLib/CommonLib.h"
-#include "../CommonLib/SpatialData/IGeoShape.h"
+#include "../../CommonLib/CommonLib.h"
+#include "../../CommonLib/SpatialData/IGeoShape.h"
 #include "../GisGeometry/Geometry.h"
-#include "../CommonLib/utils/PropertySet.h"
-#include "../CommonLib/Serialize/SerializeObj.h"
-#include "../CommonLib/exception/exc_base.h"
-#include "../CommonLib/guid/guid.h"
-#include "../CommonLib/data/blob.h"
-#include "../CommonLib/variant/Variant.h"
+#include "../../CommonLib/utils/PropertySet.h"
+#include "../../CommonLib/Serialize/SerializeObj.h"
+#include "../../CommonLib/exception/exc_base.h"
+#include "../../CommonLib/guid/guid.h"
+#include "../../CommonLib/data/blob.h"
+#include "../../CommonLib/variant/Variant.h"
 
 namespace GraphEngine
 {

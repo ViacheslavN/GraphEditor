@@ -1,6 +1,6 @@
 #include "SymbolSelectorUtils.h"
-#include "../../CommonLib/str/StringEncoding.h"
-#include "../../CommonLib/variant/VariantVisitor.h"
+#include "../../../CommonLib/str/StringEncoding.h"
+#include "../../../CommonLib/variant/VariantVisitor.h"
 #include "../../DisplayLib/Symbols/SymbolsLoader.h"
 #include <cstdlib>
 

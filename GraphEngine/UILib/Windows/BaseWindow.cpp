@@ -1,7 +1,7 @@
 
 #include "BaseWindow.h"
 #include <WinUser.h>
-#include "../../CommonLib/exception/WinExc.h"
+#include "../../../CommonLib/exception/WinExc.h"
 
 namespace GraphEngine {
     namespace UILib {

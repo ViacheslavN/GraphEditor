@@ -1,11 +1,11 @@
 #include "SQLiteUtils.h"
 #include <limits>
-#include "../../CommonLib/str/str.h"
+#include "../../../CommonLib/str/str.h"
 #include "../Fields.h"
 #include "../Field.h"
 #include "../GeoDatabaseUtils.h"
 extern "C" {
-#include "../../CommonLib/sqlitelib/sqlite/db/sqlite3.h"
+#include "../../../CommonLib/sqlitelib/sqlite/db/sqlite3.h"
 }
 
 namespace GraphEngine {

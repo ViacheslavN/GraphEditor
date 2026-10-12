@@ -10,7 +10,7 @@
 #include "../../../GeoDatabase/GeoDatabaseShape/ShapefileWorkspace.h"
 #include "../../../GeoDatabase/GeoDatabaseSQlite/SQLiteWorkspace.h"
 #include "../../../GeoDatabase/GeoDatabaseRaster/RasterWorkspace.h"
-#include "../../../CommonLib/filesystem/filesystem.h"
+#include "../../../../CommonLib/filesystem/filesystem.h"
 #include "../../../GeoDatabase/WorkspaceHolder.h"
 #include "../../../GeoDatabase/DatasetLoader.h"
 #include "../../../GeoDatabase/QueryFilter.h"
@@ -19,10 +19,10 @@
 #include "../../../DisplayLib/Symbols/SimpleLineSymbol.h"
 #include "../../../DisplayLib/Symbols/SimpleMarketSymbol.h"
 #include "../../../DisplayLib/Symbols/TextSymbol.h"
-#include "../../../CommonLib/xml/XMLDoc.h"
-#include "../../../CommonLib/xml/XMLNode.h"
-#include "../../../CommonLib/SpatialData/GeoShape.h"
-#include "../../../CommonLib/Serialize/SerializeXML.h"
+#include "../../../../CommonLib/xml/XMLDoc.h"
+#include "../../../../CommonLib/xml/XMLNode.h"
+#include "../../../../CommonLib/SpatialData/GeoShape.h"
+#include "../../../../CommonLib/Serialize/SerializeXML.h"
 #include "../../../GisGeometry/SpatialReferenceProj4/SpatialReferenceProj4.h"
 
 #include <cmath>

@@ -1,6 +1,6 @@
 #pragma once
 #include "../GeoDatabase.h"
-#include "../../ThirdParty/ShapeLib/shapefil.h"
+#include "../../../ThirdParty/ShapeLib/shapefil.h"
 
 
 namespace GraphEngine

@@ -1,7 +1,7 @@
 #pragma once
 
 #include "GraphTypes.h"
-#include "../../CommonLib/Serialize/SerializeObj.h"
+#include "../../../CommonLib/Serialize/SerializeObj.h"
 #include "Color.h"
 #include "Bitmap.h"
 

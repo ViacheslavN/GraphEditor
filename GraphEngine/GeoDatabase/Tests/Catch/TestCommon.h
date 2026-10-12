@@ -18,10 +18,10 @@
 #include "../../GeoDatabaseShape/ShapefileWorkspace.h"
 #include "../../GeoDatabaseSQlite/SQLiteWorkspace.h"
 #include "../../GeoDatabaseSQlite/SQLiteUtils.h"
-#include "../../../CommonLib/Serialize/SerializeXML.h"
-#include "../../../CommonLib/xml/XMLNode.h"
-#include "../../../CommonLib/SpatialData/GeoShape.h"
-#include "../../../ThirdParty/ShapeLib/shapefil.h"
+#include "../../../../CommonLib/Serialize/SerializeXML.h"
+#include "../../../../CommonLib/xml/XMLNode.h"
+#include "../../../../CommonLib/SpatialData/GeoShape.h"
+#include "../../../../ThirdParty/ShapeLib/shapefil.h"
 
 #include <filesystem>
 #include <cmath>

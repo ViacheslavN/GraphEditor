@@ -2,7 +2,7 @@
 #include "OSMConvertorLib.h"
 #include "OSMSchema.h"
 #include "OSMSplitFormat.h"
-#include "../../../CommonLib/xml/XMLDoc.h"
+#include "../../../../CommonLib/xml/XMLDoc.h"
 
 namespace GraphEngine {
     namespace Convertors {

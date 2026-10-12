@@ -6,8 +6,8 @@
 #include "../../../DisplayLib/Symbols/PictureMarkerSymbol.h"
 #include "../../../DisplayLib/Symbols/PictureFillSymbol.h"
 #include "../../../DisplayLib/Symbols/LineFillSymbol.h"
-#include "../../../ThirdParty/ShapeLib/shapefil.h"
-#include "../../../CommonLib/compress/zlib/zlib.h"
+#include "../../../../ThirdParty/ShapeLib/shapefil.h"
+#include "../../../../CommonLib/compress/zlib/zlib.h"
 #include <filesystem>
 #include <fstream>
 

@@ -2,7 +2,7 @@
 // the window queries as a brute force search, it can be changed by ordinary inserts / deletes afterwards
 #include "TestCommon.h"
 #include "../../GeoDatabaseSQlite/SQLiteRTreeBuilder.h"
-#include "../../../CommonLib/sqlitelib/Database.h"
+#include "../../../../CommonLib/sqlitelib/Database.h"
 #include <filesystem>
 #include <random>
 

@@ -1,9 +1,9 @@
 #pragma once
-#include "../CommonLib/CommonLib.h"
-#include "../CommonLib/SpatialData/BoundaryBox.h"
-#include "../CommonLib/SpatialData/IGeoShape.h"
-#include "../CommonLib/SpatialData/Units.h"
-#include "../CommonLib/Serialize/SerializeObj.h"
+#include "../../CommonLib/CommonLib.h"
+#include "../../CommonLib/SpatialData/BoundaryBox.h"
+#include "../../CommonLib/SpatialData/IGeoShape.h"
+#include "../../CommonLib/SpatialData/Units.h"
+#include "../../CommonLib/Serialize/SerializeObj.h"
 
 namespace GraphEngine {
     namespace Geometry {

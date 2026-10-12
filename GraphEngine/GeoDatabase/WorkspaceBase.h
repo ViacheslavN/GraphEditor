@@ -1,8 +1,8 @@
 #pragma once
 
 #include "GeoDatabase.h"
-#include "../CommonLib/utils/PropertySet.h"
-#include "../CommonLib/guid/guid.h"
+#include "../../CommonLib/utils/PropertySet.h"
+#include "../../CommonLib/guid/guid.h"
 
 namespace GraphEngine {
     namespace GeoDatabase {

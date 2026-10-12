@@ -4,7 +4,7 @@
 #include "GraphTypes/Font.h"
 #include "GraphTypes/Brush.h"
 #include "GraphTypes/Rect.h"
-#include "../CommonLib/SpatialData/IGeoShape.h"
+#include "../../CommonLib/SpatialData/IGeoShape.h"
 #include "../GisGeometry/Geometry.h"
 #include "DisplayTypes.h"
 

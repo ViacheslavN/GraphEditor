@@ -13,7 +13,7 @@
 #include "../../Transformation/DisplayTransformation2D.h"
 #include "../../Transformation/DisplayTransformation3D.h"
 #include "../../Clip/ConvexClipper.h"
-#include "../../../CommonLib/SpatialData/GeoShape.h"
+#include "../../../../CommonLib/SpatialData/GeoShape.h"
 
 namespace display_test
 {

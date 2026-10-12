@@ -6,8 +6,8 @@
 #include "../../../GeoDatabase/TableCopier.h"
 #include "../../../GeoDatabase/GeoDatabaseSQlite/SQLiteWorkspace.h"
 #include "../../../DisplayLib/Symbols/SimpleFillSymbol.h"
-#include "../../../ThirdParty/ShapeLib/shapefil.h"
-#include "../../../CommonLib/xml/XMLDoc.h"
+#include "../../../../ThirdParty/ShapeLib/shapefil.h"
+#include "../../../../CommonLib/xml/XMLDoc.h"
 #include <filesystem>
 #include <chrono>
 #include <thread>

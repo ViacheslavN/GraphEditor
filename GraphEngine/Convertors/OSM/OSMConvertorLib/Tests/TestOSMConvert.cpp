@@ -12,7 +12,7 @@
 #include "../../../../GeoDatabase/GeoDatabaseSQlite/SQLiteWorkspace.h"
 #include "../../../../CartographyLib/Map.h"
 
-#include "../../../../GeometryCompression/ShapeFormat.h"
+#include "../../../../../GeometryCompression/ShapeFormat.h"
 #include <algorithm>
 #include <cmath>
 #include <filesystem>
