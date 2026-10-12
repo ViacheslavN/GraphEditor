@@ -1,5 +1,5 @@
 #include "TIFF.h"
-#include "../../../CommonLib/exception/exc_base.h"
+#include "../../../../CommonLib/exception/exc_base.h"
 
 extern "C" {
 #include "tiffio.h"

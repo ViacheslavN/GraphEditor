@@ -1,6 +1,6 @@
 #pragma once
 #include "Geometry.h"
-#include "../GeometryCompression/ShapeCompressor.h"
+#include "../../GeometryCompression/ShapeCompressor.h"
 
 namespace GraphEngine {
     namespace Geometry {

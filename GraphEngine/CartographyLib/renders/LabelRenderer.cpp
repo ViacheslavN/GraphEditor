@@ -1,6 +1,6 @@
 #include "LabelRenderer.h"
-#include "../../CommonLib/str/StringEncoding.h"
-#include "../../CommonLib/variant/VariantVisitor.h"
+#include "../../../CommonLib/str/StringEncoding.h"
+#include "../../../CommonLib/variant/VariantVisitor.h"
 #include "../selectors/SymbolSelectorsLoader.h"
 
 namespace GraphEngine {

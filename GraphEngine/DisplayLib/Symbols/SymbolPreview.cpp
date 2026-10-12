@@ -2,8 +2,8 @@
 #include "SymbolsLoader.h"
 #include "../Display/Display.h"
 #include "../Transformation/DisplayTransformation2D.h"
-#include "../../CommonLib/Serialize/SerializeXML.h"
-#include "../../CommonLib/xml/XMLNode.h"
+#include "../../../CommonLib/Serialize/SerializeXML.h"
+#include "../../../CommonLib/xml/XMLNode.h"
 
 namespace GraphEngine {
     namespace Display {

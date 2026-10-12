@@ -9,7 +9,7 @@
 #include "../OSMWayStore.h"
 #include "../OSMTempFile.h"
 #include "../OSMConvertor.h"
-#include "../../../../CommonLib/filesystem/FileMapping.h"
+#include "../../../../../CommonLib/filesystem/FileMapping.h"
 #include "../../../../GeoDatabase/GeoDatabaseSQlite/SQLiteWorkspace.h"
 #include "../../../../CartographyLib/Map.h"
 #include <algorithm>

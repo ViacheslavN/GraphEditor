@@ -1,12 +1,12 @@
 #pragma once
 #include "Cartography.h"
-#include "../CommonLib/CommonLib.h"
+#include "../../CommonLib/CommonLib.h"
 #include "../DisplayLib/DisplayLib.h"
 #include "../GisGeometry/Geometry.h"
 #include "../GeoDatabase/GeoDatabase.h"
-#include "../CommonLib/utils/PropertySet.h"
-#include "../CommonLib/Serialize/SerializeObj.h"
-#include "../CommonLib/exception/exc_base.h"
+#include "../../CommonLib/utils/PropertySet.h"
+#include "../../CommonLib/Serialize/SerializeObj.h"
+#include "../../CommonLib/exception/exc_base.h"
 #include "../DisplayLib/Symbols.h"
 
 namespace GraphEngine {

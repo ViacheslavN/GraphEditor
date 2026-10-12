@@ -17,8 +17,8 @@
 #include "../../Symbols/MultiLayerSymbol.h"
 #include "../../Symbols/SymbolBitmapUtils.h"
 #include "../../Symbols/ArrowMarkerSymbol.h"
-#include "../../../CommonLib/Serialize/SerializeXML.h"
-#include "../../../CommonLib/xml/XMLNode.h"
+#include "../../../../CommonLib/Serialize/SerializeXML.h"
+#include "../../../../CommonLib/xml/XMLNode.h"
 
 using namespace display_test;
 using namespace GraphEngine::Display;

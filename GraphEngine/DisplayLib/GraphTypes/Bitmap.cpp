@@ -2,8 +2,8 @@
 #include "Bitmap.h"
 #include "DisplayMath.h"
 
-#include "../../CommonLib/alloc/simpleAlloc.h"
-#include "../../CommonLib/stream/MemoryStream.h"
+#include "../../../CommonLib/alloc/simpleAlloc.h"
+#include "../../../CommonLib/stream/MemoryStream.h"
 
 #include "../Agg/agg_renderer_base.h"
 #include "../Agg/agg_scanline_p.h"

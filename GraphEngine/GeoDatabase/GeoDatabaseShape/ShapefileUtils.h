@@ -1,8 +1,8 @@
 #pragma once
 
 #include "../GeoDatabase.h"
-#include "../../CommonLib/SpatialData/IGeoShape.h"
-#include "../../ThirdParty/ShapeLib/shapefil.h"
+#include "../../../CommonLib/SpatialData/IGeoShape.h"
+#include "../../../ThirdParty/ShapeLib/shapefil.h"
 #include "SHPObject.h"
 
 namespace GraphEngine

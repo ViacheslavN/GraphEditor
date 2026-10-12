@@ -10,7 +10,7 @@
 #include "../../../DisplayLib/Symbols/MultiLayerSymbol.h"
 #include "../../../DisplayLib/Display/Display.h"
 #include "../../../DisplayLib/Transformation/DisplayTransformation2D.h"
-#include "../../../ThirdParty/ShapeLib/shapefil.h"
+#include "../../../../ThirdParty/ShapeLib/shapefil.h"
 #include <cmath>
 #include <filesystem>
 

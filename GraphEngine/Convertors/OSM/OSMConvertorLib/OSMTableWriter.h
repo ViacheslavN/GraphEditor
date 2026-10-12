@@ -1,7 +1,7 @@
 #pragma once
 #include "OSMConvertorLib.h"
-#include "../../../GeometryCompression/ShapeCompressor.h"
-#include "../../../CommonLib/SpatialData/GeoShape.h"
+#include "../../../../GeometryCompression/ShapeCompressor.h"
+#include "../../../../CommonLib/SpatialData/GeoShape.h"
 
 namespace GraphEngine {
     namespace Convertors {

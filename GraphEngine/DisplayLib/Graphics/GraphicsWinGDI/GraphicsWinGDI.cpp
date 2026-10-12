@@ -1,5 +1,5 @@
 #include "GraphicsWinGDI.h"
-#include "../../../CommonLib/str/StringEncoding.h"
+#include "../../../../CommonLib/str/StringEncoding.h"
 
 
 namespace GraphEngine {

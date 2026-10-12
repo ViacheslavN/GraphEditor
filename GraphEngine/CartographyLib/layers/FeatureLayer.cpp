@@ -1,11 +1,11 @@
 #include "FeatureLayer.h"
-#include "../GisGeometry/Envelope.h"
-#include "../GeoDatabase/QueryFilter.h"
-#include "../DisplayLib/DisplayUtils.h"
+#include "../../GisGeometry/Envelope.h"
+#include "../../GeoDatabase/QueryFilter.h"
+#include "../../DisplayLib/DisplayUtils.h"
 #include "renders/RenderersLoader.h"
 #include "legend/Legend.h"
-#include "../GeoDatabase/DatasetLoader.h"
-#include "../../CommonLib/synch/ThreadCancel.h"
+#include "../../GeoDatabase/DatasetLoader.h"
+#include "../../../CommonLib/synch/ThreadCancel.h"
 
 namespace GraphEngine {
     namespace Cartography {

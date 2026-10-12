@@ -1,7 +1,7 @@
 #include "OSMReader.h"
 #include "OSMPbfReader.h"
 #include "OSMMap.h"
-#include "../../../CommonLib/str/StringEncoding.h"
+#include "../../../../CommonLib/str/StringEncoding.h"
 #include <exception>
 
 namespace GraphEngine {

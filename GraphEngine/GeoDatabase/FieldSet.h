@@ -1,6 +1,6 @@
 #pragma once
 #include "GeoDatabase.h"
-#include "../CommonLib/str/StrUtils.h"
+#include "../../CommonLib/str/StrUtils.h"
 
 namespace GraphEngine
 {

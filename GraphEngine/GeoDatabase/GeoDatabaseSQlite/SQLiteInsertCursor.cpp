@@ -1,7 +1,7 @@
 #include "SQLiteInsertCursor.h"
 #include "SQLiteUtils.h"
-#include "../../CommonLib/str/StringEncoding.h"
-#include "../../CommonLib/str/str.h"
+#include "../../../CommonLib/str/StringEncoding.h"
+#include "../../../CommonLib/str/str.h"
 #include "SQLiteSpatialTable.h"
 
 namespace GraphEngine {

@@ -8,10 +8,10 @@
 // Any number of boxes: they are kept in memory up to the limit, then written to a temporary file in sorted runs
 // which are merged by Build. The entries already in the index are kept (they are read back and packed with the new ones).
 
-#include "../../CommonLib/CommonLib.h"
-#include "../../CommonLib/sqlitelib/Database.h"
-#include "../../CommonLib/SpatialData/BoundaryBox.h"
-#include "../../CommonLib/filesystem/File.h"
+#include "../../../CommonLib/CommonLib.h"
+#include "../../../CommonLib/sqlitelib/Database.h"
+#include "../../../CommonLib/SpatialData/BoundaryBox.h"
+#include "../../../CommonLib/filesystem/File.h"
 
 namespace GraphEngine {
     namespace GeoDatabase {

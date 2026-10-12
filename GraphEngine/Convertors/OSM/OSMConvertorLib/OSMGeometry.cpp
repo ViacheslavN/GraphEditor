@@ -1,5 +1,5 @@
 #include "OSMGeometry.h"
-#include "../../../CommonLib/SpatialData/GeoShape.h"
+#include "../../../../CommonLib/SpatialData/GeoShape.h"
 #include "../../../GisGeometry/SpatialReferenceProj4/SpatialReferenceProj4.h"
 #include <algorithm>
 #include <cmath>

@@ -1,5 +1,5 @@
 #include "WndProcThunk.h"
-#include "../../CommonLib/exception/exc_base.h"
+#include "../../../CommonLib/exception/exc_base.h"
 
 namespace GraphEngine {
     namespace UILib {

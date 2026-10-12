@@ -20,5 +20,5 @@ target_link_libraries(${PROJECT_NAME} PRIVATE   CommonLib)
 target_link_libraries(${PROJECT_NAME} PRIVATE   UILib)
 
 
-target_include_directories(${PROJECT_NAME} PRIVATE ../../../ThirdParty/WTL)
-target_include_directories(${PROJECT_NAME} PRIVATE ../../../ThirdParty/sciter-js-sdk/include)
+target_include_directories(${PROJECT_NAME} PRIVATE ../../../../ThirdParty/WTL)
+target_include_directories(${PROJECT_NAME} PRIVATE ../../../../ThirdParty/sciter-js-sdk/include)

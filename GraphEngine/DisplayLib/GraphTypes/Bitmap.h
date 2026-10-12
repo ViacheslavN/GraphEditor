@@ -1,8 +1,8 @@
 #pragma once
 #include "GraphTypes.h"
 #include "Color.h"
-#include "../../CommonLib/Serialize/SerializeObj.h"
-#include "../../CommonLib/stream/stream.h"
+#include "../../../CommonLib/Serialize/SerializeObj.h"
+#include "../../../CommonLib/stream/stream.h"
 
 namespace GraphEngine
 {
