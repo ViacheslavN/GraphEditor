@@ -46,13 +46,17 @@ namespace bptreedb
 			virtual eTransactionDataType GetTransactionDataType() const { return m_type; }
 
 			virtual ISelectCursorPtr executeQuery(const std::string& sQuery);
+			virtual int64_t execute(const std::string& sSQL);
+			virtual IStatementPtr prepare(const std::string& sSQL);
 			virtual ISelectCursorPtr executeSpatialQuery(const CommonLib::bbox& extent, const std::string& sTable, const std::string& sSpatialField,
 				eSpatialQueryMode mode, IFieldSetPtr ptrFieldSet);
 			virtual ISelectCursorPtr executeSelectQuery(const std::string& sTable, IFieldSetPtr ptrFieldSet);
 			virtual ISelectCursorPtr executeSelectQuery(const std::string& sTable, IFieldSetPtr ptrFieldSet, const std::string& sField, const CommonLib::CVariant& var, OpType opType);
+			virtual ISelectCursorPtr executeSelectQuery(const std::string& sTable, IFieldSetPtr ptrFieldSet, const std::vector<int64_t>& rowIds);
 			virtual IInsertCursorPtr createInsertCursor(const std::string& sTable, IFieldSetPtr ptrFieldSet, bool bMinSplit);
 			virtual IUpdateCursorPtr createUpdateCursor(const std::string& sTable, IFieldSetPtr ptrFieldSet);
 			virtual IUpdateCursorPtr createUpdateCursor(const std::string& sTable, IFieldSetPtr ptrFieldSet, const std::string& sField, const CommonLib::CVariant& var, OpType opType);
+			virtual IUpdateCursorPtr createUpdateCursor(const std::string& sTable, IFieldSetPtr ptrFieldSet, const std::vector<int64_t>& rowIds);
 			virtual IDeleteCursorPtr createDeleteCursor(const std::string& sTable);
 
 			bool IsWrite() const { return m_type == eTT_MODIFY || m_type == eTT_DDL; }

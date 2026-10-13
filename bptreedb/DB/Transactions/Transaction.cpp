@@ -5,6 +5,8 @@
 #include "../Cursors/UpdateCursor.h"
 #include "../Cursors/InsertCursor.h"
 #include "../Cursors/DeleteCursor.h"
+#include "../SQLEngine/SQLDriver.h"
+#include "../SQLEngine/Statement.h"
 
 namespace bptreedb
 {
@@ -248,7 +250,37 @@ namespace bptreedb
 
 		ISelectCursorPtr CTransaction::executeQuery(const std::string& sQuery)
 		{
-			throw CommonLib::CExcBase("SQL isn't implemented yet, query: {0}", sQuery);
+			IStatementPtr ptrStatement = prepare(sQuery);
+			if (!ptrStatement->IsQuery())
+				throw CommonLib::CExcBase("SQL: executeQuery runs a SELECT, use execute: '{0}'", sQuery);
+			return ptrStatement->executeQuery();
+		}
+
+		int64_t CTransaction::execute(const std::string& sSQL)
+		{
+			CheckActive();
+			sql::CSQLDriver driver;
+			sql::TStatementList statements = driver.Parse(sSQL);
+			if (driver.GetParameterCount() != 0)
+				throw CommonLib::CExcBase("SQL: execute has no parameters, use prepare: '{0}'", sSQL);
+
+			// one by one: a statement is compiled after the previous ones ran (CREATE TABLE; INSERT INTO it)
+			int64_t nRows = 0;
+			for (const sql::SStatementPtr& ptrAst : statements)
+			{
+				std::string sText = statements.size() == 1 ? sSQL : ptrAst->ToSQL();
+				auto ptrStatement = std::make_shared<sql::CSQLStatement>(shared_from_this(), Schema(), ptrAst, 0, sText);
+				nRows += ptrStatement->execute();
+			}
+			return nRows;
+		}
+
+		IStatementPtr CTransaction::prepare(const std::string& sSQL)
+		{
+			CheckActive();
+			sql::CSQLDriver driver;
+			sql::SStatementPtr ptrAst = driver.ParseStatement(sSQL);
+			return std::make_shared<sql::CSQLStatement>(shared_from_this(), Schema(), ptrAst, driver.GetParameterCount(), sSQL);
 		}
 
 		ISelectCursorPtr CTransaction::executeSpatialQuery(const CommonLib::bbox& extent, const std::string& sTable, const std::string& sSpatialField,
@@ -309,6 +341,38 @@ namespace bptreedb
 			catch (std::exception& excSrc)
 			{
 				CommonLib::CExcBase::RegenExcT("failed to create an insert cursor of {0}", sTable, excSrc);
+				throw;
+			}
+		}
+
+		ISelectCursorPtr CTransaction::executeSelectQuery(const std::string& sTable, IFieldSetPtr ptrFieldSet, const std::vector<int64_t>& rowIds)
+		{
+			try
+			{
+				CheckActive();
+				CTablePtr ptrTable = Schema()->GetTableThrow(sTable);
+				std::vector<int64_t> rows(rowIds);
+				return std::make_shared<CSelectCursor>(shared_from_this(), ptrTable, ptrFieldSet, std::make_shared<CListRowSource>(std::move(rows)), true);
+			}
+			catch (std::exception& excSrc)
+			{
+				CommonLib::CExcBase::RegenExcT("failed to select from {0} by row ids", sTable, excSrc);
+				throw;
+			}
+		}
+
+		IUpdateCursorPtr CTransaction::createUpdateCursor(const std::string& sTable, IFieldSetPtr ptrFieldSet, const std::vector<int64_t>& rowIds)
+		{
+			try
+			{
+				CheckWrite();
+				CTablePtr ptrTable = Schema()->GetTableThrow(sTable);
+				std::vector<int64_t> rows(rowIds);
+				return std::make_shared<CUpdateCursor>(shared_from_this(), ptrTable, ptrFieldSet, std::make_shared<CListRowSource>(std::move(rows)));
+			}
+			catch (std::exception& excSrc)
+			{
+				CommonLib::CExcBase::RegenExcT("failed to create an update cursor of {0} by row ids", sTable, excSrc);
 				throw;
 			}
 		}

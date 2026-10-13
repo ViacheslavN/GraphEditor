@@ -167,6 +167,7 @@ namespace bptreedb
 	typedef std::shared_ptr<class IInsertCursor> IInsertCursorPtr;
 	typedef std::shared_ptr<class IUpdateCursor> IUpdateCursorPtr;
 	typedef std::shared_ptr<class IDeleteCursor> IDeleteCursorPtr;
+	typedef std::shared_ptr<class IStatement> IStatementPtr;
 
 	class IField
 	{
@@ -378,6 +379,28 @@ namespace bptreedb
 		virtual bool DeleteRow(int64_t nRowID) = 0;   // false if there is no such row
 	};
 
+	// A prepared SQL statement (ITransaction::prepare): parsed and planned once, executed many times with other
+	// values of the parameters - the "?" of the text, numbered from 0 in the order of the text. Every parameter
+	// has to be bound (NULL is the empty variant). A statement belongs to its transaction; one cursor of
+	// executeQuery is valid at a time (the next execution makes the previous cursor invalid).
+	class IStatement
+	{
+	public:
+		IStatement() {}
+		virtual ~IStatement() {}
+
+		virtual uint32_t GetParameterCount() const = 0;
+		virtual void BindParameter(uint32_t nIndex, const CommonLib::CVariant& value) = 0;
+		virtual void ClearParameters() = 0;
+		virtual bool IsQuery() const = 0;                 // SELECT: executeQuery, other statements: execute
+		virtual ISelectCursorPtr executeQuery() = 0;
+		virtual int64_t execute() = 0;                    // the rows inserted / updated / deleted (0 for DDL, SELECT)
+		virtual std::string GetSQL() const = 0;
+		// the plan as text: the operators (one per line, the inputs indented), how every table is read
+		// ("table roads: index cls =", "spatial index geom", "scan") and the join algorithms
+		virtual std::string GetPlan() const = 0;
+	};
+
 	class ITransaction
 	{
 	public:
@@ -390,7 +413,16 @@ namespace bptreedb
 		virtual eTransactionType GetTransactionType() const = 0;
 		virtual eTransactionDataType GetTransactionDataType() const = 0;
 
-		virtual ISelectCursorPtr executeQuery(const std::string& sQuery) = 0;  // SQL: not implemented yet
+		// SQL (DB/SQLEngine): SELECT with joins, subqueries, GROUP BY, ORDER BY, LIMIT, UNION; INSERT, UPDATE, DELETE;
+		// CREATE / DROP TABLE, ALTER TABLE ADD / DROP COLUMN, CREATE / DROP INDEX. Write statements need a write
+		// transaction (DDL - eTT_DDL). A table is read by its indexes when the conditions allow it.
+		// executeQuery: one SELECT, the cursor reads the result (GetRowID - the row of the table for a query of one
+		// table without aggregation, else -1)
+		virtual ISelectCursorPtr executeQuery(const std::string& sQuery) = 0;
+		// statements separated by ";" (a SELECT runs, its rows are dropped): the rows inserted / updated / deleted
+		virtual int64_t execute(const std::string& sSQL) = 0;
+		// one statement with "?" parameters
+		virtual IStatementPtr prepare(const std::string& sSQL) = 0;
 		// rows by the spatial index of the geometry field (it has to have one)
 		virtual ISelectCursorPtr executeSpatialQuery(const CommonLib::bbox& extent, const std::string& sTable, const std::string& sSpatialField,
 			eSpatialQueryMode mode = sqmIntersect, IFieldSetPtr ptrFieldSet = IFieldSetPtr()) = 0;
@@ -398,6 +430,8 @@ namespace bptreedb
 		virtual ISelectCursorPtr executeSelectQuery(const std::string& sTable, IFieldSetPtr ptrFieldSet = IFieldSetPtr()) = 0;
 		// rows where "sField opType var" (by the index of the field if it has one; NULL values never match)
 		virtual ISelectCursorPtr executeSelectQuery(const std::string& sTable, IFieldSetPtr ptrFieldSet, const std::string& sField, const CommonLib::CVariant& var, OpType opType) = 0;
+		// the rows of the list (in its order) that exist
+		virtual ISelectCursorPtr executeSelectQuery(const std::string& sTable, IFieldSetPtr ptrFieldSet, const std::vector<int64_t>& rowIds) = 0;
 
 		// bMinSplit: the rows come in ascending order of the indexed values (a bulk load sorted by the index key):
 		// the index trees then split a full leaf by moving only its last key to the new leaf, so the leaves stay full
@@ -406,6 +440,7 @@ namespace bptreedb
 		virtual IInsertCursorPtr createInsertCursor(const std::string& sTable, IFieldSetPtr ptrFieldSet = IFieldSetPtr(), bool bMinSplit = false) = 0;
 		virtual IUpdateCursorPtr createUpdateCursor(const std::string& sTable, IFieldSetPtr ptrFieldSet = IFieldSetPtr()) = 0;
 		virtual IUpdateCursorPtr createUpdateCursor(const std::string& sTable, IFieldSetPtr ptrFieldSet, const std::string& sField, const CommonLib::CVariant& var, OpType opType) = 0;
+		virtual IUpdateCursorPtr createUpdateCursor(const std::string& sTable, IFieldSetPtr ptrFieldSet, const std::vector<int64_t>& rowIds) = 0;
 		virtual IDeleteCursorPtr createDeleteCursor(const std::string& sTable) = 0;
 	};
 

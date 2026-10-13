@@ -37,12 +37,18 @@ set(SOURCE_FILES_TRANSACTIONS
         Transactions/RedoLog.cpp
 )
 
-# SQL: the syntax tree, the driver, the parser (bison) and the scanner (flex) generated into SQLEngine/Grammar
+# SQL: the syntax tree, the driver, the parser (bison) and the scanner (flex) generated into SQLEngine/Grammar;
+# the execution: values, bound expressions, operators, the compiler (names, plans), statements and cursors
 set(SOURCE_FILES_SQL
         SQLEngine/AST.cpp
         SQLEngine/SQLDriver.cpp
         SQLEngine/Grammar/SQLParser.cpp
         SQLEngine/Grammar/SQLLexer.cpp
+        SQLEngine/SQLValue.cpp
+        SQLEngine/Expr.cpp
+        SQLEngine/Operators.cpp
+        SQLEngine/Compiler.cpp
+        SQLEngine/Statement.cpp
 )
 
 # The generated files are in the repository (SQLEngine/Grammar/generate.bat / generate.sh regenerate them).
@@ -99,4 +105,5 @@ target_include_directories(${PROJECT_NAME} PRIVATE SQLEngine/Grammar)
 if(BPTREEDB_BUILD_TESTS)
     add_subdirectory(Tests/DBTest)
     add_subdirectory(Tests/SQLParserTest)
+    add_subdirectory(Tests/SQLTest)
 endif()
