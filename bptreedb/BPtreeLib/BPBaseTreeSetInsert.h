@@ -77,9 +77,14 @@ void BPSETBASE_DECLARATION::CheckLeafNode(TBPTreeNodePtr &pNode)
 		}
 
 		
+		// min split: only for a key appended to the end of the leaf (ascending inserts) - the leaf stays full and
+		// the new right leaf gets the new key. A key in the middle of a leaf splits it in halves: a min split there
+		// would leave the leaf full and split it again at the next insert (a chain of almost empty leaves).
+		bool bMinSplit = m_bMinSplit && pNode->LeafLastInsertAppend();
+
 		TBPTreeNodePtr pCheckNode = GetParentNode(pNode);
 		TBPTreeNodePtr pNewRightLeafNode = NewNode(true, true);
-		SplitLeafNode(pNode, pNewRightLeafNode, pCheckNode, m_bMinSplit ? 1 : pNode->LeafSplitCount());
+		SplitLeafNode(pNode, pNewRightLeafNode, pCheckNode, bMinSplit ? 1 : pNode->LeafSplitCount());
 
 		while (pCheckNode->IsNeedSplit())
 		{
@@ -92,7 +97,7 @@ void BPSETBASE_DECLARATION::CheckLeafNode(TBPTreeNodePtr &pNode)
 			}
 
 			TBPTreeNodePtr pNodeNewRight = NewNode(false, true);
-			SplitInnerNode(pCheckNode, pNodeNewRight, pParentNode, m_bMinSplit ? 3 : (pCheckNode->Count() / 2) - 3);
+			SplitInnerNode(pCheckNode, pNodeNewRight, pParentNode, bMinSplit ? 3 : (pCheckNode->Count() / 2) - 3);
 			pCheckNode = pParentNode;
 
 		}

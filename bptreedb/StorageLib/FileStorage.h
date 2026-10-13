@@ -33,6 +33,8 @@ namespace bptreedb
 			virtual void SetStoragePerformer(CommonLib::TPrefCounterPtr pStoragePerformer);
 			virtual int32_t GetStorageId() const;
 			virtual int64_t GetNewFilePageAddr(uint32_t nSize = 0);
+			// the addresses below nEndAddr become writable (the recovery writes pages allocated before a crash)
+			void ReserveAddr(int64_t nEndAddr);
 			virtual uint32_t GetPageSize() const;
 			virtual void Lock();
 			virtual void UnLock();

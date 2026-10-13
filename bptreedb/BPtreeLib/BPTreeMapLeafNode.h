@@ -221,6 +221,9 @@ namespace bptreedb
 				this->m_Compressor.Insert(nIndex, this->m_KeyMemSet[nIndex], this->m_ValueMemSet[nIndex], this->m_KeyMemSet, this->m_ValueMemSet);
 		}
 
+		// the last insert added the greatest key of the node (pending inserts: no)
+		bool LastInsertAppend() const { return m_bLastInsertAppend; }
+
 		// bulk load: key is greater than every key of the node
 		void AppendSorted(const TKey& key, const TValue& value)
 		{

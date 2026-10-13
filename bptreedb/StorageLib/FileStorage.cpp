@@ -30,8 +30,10 @@ namespace bptreedb
 				m_minPageSize = nMinPageSize;
 				m_file.OpenFileA(pszNameUtf8, nOpenMode, nReadWrite, CommonLib::file::smNoMode, CommonLib::file::oftBinary);
 
+				// the pages start after the offset; a partly written last page counts
 				uint64_t nSize = m_file.GetFileSize();
-				m_lastAddr = nSize / m_minPageSize;
+				uint64_t nDataSize = nSize > m_offset ? nSize - m_offset : 0;
+				m_lastAddr = (nDataSize + m_minPageSize - 1) / m_minPageSize;
 
 			}
 			catch (std::exception& excSrc)
@@ -164,6 +166,13 @@ namespace bptreedb
 				throw;
 			}
 
+		}
+
+		void CFileStorage::ReserveAddr(int64_t nEndAddr)
+		{
+			std::lock_guard<std::recursive_mutex> locker(m_mutex);
+			if (m_lastAddr < nEndAddr)
+				m_lastAddr = nEndAddr;
 		}
 
 		void CFileStorage::_WriteData(int64_t nAddr, const byte_t* pData)

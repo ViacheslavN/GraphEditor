@@ -72,6 +72,13 @@ namespace bptreedb
 			return m_nPageBTreeInfo;
 		}
 
+		// Split strategy of the next inserts (not stored in the tree): a leaf that overflows by an appended key
+		// (the greatest key of the leaf) gives only that key to the new right leaf, so keys inserted in ascending
+		// order leave full leaves behind them instead of half full ones. A leaf that overflows by a key in its
+		// middle is split in halves as usual, so random keys don't suffer from it.
+		void SetMinSplit(bool bMinSplit) { m_bMinSplit = bMinSplit; }
+		bool IsMinSplit() const { return m_bMinSplit; }
+
 
 		/*insert*/
 		void insert(TKey& key);

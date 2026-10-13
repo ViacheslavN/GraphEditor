@@ -358,6 +358,123 @@ namespace
 		SMetrics m_metrics;
 	};
 
+	// Nodes bigger than the page when they are written. The size estimate of a node (the real size + MaxGrowth
+	// per changed entry) isn't a bound for zlib: on compressible coordinates level 1 grows by a few hundred bytes
+	// for one entry, so a node passes the checks of the inserts and doesn't fit when it leaves the cache (a small
+	// cache: it happens all the time) or is flushed. The tree has to split it there. Searches between the
+	// inserts mustn't split (the nodes they will visit are on their stack): the node stays in the cache.
+	// bSearchEachInsert: a search of the whole extent after every insert (the "keep it during a search" case).
+	int TestOverflowSave(const std::wstring& path, size_t nCount, bool bSearchEachInsert)
+	{
+		typedef bptreedb::spatiallib::rtree::TRTree<double> TTree;
+		typedef TTree::TEntry TEntry;
+		typedef TTree::TRect TRect;
+		typedef bptreedb::spatiallib::rtree::RectMath RectMath;
+
+		try
+		{
+			CommonLib::CLogInfo testInfo(Log, "TestRTree overflow on save, count: {0}, search after every insert: {1}", (uint64_t)nCount, bSearchEachInsert ? 1 : 0);
+			CommonLib::IAllocPtr pAlloc(new CommonLib::CSimpleAlloc(false));
+			bptreedb::spatiallib::rtree::SRTreeParams params;
+			params.m_nCompressLevel = 1;
+			const uint32_t nTreeCache = 8;
+
+			auto openStorage = [&](bool bCreate, bptreedb::storage::CFileStoragePtr& pStorage, bptreedb::storage::IFilePagerPtr& pPager)
+			{
+				pStorage.reset(new bptreedb::storage::CFileStorage(pAlloc, 1, bptreedb::storage::IStorageCipherPtr()));
+				pStorage->Open(path.c_str(), bCreate, 0, nPageSize);
+				pPager = std::make_shared<bptreedb::storage::CFilePager>(pAlloc, pStorage, 100);
+			};
+
+			std::vector<TEntry> entries;
+			auto check = [&](TTree& tree, std::mt19937_64& rng, int nQueries)
+			{
+				for (int q = 0; q < nQueries; ++q)
+				{
+					double x = (double)(rng() % 1000), y = (double)(rng() % 1000), s = (double)(rng() % 200);
+					TRect rect(x, y, x + s, y + s);
+					std::vector<int64_t> found, expected;
+					tree.search(rect, [&found](const TRect&, int64_t v) { found.push_back(v); return true; });
+					for (const TEntry& e : entries)
+						if (RectMath::Intersects(e.m_rect, rect))
+							expected.push_back(e.m_nValue);
+					std::sort(found.begin(), found.end());
+					std::sort(expected.begin(), expected.end());
+					if (found != expected)
+						throw CommonLib::CExcBase("search: {0} entries, expected {1}", (uint64_t)found.size(), (uint64_t)expected.size());
+				}
+			};
+
+			std::mt19937_64 rng(11);
+			int64_t nInfo = -1;
+			{
+				bptreedb::storage::CFileStoragePtr pStorage;
+				bptreedb::storage::IFilePagerPtr pPager;
+				openStorage(true, pStorage, pPager);
+				TTree tree(-1, pPager, nTreeCache, params);
+				tree.Open();
+
+				for (size_t i = 0; i < nCount; ++i)
+				{
+					// points with integer coordinates (as doubles): zlib finds many repeats in the byte columns
+					double x = (double)(rng() % 1000), y = (double)(rng() % 1000);
+					TEntry e(TRect(x, y, x, y), (int64_t)i * 3 + 1);
+					tree.insert(e.m_rect, e.m_nValue);
+					entries.push_back(e);
+					if (bSearchEachInsert)
+					{
+						uint64_t nFound = tree.search(TRect(0, 0, 1000, 1000), [](const TRect&, int64_t) { return true; });
+						if (nFound != entries.size())
+							throw CommonLib::CExcBase("search after insert {0}: {1} entries", (uint64_t)i, nFound);
+					}
+					else if (i % 2500 == 2499)
+						check(tree, rng, 3);     // dirty, maybe too big nodes in the cache during the search
+				}
+				tree.Check();
+
+				std::vector<TEntry> kept;
+				for (size_t i = 0; i < entries.size(); ++i)
+				{
+					if (i % 3 == 0)
+					{
+						if (!tree.remove(entries[i].m_rect, entries[i].m_nValue))
+							throw CommonLib::CExcBase("remove of entry {0}", entries[i].m_nValue);
+					}
+					else
+						kept.push_back(entries[i]);
+				}
+				entries.swap(kept);
+				tree.Check();
+				check(tree, rng, 20);
+				tree.Flush();
+				nInfo = tree.GetPageInfo();
+				pPager->Flush();
+				pStorage->Close();
+			}
+
+			{
+				bptreedb::storage::CFileStoragePtr pStorage;
+				bptreedb::storage::IFilePagerPtr pPager;
+				openStorage(false, pStorage, pPager);
+				TTree tree(nInfo, pPager, nTreeCache, params);
+				tree.Open();
+				tree.Check();
+				if (tree.size() != entries.size())
+					throw CommonLib::CExcBase("size after reopen {0}, expected {1}", tree.size(), (uint64_t)entries.size());
+				check(tree, rng, 20);
+				pStorage->Close();
+			}
+			testInfo.Complete("TestRTree overflow on save passed");
+			return 0;
+		}
+		catch (std::exception& exc)
+		{
+			Log.Exc(exc);
+			std::cout << "TestRTree overflow on save failed" << std::endl;
+			return 1;
+		}
+	}
+
 	template<class TCoord, class TCompressor = bptreedb::spatiallib::rtree::TRTreeZlibCompressor<TCoord> >
 	int RunTest(const std::string& name, size_t nCount, const std::wstring& path, uint32_t nCache)
 	{
@@ -397,6 +514,8 @@ int main(int argc, char* argv[])
 	uint32_t nCache = argc > 3 ? (uint32_t)std::strtoul(argv[3], nullptr, 10) : 200;
 
 	int nFailed = 0;
+	nFailed += TestOverflowSave(storagePath, (std::min)(nCount, (size_t)60000), false);
+	nFailed += TestOverflowSave(storagePath, (std::min)(nCount, (size_t)15000), true);
 	nFailed += RunTest<int32_t>("int32 zlib", nCount, storagePath, nCache);
 	nFailed += RunTest<int32_t, bptreedb::spatiallib::rtree::TRTreeNumLenCompressor<int32_t> >("int32 numlen", nCount, storagePath, nCache);
 	nFailed += RunTest<int64_t, bptreedb::spatiallib::rtree::TRTreeNumLenCompressor<int64_t> >("int64 numlen", nCount, storagePath, nCache);

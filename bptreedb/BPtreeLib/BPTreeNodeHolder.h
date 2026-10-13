@@ -285,6 +285,15 @@ namespace bptreedb
 			return 0;
 		}
 
+		// the last insert into the leaf added its greatest key
+		bool LeafLastInsertAppend() const
+		{
+			if (!IsLeaf())
+				throw CommonLib::CExcBase("BTNode holder LeafLastInsertAppend()  Node addr {0} isn't a leaf node", m_nAddr);
+
+			return m_pLeafNode->LastInsertAppend();
+		}
+
 		// how many elements a split of a leaf moves to the new right node
 		uint32_t LeafSplitCount()
 		{

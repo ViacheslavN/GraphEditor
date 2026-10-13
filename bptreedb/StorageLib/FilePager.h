@@ -38,6 +38,8 @@ namespace bptreedb
 			void ClearCache();
 
 			IStoragePtr GetStorage() const;
+			// the cached page IO (pages of other pagers can read and write through the same cache)
+			IStorageIOPtr GetStorageIO() const;
 			uint32_t GetPageSize() const;
 			uint32_t GetCacheSize() const;
 			uint32_t GetCachedPageCount() const;

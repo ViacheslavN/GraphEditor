@@ -8,6 +8,9 @@
 #include "../../StorageLib/WriteStreamPage.h"
 #include "RTreeEntry.h"
 #include "RTreeZlibCompressor.h"
+#include "RTreeNode.h"
+#include "RTreeLeafNode.h"
+#include "RTreeInnerNode.h"
 
 #include <vector>
 #include <list>
@@ -39,7 +42,8 @@ namespace bptreedb
 		};
 
 		// R*-tree on the pages of IFilePager, after SQLite rtree:
-		//   - one node is one page: uint16 level (0 - leaf), uint32 count, the entries by the compressor;
+		//   - one node is one page: uint16 level (0 - leaf), uint32 count, the entries by the compressor
+		//     (TRTreeLeafNode: rect -> id, TRTreeInnerNode: MBR -> child address, TRTreeNode - the common part);
 		//   - the root has a fixed address (as node 1 of SQLite), the tree info page keeps it and the height;
 		//   - insert: ChooseSubtree by the least area enlargement (ties: the least area), an overflowing node
 		//     first reinserts 30% of its entries farthest from the center (once per level and insert, R*),
@@ -49,10 +53,9 @@ namespace bptreedb
 		//     gives the rect of the entry;
 		//   - BulkLoad: STR (sort-tile-recursive) packing of an empty tree.
 		//
-		// A node is full when its entries don't fit in the page by the compressed size (or more than MaxCount).
-		// Every node keeps an upper estimate of its encoded size: the real size after load / save / a real
-		// check, plus TCompressor::MaxGrowth for every entry added, removed or changed since. The compressor
-		// runs only when the estimate is over the limit. Decisions use the page size minus a reserve.
+		// A node is full when its entries don't fit in the page by the compressed size (or more than MaxCount);
+		// the node keeps an upper estimate of its encoded size, the compressor runs only when the estimate is
+		// over the limit (TRTreeNode::Fits). Decisions use the page size minus a reserve.
 		//
 		// TCompressor: TRTreeZlibCompressor (any coordinates) or TRTreeNumLenCompressor (integer coordinates):
 		// RawEntrySize, HeadSize, MaxGrowth, Fits, Prepare, EncodedSize, Write, Read.
@@ -64,6 +67,12 @@ namespace bptreedb
 			typedef _TCompressor TCompressor;
 			typedef TRTreeEntry<TCoord> TEntry;
 			typedef typename TEntry::TRect TRect;
+			typedef std::vector<TEntry> TEntries;
+
+			typedef TRTreeNode<TCoord, TCompressor> TNode;
+			typedef TRTreeLeafNode<TCoord, TCompressor> TLeafNode;
+			typedef TRTreeInnerNode<TCoord, TCompressor> TInnerNode;
+			typedef std::shared_ptr<TNode> TNodePtr;
 
 			// search callback: return false to stop
 			typedef std::function<bool(const TRect& rect, int64_t nValue)> TSearchCallback;
@@ -84,7 +93,7 @@ namespace bptreedb
 				{
 					m_cachePage = m_pStorage->GetNewPage(-1);
 					uint32_t nPageSize = m_cachePage->GetSize();
-					m_nPageMax = nPageSize - NodeHeadSize;
+					m_nPageMax = nPageSize - TNode::HeadSize;
 					m_nPageLimit = m_nPageMax - std::max<uint32_t>(16, nPageSize / 64);
 
 					uint32_t nRawCap = m_nPageLimit / TCompressor::RawEntrySize;
@@ -97,8 +106,8 @@ namespace bptreedb
 						m_nPageInfo = m_pStorage->GetNewFilePageAddr();
 						m_nRootAddr = m_pStorage->GetNewFilePageAddr();
 						m_nCount = 0;
-						m_pRoot = std::make_shared<TNode>(m_nRootAddr, 0);
-						m_pRoot->m_bDirty = true;
+						m_pRoot = CreateNode(m_nRootAddr, 0);
+						m_pRoot->SetDirty(true);
 						m_bInfoDirty = true;
 						Flush();
 					}
@@ -117,7 +126,7 @@ namespace bptreedb
 
 			int64_t GetPageInfo() const { return m_nPageInfo; }
 			uint64_t size() const { return m_nCount; }
-			uint32_t height() const { return m_pRoot->m_nLevel + 1; }
+			uint32_t height() const { return m_pRoot->Level() + 1; }
 
 			void insert(const TRect& rect, int64_t nValue)
 			{
@@ -183,7 +192,7 @@ namespace bptreedb
 						TNodePtr pNode = GetNode(nAddr);
 						bool bStop = SearchNode(pNode, rect, func, stack, nFound);
 						pNode.reset();
-						CheckCache();      // read only: nodes may leave the cache during the search
+						CheckCache(false);    // nodes may leave the cache, the tree mustn't change during the search
 						if (bStop)
 							break;
 					}
@@ -196,17 +205,17 @@ namespace bptreedb
 				}
 			}
 
-			void search(const TRect& rect, std::vector<TEntry>& result)
+			void search(const TRect& rect, TEntries& result)
 			{
 				search(rect, [&result](const TRect& r, int64_t v) { result.emplace_back(r, v); return true; });
 			}
 
 			// STR bulk load of an empty tree; takes the entries (the vector is left empty)
-			void BulkLoad(std::vector<TEntry>& entries)
+			void BulkLoad(TEntries& entries)
 			{
 				try
 				{
-					if (m_nCount != 0 || m_pRoot->m_nLevel != 0 || !m_pRoot->m_entries.empty())
+					if (m_nCount != 0 || !m_pRoot->IsLeaf() || !m_pRoot->Empty())
 						throw CommonLib::CExcBase("the tree isn't empty");
 
 					for (const TEntry& e : entries)
@@ -216,19 +225,19 @@ namespace bptreedb
 					uint32_t nLimit = std::max<uint32_t>(TCompressor::HeadSize + TCompressor::RawEntrySize,
 						(uint32_t)(m_nPageLimit * (std::min)(1.0, m_params.m_dBulkFill)));
 
-					std::vector<TEntry> level;
+					TEntries level;
 					level.swap(entries);
 					uint32_t nLevel = 0;
 					for (;;)
 					{
 						if (level.size() <= m_params.m_nMaxCount && m_compressor.Fits(level.data(), level.size(), m_nPageLimit))
 						{
+							m_pRoot = CreateNode(m_nRootAddr, nLevel);
 							m_pRoot->Reset(std::move(level));
-							m_pRoot->m_nLevel = nLevel;
 							break;
 						}
 
-						std::vector<TEntry> upper;
+						TEntries upper;
 						PackLevel(level, nLevel, nLimit, upper);
 						level.swap(upper);
 						++nLevel;
@@ -247,18 +256,32 @@ namespace bptreedb
 				}
 			}
 
+			// writes the changed nodes; a node that turns out bigger than the page is split first
 			void Flush()
 			{
 				try
 				{
-					for (auto& item : m_cache)
+					for (;;)
 					{
-						if (item.second.m_pNode->m_bDirty)
-							SaveNode(*item.second.m_pNode);
-					}
+						std::vector<TNodePtr> dirty;
+						for (auto& item : m_cache)
+							if (item.second.m_pNode->IsDirty())
+								dirty.push_back(item.second.m_pNode);
+						if (m_pRoot->IsDirty())
+							dirty.push_back(m_pRoot);
 
-					if (m_pRoot->m_bDirty)
-						SaveNode(*m_pRoot);
+						bool bSplit = false;
+						for (const TNodePtr& pNode : dirty)
+						{
+							if (pNode->IsDirty() && !SaveDirtyNode(pNode, true))
+							{
+								bSplit = true;     // the tree changed: collect the dirty nodes again
+								break;
+							}
+						}
+						if (!bSplit)
+							break;
+					}
 
 					if (m_bInfoDirty)
 						SaveInfo();
@@ -273,18 +296,18 @@ namespace bptreedb
 			void GetStatistics(SRTreeStatistics& stat)
 			{
 				stat = SRTreeStatistics();
-				stat.m_nodesByLevel.assign(m_pRoot->m_nLevel + 1, 0);
-				stat.m_entriesByLevel.assign(m_pRoot->m_nLevel + 1, 0);
+				stat.m_nodesByLevel.assign(m_pRoot->Level() + 1, 0);
+				stat.m_entriesByLevel.assign(m_pRoot->Level() + 1, 0);
 
 				std::vector<int64_t> stack;
 				auto visit = [&](const TNodePtr& pNode)
 				{
-					stat.m_nodesByLevel[pNode->m_nLevel] += 1;
-					stat.m_entriesByLevel[pNode->m_nLevel] += pNode->m_entries.size();
-					if (pNode->m_nLevel == 0)
-						stat.m_nEntries += pNode->m_entries.size();
+					stat.m_nodesByLevel[pNode->Level()] += 1;
+					stat.m_entriesByLevel[pNode->Level()] += pNode->Count();
+					if (pNode->IsLeaf())
+						stat.m_nEntries += pNode->Count();
 					else
-						for (const TEntry& e : pNode->m_entries)
+						for (const TEntry& e : pNode->Entries())
 							stack.push_back(e.m_nValue);
 				};
 
@@ -294,7 +317,7 @@ namespace bptreedb
 					int64_t nAddr = stack.back();
 					stack.pop_back();
 					visit(GetNode(nAddr));
-					CheckCache();
+					CheckCache(false);
 				}
 			}
 
@@ -302,7 +325,7 @@ namespace bptreedb
 			void Check()
 			{
 				uint64_t nEntries = 0;
-				if (m_pRoot->m_nLevel != 0 && m_pRoot->m_entries.empty())
+				if (!m_pRoot->IsLeaf() && m_pRoot->Empty())
 					throw CommonLib::CExcBase("[TRTree] check: empty inner root");
 				CheckNode(m_pRoot, nullptr, nEntries);
 				if (nEntries != m_nCount)
@@ -310,71 +333,44 @@ namespace bptreedb
 			}
 
 		private:
-			static constexpr uint32_t NodeHeadSize = sizeof(uint16_t) + sizeof(uint32_t);
 			static constexpr uint32_t MaxLevels = 64;
 			static constexpr uint32_t InfoMagic = 0x45525452;   // "RTRE"
 			static constexpr uint32_t InfoVersion = 1;
-
-			struct TNode
-			{
-				TNode(int64_t nAddr, uint32_t nLevel) : m_nAddr(nAddr), m_nLevel(nLevel) {}
-
-				TRect Mbr() const { return RectMath::Mbr(m_entries.begin(), m_entries.end()); }
-
-				int32_t FindChild(int64_t nAddr) const
-				{
-					for (size_t i = 0; i < m_entries.size(); ++i)
-						if (m_entries[i].m_nValue == nAddr)
-							return (int32_t)i;
-					throw CommonLib::CExcBase("[TRTree] node {0} has no child {1}", m_nAddr, nAddr);
-				}
-
-				// all changes of the entries go through these: they keep m_nEstSize an upper estimate
-				void Add(const TEntry& e)
-				{
-					m_entries.push_back(e);
-					Grow();
-				}
-
-				void SetRect(size_t i, const TRect& rect)
-				{
-					m_entries[i].m_rect = rect;
-					Grow();
-				}
-
-				void Erase(size_t i)
-				{
-					m_entries.erase(m_entries.begin() + i);    // a removed entry can make the encoding bigger too (deltas)
-					Grow();
-				}
-
-				void Reset(std::vector<TEntry>&& entries)
-				{
-					m_entries = std::move(entries);
-					m_nEstSize = 0;
-					m_bDirty = true;
-				}
-
-				void Grow()
-				{
-					if (m_nEstSize != 0)
-						m_nEstSize += TCompressor::MaxGrowth(m_entries.size());
-					m_bDirty = true;
-				}
-
-				int64_t m_nAddr;
-				uint32_t m_nLevel;
-				std::vector<TEntry> m_entries;
-				bool m_bDirty{ false };
-				uint32_t m_nEstSize{ 0 };     // upper estimate of the encoded size, 0 - unknown
-			};
-			typedef std::shared_ptr<TNode> TNodePtr;
 
 			struct SCacheItem
 			{
 				TNodePtr m_pNode;
 				std::list<int64_t>::iterator m_lru;
 			};
+
+			//------------------------------------------------------------------------------------------
+			// nodes
+
+			static TNodePtr CreateNode(int64_t nAddr, uint32_t nLevel)
+			{
+				if (nLevel == 0)
+					return std::make_shared<TLeafNode>(nAddr);
+				return std::make_shared<TInnerNode>(nAddr, nLevel);
+			}
+
+			static TLeafNode& Leaf(const TNodePtr& pNode)
+			{
+				if (!pNode->IsLeaf())
+					throw CommonLib::CExcBase("[TRTree] node {0} isn't a leaf", pNode->Addr());
+				return static_cast<TLeafNode&>(*pNode);
+			}
+
+			static TInnerNode& Inner(const TNodePtr& pNode)
+			{
+				if (pNode->IsLeaf())
+					throw CommonLib::CExcBase("[TRTree] node {0} isn't an inner node", pNode->Addr());
+				return static_cast<TInnerNode&>(*pNode);
+			}
+
+			bool Fits(TNode& node)
+			{
+				return node.Fits(m_compressor, m_nPageLimit, m_params.m_nMaxCount);
+			}
 
 			//------------------------------------------------------------------------------------------
 			// storage
@@ -385,43 +381,89 @@ namespace bptreedb
 					throw CommonLib::CExcBase("[TRTree] wrong rect: min is above max");
 			}
 
-			bool Fits(TNode& node)
-			{
-				size_t n = node.m_entries.size();
-				if (n > m_params.m_nMaxCount)
-					return false;
-				if (TCompressor::HeadSize + n * TCompressor::RawEntrySize <= m_nPageLimit)
-					return true;
-				if (node.m_nEstSize != 0 && node.m_nEstSize <= m_nPageLimit)
-					return true;
-
-				bool bFits = m_compressor.Prepare(node.m_entries.data(), n, m_nPageLimit);
-				node.m_nEstSize = m_compressor.EncodedSize();
-				return bFits;
-			}
-
+			// writes a node known to fit in the page (a new root, the nodes of a bulk load sized by FitCount)
 			void SaveNode(TNode& node)
 			{
 				try
 				{
-					if (!m_compressor.Prepare(node.m_entries.data(), node.m_entries.size(), m_nPageMax))
-						throw CommonLib::CExcBase("{0} entries don't fit in the page", (uint64_t)node.m_entries.size());
-
-					m_cachePage->SetAddr(node.m_nAddr);
+					m_cachePage->SetAddr(node.Addr());
 					CommonLib::CFxMemoryWriteStream stream;
 					stream.AttachBuffer(m_cachePage->GetPayLoadData(), m_cachePage->GetSize());
-					stream.Write((uint16_t)node.m_nLevel);
-					stream.Write((uint32_t)node.m_entries.size());
-					m_compressor.Write(&stream);
+					node.Write(m_compressor, m_nPageMax, &stream);
 					m_pStorage->SavePage(m_cachePage);
-					node.m_nEstSize = m_compressor.EncodedSize();
-					node.m_bDirty = false;
 				}
 				catch (std::exception& exc)
 				{
-					CommonLib::CExcBase::RegenExcT("[TRTree] failed to save node {0}, level {1}", node.m_nAddr, node.m_nLevel, exc);
+					CommonLib::CExcBase::RegenExcT("[TRTree] failed to save node {0}, level {1}", node.Addr(), node.Level(), exc);
 					throw;
 				}
+			}
+
+			// Writes a changed node (it leaves the cache or is flushed). The real encoded size decides: the size
+			// estimate of a node is a heuristic (zlib can grow by more than MaxGrowth for one entry), so a node can
+			// pass the checks of the inserts and still not fit in the page. Such a node is split first when the
+			// tree may change (bCanSplit: no operation in progress), otherwise it isn't written and stays in memory.
+			// Returns true if the node was written; false - not written (split: the tree changed, try again).
+			bool SaveDirtyNode(const TNodePtr& pNode, bool bCanSplit)
+			{
+				try
+				{
+					if (pNode->Prepare(m_compressor, m_nPageMax))
+					{
+						m_cachePage->SetAddr(pNode->Addr());
+						CommonLib::CFxMemoryWriteStream stream;
+						stream.AttachBuffer(m_cachePage->GetPayLoadData(), m_cachePage->GetSize());
+						pNode->WritePrepared(m_compressor, &stream);     // the block of this Prepare: compressed once
+						m_pStorage->SavePage(m_cachePage);
+						return true;
+					}
+
+					if (bCanSplit)
+						SplitOverflow(pNode);
+					return false;
+				}
+				catch (std::exception& exc)
+				{
+					CommonLib::CExcBase::RegenExcT("[TRTree] failed to save node {0}, level {1}", pNode->Addr(), pNode->Level(), exc);
+					throw;
+				}
+			}
+
+			// a node bigger than the page (found when it was written): split by the path from the root
+			void SplitOverflow(const TNodePtr& pNode)
+			{
+				std::vector<TNodePtr> path;
+				if (pNode == m_pRoot)
+					path.push_back(m_pRoot);
+				else if (pNode->Empty() || !FindPath(m_pRoot, pNode->Addr(), pNode->Level(), pNode->Mbr(), path))
+					throw CommonLib::CExcBase("[TRTree] node {0} of level {1} isn't in the tree", pNode->Addr(), pNode->Level());
+
+				PropagateUp(path, path.size() - 1, nullptr);     // split (no forced reinsert), the rects above
+			}
+
+			// the path from pFrom to the node nAddr of nLevel with the MBR mbr (the rect of a node in its parent
+			// is its MBR, so the node is below the children that contain it)
+			bool FindPath(const TNodePtr& pFrom, int64_t nAddr, uint32_t nLevel, const TRect& mbr, std::vector<TNodePtr>& path)
+			{
+				path.push_back(pFrom);
+				if (pFrom->Addr() == nAddr)
+					return true;
+
+				if (pFrom->Level() > nLevel)
+				{
+					std::vector<int64_t> children;
+					Inner(pFrom).ContainingChildren(mbr, children);
+					for (int64_t nChild : children)
+					{
+						if (nChild == nAddr || pFrom->Level() - 1 > nLevel)
+						{
+							if (FindPath(GetNode(nChild), nAddr, nLevel, mbr, path))
+								return true;
+						}
+					}
+				}
+				path.pop_back();
+				return false;
 			}
 
 			TNodePtr LoadNode(int64_t nAddr)
@@ -432,14 +474,10 @@ namespace bptreedb
 					CommonLib::CReadMemoryStream stream;
 					stream.AttachBuffer(m_cachePage->GetPayLoadData(), m_cachePage->GetSize());
 
-					uint32_t nLevel = stream.Readintu16();
-					uint32_t nCount = stream.ReadIntu32();
-					if (nLevel >= MaxLevels || nCount > m_params.m_nMaxCount)
-						throw CommonLib::CExcBase("wrong node header, level {0}, count {1}", nLevel, nCount);
-
-					TNodePtr pNode = std::make_shared<TNode>(nAddr, nLevel);
-					m_compressor.Read(nCount, pNode->m_entries, &stream);
-					pNode->m_nEstSize = m_compressor.EncodedSize();
+					uint32_t nLevel = 0, nCount = 0;
+					TNode::ReadHead(&stream, MaxLevels, m_params.m_nMaxCount, nLevel, nCount);
+					TNodePtr pNode = CreateNode(nAddr, nLevel);
+					pNode->ReadEntries(m_compressor, nCount, &stream);
 					return pNode;
 				}
 				catch (std::exception& exc)
@@ -482,6 +520,7 @@ namespace bptreedb
 			//------------------------------------------------------------------------------------------
 			// node cache (LRU). Nodes leave the cache only in CheckCache, called when no operation that
 			// changes the tree is in progress, so the nodes of a path stay the cached ones.
+			// The root isn't in the cache: it is m_pRoot (a root that changes its kind is a new object).
 
 			TNodePtr GetNode(int64_t nAddr)
 			{
@@ -502,38 +541,51 @@ namespace bptreedb
 
 			void AddToCache(const TNodePtr& pNode)
 			{
-				m_lru.push_front(pNode->m_nAddr);
-				m_cache[pNode->m_nAddr] = SCacheItem{ pNode, m_lru.begin() };
+				m_lru.push_front(pNode->Addr());
+				m_cache[pNode->Addr()] = SCacheItem{ pNode, m_lru.begin() };
 			}
 
 			TNodePtr NewNode(uint32_t nLevel)
 			{
-				TNodePtr pNode = std::make_shared<TNode>(m_pStorage->GetNewFilePageAddr(), nLevel);
-				pNode->m_bDirty = true;
+				TNodePtr pNode = CreateNode(m_pStorage->GetNewFilePageAddr(), nLevel);
+				pNode->SetDirty(true);
 				AddToCache(pNode);
 				return pNode;
 			}
 
 			void DeleteNode(const TNodePtr& pNode)
 			{
-				auto it = m_cache.find(pNode->m_nAddr);
+				auto it = m_cache.find(pNode->Addr());
 				if (it != m_cache.end())
 				{
 					m_lru.erase(it->second.m_lru);
 					m_cache.erase(it);
 				}
-				pNode->m_bDirty = false;
-				m_pStorage->DropFilePage(pNode->m_nAddr);
+				pNode->SetDirty(false);
+				m_pStorage->DropFilePage(pNode->Addr());
 			}
 
-			void CheckCache()
+			// evicts the least recently used nodes over the cache size; the changed ones are written.
+			// bCanSplit: no operation is in progress, a node bigger than the page is split (SaveDirtyNode);
+			// otherwise (a search) such a node stays in the cache until the next insert / remove / Flush.
+			void CheckCache(bool bCanSplit = true)
 			{
-				while (m_cache.size() > m_nCacheSize && !m_lru.empty())
+				size_t nKept = 0;
+				while (m_cache.size() > m_nCacheSize + nKept && !m_lru.empty())
 				{
 					int64_t nAddr = m_lru.back();
 					auto it = m_cache.find(nAddr);
-					if (it->second.m_pNode->m_bDirty)
-						SaveNode(*it->second.m_pNode);
+					TNodePtr pNode = it->second.m_pNode;
+					if (pNode->IsDirty() && !SaveDirtyNode(pNode, bCanSplit))
+					{
+						if (!bCanSplit)
+						{
+							m_lru.splice(m_lru.begin(), m_lru, it->second.m_lru);     // keep it
+							if (++nKept >= m_cache.size())
+								break;
+						}
+						continue;    // split: the node changed, look at the cache again
+					}
 					m_lru.pop_back();
 					m_cache.erase(it);
 				}
@@ -547,44 +599,20 @@ namespace bptreedb
 			{
 				TNodePtr pNode = m_pRoot;
 				path.push_back(pNode);
-				while (pNode->m_nLevel > nLevel)
+				while (pNode->Level() > nLevel)
 				{
-					if (pNode->m_entries.empty())
-						throw CommonLib::CExcBase("[TRTree] empty inner node {0}", pNode->m_nAddr);
-
-					size_t nBest = 0;
-					double dBestGrow = 0, dBestArea = 0;
-					for (size_t i = 0; i < pNode->m_entries.size(); ++i)
-					{
-						const TRect& r = pNode->m_entries[i].m_rect;
-						double dArea = RectMath::Area(r);
-						double dGrow = RectMath::Area(RectMath::Union(r, rect)) - dArea;
-						if (i == 0 || dGrow < dBestGrow || (dGrow == dBestGrow && dArea < dBestArea))
-						{
-							nBest = i;
-							dBestGrow = dGrow;
-							dBestArea = dArea;
-						}
-					}
-
-					pNode = GetNode(pNode->m_entries[nBest].m_nValue);
+					const TInnerNode& inner = Inner(pNode);
+					pNode = GetNode(inner.ChildAddr(inner.ChooseSubtree(rect)));
 					path.push_back(pNode);
 				}
 			}
 
-			// inserts an entry into a node of nLevel (0 - leaf entry, > 0 - a subtree of level nLevel - 1)
+			// inserts an entry into a node of nLevel (0 - a leaf entry, > 0 - a subtree of level nLevel - 1);
+			// the tree is at least that high (see ReinsertSubtree)
 			void InsertEntry(const TEntry& entry, uint32_t nLevel, std::vector<bool>& reinserted)
 			{
-				if (nLevel > m_pRoot->m_nLevel)
-				{
-					// a subtree from a dissolved node is higher than the tree now: insert its entries
-					TNodePtr pChild = GetNode(entry.m_nValue);
-					std::vector<TEntry> entries = pChild->m_entries;
-					DeleteNode(pChild);
-					for (const TEntry& e : entries)
-						InsertEntry(e, nLevel - 1, reinserted);
-					return;
-				}
+				if (nLevel > m_pRoot->Level())
+					throw CommonLib::CExcBase("[TRTree] an entry of level {0} in a tree of height {1}", nLevel, m_pRoot->Level() + 1);
 
 				std::vector<TNodePtr> path;
 				ChooseSubtree(entry.m_rect, nLevel, path);
@@ -601,14 +629,14 @@ namespace bptreedb
 					TNodePtr pNode = path[j];
 					if (!Fits(*pNode))
 					{
-						if (j != 0 && pReinserted != nullptr && !(*pReinserted)[pNode->m_nLevel])
+						if (j != 0 && pReinserted != nullptr && !(*pReinserted)[pNode->Level()])
 						{
-							(*pReinserted)[pNode->m_nLevel] = true;
-							std::vector<TEntry> removed;
-							TakeFarthest(*pNode, removed);
+							(*pReinserted)[pNode->Level()] = true;
+							TEntries removed;
+							pNode->TakeFarthest(m_params.m_dReinsert, removed);
 							PropagateUp(path, j, nullptr);       // the node fits now, shrink the rects above
 							for (const TEntry& e : removed)
-								InsertEntry(e, pNode->m_nLevel, *pReinserted);
+								InsertEntry(e, pNode->Level(), *pReinserted);
 							return;
 						}
 
@@ -619,160 +647,50 @@ namespace bptreedb
 						}
 
 						TNodePtr pNew = Split(pNode);
-						TNodePtr pParent = path[j - 1];
-						pParent->SetRect(pParent->FindChild(pNode->m_nAddr), pNode->Mbr());
-						pParent->Add(TEntry(pNew->Mbr(), pNew->m_nAddr));
+						TInnerNode& parent = Inner(path[j - 1]);
+						parent.SetRect(parent.FindChild(pNode->Addr()), pNode->Mbr());
+						parent.Add(TEntry(pNew->Mbr(), pNew->Addr()));
 						continue;
 					}
 
 					if (j == 0)
 						return;
 
-					TNodePtr pParent = path[j - 1];
-					int32_t nChild = pParent->FindChild(pNode->m_nAddr);
+					TInnerNode& parent = Inner(path[j - 1]);
+					int32_t nChild = parent.FindChild(pNode->Addr());
 					TRect mbr = pNode->Mbr();
-					if (pParent->m_entries[nChild].m_rect == mbr)
+					if (parent.Entry(nChild).m_rect == mbr)
 						return;          // nothing changes above
-					pParent->SetRect(nChild, mbr);
+					parent.SetRect(nChild, mbr);
 				}
-			}
-
-			// R*: removes the part of the entries farthest from the center of the node; closest first
-			void TakeFarthest(TNode& node, std::vector<TEntry>& removed)
-			{
-				size_t n = node.m_entries.size();
-				size_t p = std::max<size_t>(1, (size_t)(n * m_params.m_dReinsert));
-				TRect center = node.Mbr();
-
-				std::vector<std::pair<double, size_t>> dist(n);
-				for (size_t i = 0; i < n; ++i)
-					dist[i] = std::make_pair(RectMath::CenterDist2(node.m_entries[i].m_rect, center), i);
-				std::sort(dist.begin(), dist.end(), [](const std::pair<double, size_t>& a, const std::pair<double, size_t>& b) { return a.first > b.first; });
-
-				std::vector<bool> take(n, false);
-				for (size_t i = 0; i < p; ++i)
-					take[dist[i].second] = true;
-
-				for (size_t i = p; i-- > 0; )
-					removed.push_back(node.m_entries[dist[i].second]);
-
-				std::vector<TEntry> keep;
-				keep.reserve(n - p);
-				for (size_t i = 0; i < n; ++i)
-					if (!take[i])
-						keep.push_back(node.m_entries[i]);
-				node.Reset(std::move(keep));
 			}
 
 			// R* split: pNode keeps the first group, the second goes to a new node of the same level
 			TNodePtr Split(const TNodePtr& pNode)
 			{
-				std::vector<TEntry>& entries = pNode->m_entries;
-				size_t n = entries.size();
-				if (n < 2)
-					throw CommonLib::CExcBase("[TRTree] one entry doesn't fit in a node");
-
-				size_t m = std::max<size_t>(1, (size_t)(n * m_params.m_dSplitMin));
-				if (m * 2 > n)
-					m = n / 2;
-
-				// sorts: axis 0 - x, 1 - y; by min (then max) and by max (then min)
-				auto sortBy = [](std::vector<TEntry>& v, int axis, bool byMax)
-				{
-					std::sort(v.begin(), v.end(), [axis, byMax](const TEntry& a, const TEntry& b)
-					{
-						double a1 = axis == 0 ? (double)(byMax ? a.m_rect.m_maxX : a.m_rect.m_minX) : (double)(byMax ? a.m_rect.m_maxY : a.m_rect.m_minY);
-						double b1 = axis == 0 ? (double)(byMax ? b.m_rect.m_maxX : b.m_rect.m_minX) : (double)(byMax ? b.m_rect.m_maxY : b.m_rect.m_minY);
-						if (a1 != b1)
-							return a1 < b1;
-						double a2 = axis == 0 ? (double)(byMax ? a.m_rect.m_minX : a.m_rect.m_maxX) : (double)(byMax ? a.m_rect.m_minY : a.m_rect.m_maxY);
-						double b2 = axis == 0 ? (double)(byMax ? b.m_rect.m_minX : b.m_rect.m_maxX) : (double)(byMax ? b.m_rect.m_minY : b.m_rect.m_maxY);
-						return a2 < b2;
-					});
-				};
-
-				std::vector<TRect> prefix(n), suffix(n);
-				auto calcBounds = [&](const std::vector<TEntry>& v)
-				{
-					prefix[0] = v[0].m_rect;
-					for (size_t i = 1; i < n; ++i)
-						prefix[i] = RectMath::Union(prefix[i - 1], v[i].m_rect);
-					suffix[n - 1] = v[n - 1].m_rect;
-					for (size_t i = n - 1; i-- > 0; )
-						suffix[i] = RectMath::Union(suffix[i + 1], v[i].m_rect);
-				};
-
-				// choose the axis: the least sum of the margins of all distributions
-				std::vector<TEntry> sorted = entries;
-				int nBestAxis = 0;
-				double dBestMargin = 0;
-				for (int axis = 0; axis < 2; ++axis)
-				{
-					double dMargin = 0;
-					for (int byMax = 0; byMax < 2; ++byMax)
-					{
-						sortBy(sorted, axis, byMax != 0);
-						calcBounds(sorted);
-						for (size_t k = m; k <= n - m; ++k)
-							dMargin += RectMath::Margin(prefix[k - 1]) + RectMath::Margin(suffix[k]);
-					}
-					if (axis == 0 || dMargin < dBestMargin)
-					{
-						nBestAxis = axis;
-						dBestMargin = dMargin;
-					}
-				}
-
-				// choose the distribution on the axis: the least overlap, then the least area
-				bool bBestByMax = false;
-				size_t nBestK = m;
-				double dBestOverlap = 0, dBestArea = 0;
-				bool bFirst = true;
-				for (int byMax = 0; byMax < 2; ++byMax)
-				{
-					sortBy(sorted, nBestAxis, byMax != 0);
-					calcBounds(sorted);
-					for (size_t k = m; k <= n - m; ++k)
-					{
-						double dOverlap = RectMath::OverlapArea(prefix[k - 1], suffix[k]);
-						double dArea = RectMath::Area(prefix[k - 1]) + RectMath::Area(suffix[k]);
-						if (bFirst || dOverlap < dBestOverlap || (dOverlap == dBestOverlap && dArea < dBestArea))
-						{
-							bFirst = false;
-							bBestByMax = byMax != 0;
-							nBestK = k;
-							dBestOverlap = dOverlap;
-							dBestArea = dArea;
-						}
-					}
-				}
-
-				sortBy(sorted, nBestAxis, bBestByMax);
-				TNodePtr pNew = NewNode(pNode->m_nLevel);
-				pNew->Reset(std::vector<TEntry>(sorted.begin() + nBestK, sorted.end()));
-				pNode->Reset(std::vector<TEntry>(sorted.begin(), sorted.begin() + nBestK));
+				TNodePtr pNew = NewNode(pNode->Level());
+				pNew->Reset(pNode->SplitOff(m_params.m_dSplitMin));
 
 				if (!Fits(*pNode) || !Fits(*pNew))
-					throw CommonLib::CExcBase("[TRTree] split of node {0}: a half doesn't fit ({1} + {2} entries)", pNode->m_nAddr, (uint64_t)entries.size(), (uint64_t)pNew->m_entries.size());
-
+					throw CommonLib::CExcBase("[TRTree] split of node {0}: a half doesn't fit ({1} + {2} entries)", pNode->Addr(), (uint64_t)pNode->Count(), (uint64_t)pNew->Count());
 				return pNew;
 			}
 
 			// the root keeps its address: its entries go to two new nodes, the root becomes their parent
 			void SplitRoot()
 			{
-				if (m_pRoot->m_nLevel + 1 >= MaxLevels)
+				if (m_pRoot->Level() + 1 >= MaxLevels)
 					throw CommonLib::CExcBase("[TRTree] too many levels");
 
-				TNodePtr pLeft = NewNode(m_pRoot->m_nLevel);
-				pLeft->Reset(std::move(m_pRoot->m_entries));
+				TNodePtr pLeft = NewNode(m_pRoot->Level());
+				pLeft->Reset(m_pRoot->TakeEntries());
 				TNodePtr pRight = Split(pLeft);
 
-				std::vector<TEntry> rootEntries;
-				rootEntries.push_back(TEntry(pLeft->Mbr(), pLeft->m_nAddr));
-				rootEntries.push_back(TEntry(pRight->Mbr(), pRight->m_nAddr));
+				TEntries rootEntries;
+				rootEntries.push_back(TEntry(pLeft->Mbr(), pLeft->Addr()));
+				rootEntries.push_back(TEntry(pRight->Mbr(), pRight->Addr()));
+				m_pRoot = CreateNode(m_nRootAddr, m_pRoot->Level() + 1);
 				m_pRoot->Reset(std::move(rootEntries));
-				m_pRoot->m_nLevel += 1;
 			}
 
 			//------------------------------------------------------------------------------------------
@@ -781,24 +699,19 @@ namespace bptreedb
 			bool FindLeaf(const TNodePtr& pNode, const TRect& rect, int64_t nValue, std::vector<TNodePtr>& path, int32_t& nIndex)
 			{
 				path.push_back(pNode);
-				if (pNode->m_nLevel == 0)
+				if (pNode->IsLeaf())
 				{
-					for (size_t i = 0; i < pNode->m_entries.size(); ++i)
-					{
-						const TEntry& e = pNode->m_entries[i];
-						if (e.m_nValue == nValue && e.m_rect == rect)
-						{
-							nIndex = (int32_t)i;
-							return true;
-						}
-					}
+					nIndex = Leaf(pNode).Find(rect, nValue);
+					if (nIndex >= 0)
+						return true;
 				}
 				else
 				{
-					for (size_t i = 0; i < pNode->m_entries.size(); ++i)
+					std::vector<int64_t> children;
+					Inner(pNode).ContainingChildren(rect, children);
+					for (int64_t nChild : children)
 					{
-						if (RectMath::Contains(pNode->m_entries[i].m_rect, rect) &&
-							FindLeaf(GetNode(pNode->m_entries[i].m_nValue), rect, nValue, path, nIndex))
+						if (FindLeaf(GetNode(nChild), rect, nValue, path, nIndex))
 							return true;
 					}
 				}
@@ -814,24 +727,24 @@ namespace bptreedb
 				for (size_t j = path.size() - 1; j > 0; --j)
 				{
 					TNodePtr pNode = path[j];
-					TNodePtr pParent = path[j - 1];
-					int32_t nChild = pParent->FindChild(pNode->m_nAddr);
+					TInnerNode& parent = Inner(path[j - 1]);
+					int32_t nChild = parent.FindChild(pNode->Addr());
 
-					if (pNode->m_entries.size() < m_nMinCount)
+					if (pNode->Count() < m_nMinCount)
 					{
-						for (const TEntry& e : pNode->m_entries)
-							orphans.emplace_back(e, pNode->m_nLevel);
-						pParent->Erase(nChild);
+						for (const TEntry& e : pNode->Entries())
+							orphans.emplace_back(e, pNode->Level());
+						parent.Erase(nChild);
 						DeleteNode(pNode);
 					}
 					else
-						pParent->SetRect(nChild, pNode->Mbr());
+						parent.SetRect(nChild, pNode->Mbr());
 				}
 
-				if (m_pRoot->m_nLevel != 0 && m_pRoot->m_entries.empty())
+				if (!m_pRoot->IsLeaf() && m_pRoot->Empty())
 				{
-					m_pRoot->m_nLevel = 0;      // everything below was dissolved
-					m_pRoot->Reset(std::vector<TEntry>());
+					m_pRoot = CreateNode(m_nRootAddr, 0);      // everything below was dissolved
+					m_pRoot->SetDirty(true);
 				}
 
 				// higher subtrees first: they don't depend on the leaves
@@ -839,17 +752,38 @@ namespace bptreedb
 				for (const auto& orphan : orphans)
 				{
 					std::vector<bool> reinserted(MaxLevels, false);
-					InsertEntry(orphan.first, orphan.second, reinserted);
+					if (orphan.second > m_pRoot->Level())
+						ReinsertSubtree(orphan.first, orphan.second, reinserted);
+					else
+						InsertEntry(orphan.first, orphan.second, reinserted);
 				}
 
 				// a root with one child: the child becomes the root
-				while (m_pRoot->m_nLevel != 0 && m_pRoot->m_entries.size() == 1)
+				while (!m_pRoot->IsLeaf() && m_pRoot->Count() == 1)
 				{
-					TNodePtr pChild = GetNode(m_pRoot->m_entries[0].m_nValue);
-					m_pRoot->Reset(std::vector<TEntry>(pChild->m_entries));
-					m_pRoot->m_nLevel = pChild->m_nLevel;
+					TNodePtr pChild = GetNode(Inner(m_pRoot).ChildAddr(0));
+					TNodePtr pRoot = CreateNode(m_nRootAddr, pChild->Level());
+					pRoot->Reset(pChild->TakeEntries());
 					DeleteNode(pChild);
+					m_pRoot = pRoot;
 				}
+			}
+
+			// an orphan subtree (entry of a node of nLevel) higher than the tree after the condense: its top node
+			// is taken apart, its entries go one level lower (recursively) and its page is freed
+			void ReinsertSubtree(const TEntry& entry, uint32_t nLevel, std::vector<bool>& reinserted)
+			{
+				if (nLevel <= m_pRoot->Level())
+				{
+					InsertEntry(entry, nLevel, reinserted);
+					return;
+				}
+
+				TNodePtr pChild = GetNode(entry.m_nValue);
+				TEntries entries = pChild->TakeEntries();
+				DeleteNode(pChild);
+				for (const TEntry& e : entries)
+					ReinsertSubtree(e, nLevel - 1, reinserted);
 			}
 
 			//------------------------------------------------------------------------------------------
@@ -858,20 +792,9 @@ namespace bptreedb
 			// returns true if func asked to stop
 			bool SearchNode(const TNodePtr& pNode, const TRect& rect, const TSearchCallback& func, std::vector<int64_t>& stack, uint64_t& nFound)
 			{
-				for (const TEntry& e : pNode->m_entries)
-				{
-					if (!RectMath::Intersects(e.m_rect, rect))
-						continue;
-
-					if (pNode->m_nLevel == 0)
-					{
-						++nFound;
-						if (!func(e.m_rect, e.m_nValue))
-							return true;
-					}
-					else
-						stack.push_back(e.m_nValue);
-				}
+				if (pNode->IsLeaf())
+					return Leaf(pNode).Search(rect, func, nFound);
+				Inner(pNode).IntersectingChildren(rect, stack);
 				return false;
 			}
 
@@ -879,7 +802,7 @@ namespace bptreedb
 			// bulk load
 
 			// the most entries from nStart (up to nEnd) that fit in a node of nLimit bytes
-			size_t FitCount(const std::vector<TEntry>& v, size_t nStart, size_t nEnd, uint32_t nLimit)
+			size_t FitCount(const TEntries& v, size_t nStart, size_t nEnd, uint32_t nLimit)
 			{
 				size_t nMax = std::min<size_t>(nEnd - nStart, m_params.m_nMaxCount);
 				const TEntry* p = v.data() + nStart;
@@ -901,7 +824,7 @@ namespace bptreedb
 			}
 
 			// STR: packs the entries of a level into nodes, upper gets an entry per node
-			void PackLevel(std::vector<TEntry>& level, uint32_t nLevel, uint32_t nLimit, std::vector<TEntry>& upper)
+			void PackLevel(TEntries& level, uint32_t nLevel, uint32_t nLimit, TEntries& upper)
 			{
 				auto byX = [](const TEntry& a, const TEntry& b) { return RectMath::CenterX(a.m_rect) < RectMath::CenterX(b.m_rect); };
 				auto byY = [](const TEntry& a, const TEntry& b) { return RectMath::CenterY(a.m_rect) < RectMath::CenterY(b.m_rect); };
@@ -915,7 +838,7 @@ namespace bptreedb
 				size_t nSlices = (size_t)std::ceil(std::sqrt((double)nNodes));
 				size_t nSliceSize = nSlices * nCap;
 
-				TNode node(-1, nLevel);
+				TNodePtr pNode = CreateNode(-1, nLevel);
 				for (size_t nSlice = 0; nSlice < n; nSlice += nSliceSize)
 				{
 					size_t nSliceEnd = (std::min)(n, nSlice + nSliceSize);
@@ -924,10 +847,10 @@ namespace bptreedb
 					for (size_t i = nSlice; i < nSliceEnd; )
 					{
 						size_t k = FitCount(level, i, nSliceEnd, nLimit);
-						node.m_nAddr = m_pStorage->GetNewFilePageAddr();
-						node.Reset(std::vector<TEntry>(level.begin() + i, level.begin() + i + k));
-						SaveNode(node);           // written at once, not cached
-						upper.push_back(TEntry(node.Mbr(), node.m_nAddr));
+						pNode->SetAddr(m_pStorage->GetNewFilePageAddr());
+						pNode->Reset(TEntries(level.begin() + i, level.begin() + i + k));
+						SaveNode(*pNode);           // written at once, not cached
+						upper.push_back(TEntry(pNode->Mbr(), pNode->Addr()));
 						i += k;
 					}
 				}
@@ -938,30 +861,28 @@ namespace bptreedb
 
 			void CheckNode(const TNodePtr& pNode, const TRect* pParentRect, uint64_t& nEntries)
 			{
-				if (pNode != m_pRoot && pNode->m_entries.empty())
-					throw CommonLib::CExcBase("[TRTree] check: empty node {0}", pNode->m_nAddr);
-				if (!pNode->m_entries.empty() && pParentRect != nullptr && !(pNode->Mbr() == *pParentRect))
-					throw CommonLib::CExcBase("[TRTree] check: the parent rect of node {0} isn't its MBR", pNode->m_nAddr);
-				if (!m_compressor.Prepare(pNode->m_entries.data(), pNode->m_entries.size(), m_nPageMax))
-					throw CommonLib::CExcBase("[TRTree] check: node {0} doesn't fit", pNode->m_nAddr);
-				if (pNode->m_nEstSize != 0 && m_compressor.EncodedSize() > pNode->m_nEstSize)
-					throw CommonLib::CExcBase("[TRTree] check: node {0} encoded size {1} is above the estimate {2}", pNode->m_nAddr, m_compressor.EncodedSize(), pNode->m_nEstSize);
+				if (pNode != m_pRoot && pNode->Empty())
+					throw CommonLib::CExcBase("[TRTree] check: empty node {0}", pNode->Addr());
+				if (!pNode->Empty() && pParentRect != nullptr && !(pNode->Mbr() == *pParentRect))
+					throw CommonLib::CExcBase("[TRTree] check: the parent rect of node {0} isn't its MBR", pNode->Addr());
+				if (!m_compressor.Prepare(pNode->Entries().data(), pNode->Count(), m_nPageMax))
+					throw CommonLib::CExcBase("[TRTree] check: node {0} doesn't fit", pNode->Addr());
 
-				if (pNode->m_nLevel == 0)
+				if (pNode->IsLeaf())
 				{
-					nEntries += pNode->m_entries.size();
+					nEntries += pNode->Count();
 					return;
 				}
 
-				std::vector<TEntry> entries = pNode->m_entries;     // the node may leave the cache below
+				TEntries entries = pNode->Entries();     // the node may leave the cache below
 				for (const TEntry& e : entries)
 				{
 					TNodePtr pChild = GetNode(e.m_nValue);
-					if (pChild->m_nLevel + 1 != pNode->m_nLevel)
-						throw CommonLib::CExcBase("[TRTree] check: node {0} level {1}, parent level {2}", pChild->m_nAddr, pChild->m_nLevel, pNode->m_nLevel);
+					if (pChild->Level() + 1 != pNode->Level())
+						throw CommonLib::CExcBase("[TRTree] check: node {0} level {1}, parent level {2}", pChild->Addr(), pChild->Level(), pNode->Level());
 					CheckNode(pChild, &e.m_rect, nEntries);
 				}
-				CheckCache();
+				CheckCache(false);
 			}
 
 		private:

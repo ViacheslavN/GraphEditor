@@ -91,7 +91,11 @@ namespace bptreedb
 					m_KeyMemSet.insert(it, key);
 				}
 			}
+			m_bLastInsertAppend = (uint32_t)nIndex + 1 == (uint32_t)m_KeyMemSet.size();
 		}
+
+		// the last insert added the greatest key of the node (the min split strategy splits such nodes only)
+		bool LastInsertAppend() const { return m_bLastInsertAppend; }
 
 		template<class TComp>
 		void insert(TComp& comp, const TKey& key, int nInsertLeafIndex = -1)
@@ -414,6 +418,7 @@ namespace bptreedb
 		TLink m_nNext;
 		TLink m_nPrev;
 		uint32_t m_nPageSize;
+		bool m_bLastInsertAppend{ false };
 	};
 
 	template<typename _TKey, class _TCompressor>

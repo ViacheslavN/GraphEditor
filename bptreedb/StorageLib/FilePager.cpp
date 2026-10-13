@@ -116,6 +116,11 @@ namespace bptreedb
 			return m_ptrIO->GetStorage();
 		}
 
+		IStorageIOPtr CFilePager::GetStorageIO() const
+		{
+			return m_ptrIO;
+		}
+
 		uint32_t CFilePager::GetPageSize() const
 		{
 			return m_ptrIO->GetPageSize();
