@@ -11,6 +11,16 @@
 
 namespace bptreedb
 {
+	// a key in an error message: numbers as they are, other key types (strings, Z-order keys) as "?"
+	template <class TKey>
+	std::string KeyToStr(const TKey& key)
+	{
+		if constexpr (std::is_arithmetic<TKey>::value)
+			return CommonLib::str_utils::AStrFrom(key);
+		else
+			return "?";
+	}
+
 	template <	class _TKey, class _TComp, class _TStorage,
 		class _TInnerNode,
 		class _TLeafNode,
@@ -33,10 +43,9 @@ namespace bptreedb
 
  
 
-		TBPlusTreeSetBase(int64_t nPageBTreeInfo, std::shared_ptr<TStorage> pStorage, CommonLib::IAllocPtr pAlloc, uint32_t nCacheize, uint32_t nNodesPageSize, bool bMulti = false, bool bMinSplit = false) :
+		TBPlusTreeSetBase(int64_t nPageBTreeInfo, std::shared_ptr<TStorage> pStorage, CommonLib::IAllocPtr pAlloc, uint32_t nCacheize, uint32_t nNodesPageSize, bool bMinSplit = false) :
 			m_nPageBTreeInfo(nPageBTreeInfo), m_pStorage(pStorage),  m_nCacheSize(nCacheize)
 			, m_nRootAddr(-1)
-			, m_bMulti(bMulti)
 			, m_NodeCache(pAlloc)
 			, m_bMinSplit(bMinSplit)
 			, m_nNodePageSize(nNodesPageSize)
@@ -82,6 +91,11 @@ namespace bptreedb
 
 		template<class TIterator, class TComparator>
 		TIterator lower_bound(const TComparator& comp, const TKey& key, TIterator *pFromIterator = NULL, bool bFindNext = true);
+
+	protected:
+		template<class TIterator, class TLeafBound, class TInnerBound>
+		TIterator bound(const TKey& key, TLeafBound leafBound, TInnerBound innerBound);
+	public:
 
 
 
@@ -139,13 +153,13 @@ namespace bptreedb
 		TBPTreeNodePtr PeekNodeForCheck(int64_t nAddr);
 
 		template <class TNodeHolder>
-		std::shared_ptr<TNodeHolder> LoadNode(CommonLib::IMemoryReadStream *pStream, TAllocsSetPtr pAllocsSet, bool bMulti, uint32_t nPageSize, int64_t nAddr, TCompressorParamsBasePtr pCompressParams, CBPTreeContext *pContext)
+		std::shared_ptr<TNodeHolder> LoadNode(CommonLib::IMemoryReadStream *pStream, TAllocsSetPtr pAllocsSet, uint32_t nPageSize, int64_t nAddr, TCompressorParamsBasePtr pCompressParams, CBPTreeContext *pContext)
 		{
 			try
 			{
 				bool isLeaf = pStream->ReadBool();
 
-				std::shared_ptr<TNodeHolder> pNode(new TNodeHolder(pAllocsSet, bMulti, nPageSize, isLeaf, nAddr, pCompressParams));
+				std::shared_ptr<TNodeHolder> pNode(new TNodeHolder(pAllocsSet, nPageSize, isLeaf, nAddr, pCompressParams));
 				pNode->Load(pStream, pContext);
 
 				return pNode;
@@ -195,7 +209,6 @@ namespace bptreedb
 		TAllocsSetPtr m_pAllocsSet;
 		std::shared_ptr<TStorage> m_pStorage;
 		uint32_t m_nCacheSize{ 0 };
-		bool m_bMulti{ false };
 		bool m_bMinSplit{ false };
 		bool m_bLockRemoveItemFromCache{ false };
 		CommonLib::TPrefCounterPtr m_pBPTreePerfCounter;

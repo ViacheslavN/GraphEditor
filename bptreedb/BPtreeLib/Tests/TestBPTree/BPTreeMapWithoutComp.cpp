@@ -59,7 +59,7 @@ uint64_t CreateBPTreeMap(CommonLib::IAllocPtr pAlloc, uint32_t nPageSize, TStora
 	{
 		CommonLib::CLogInfo info(Log, "CreateBPTreeMap");
 
-		TBPTree tree(-1, pStorage, pAlloc, 10, nPageSize, false, minSplit);
+		TBPTree tree(-1, pStorage, pAlloc, 10, nPageSize, minSplit);
 
 
 		int nMaxCount = getenv("MAXCOUNT") ? atoi(getenv("MAXCOUNT")) : 8192 * 8;
@@ -130,7 +130,7 @@ void InsertBPTreeMap(CommonLib::IAllocPtr pAlloc, uint32_t nPageSize, CommonLib:
 
 		CommonLib::CLogInfo info(Log, "InsertBPTreeMap count: {0}", nCount);
 
-		TBPTree tree(nBPTreePage, pStorage, pAlloc, nNodeCache, nPageSize, false, minSplit);
+		TBPTree tree(nBPTreePage, pStorage, pAlloc, nNodeCache, nPageSize, minSplit);
 		tree.SetBPTreePerfCounter(pPerf);
 
 		for (int64_t i = nBegin; i < nEnd; i++)
@@ -185,7 +185,7 @@ void BulkLoadBPTreeMap(CommonLib::IAllocPtr pAlloc, uint32_t nPageSize, CommonLi
 			}
 		} source{ data };
 
-		TBPTree tree(nBPTreePage, pStorage, pAlloc, nNodeCache, nPageSize, false, minSplit);
+		TBPTree tree(nBPTreePage, pStorage, pAlloc, nNodeCache, nPageSize, minSplit);
 		tree.SetBPTreePerfCounter(pPerf);
 		uint64_t nLoaded = tree.BulkLoad(source);
 		auto t2 = std::chrono::steady_clock::now();
@@ -217,7 +217,7 @@ void FindBPTreeMap(CommonLib::IAllocPtr pAlloc, uint32_t nPageSize, CommonLib::T
 			nStep = 1;
 
 		CommonLib::CLogInfo info(Log, "FindBPTreeMap count: {0}, must exist: {1}", nCount, std::string(bMustExist ? "true" : "false"));
-		TBPTree tree(nBPTreePage, pStorage, pAlloc, 10, nPageSize, false, false);
+		TBPTree tree(nBPTreePage, pStorage, pAlloc, 10, nPageSize, false);
 		tree.SetBPTreePerfCounter(pPerf);
 
 		for (int64_t i = nBegin; i < nEnd; ++i)
@@ -264,7 +264,7 @@ void FindMissingBPTreeMap(CommonLib::IAllocPtr pAlloc, uint32_t nPageSize, Commo
 	try
 	{
 		CommonLib::CLogInfo info(Log, "FindMissingBPTreeMap count: {0}", nCount);
-		TBPTree tree(nBPTreePage, pStorage, pAlloc, 10, nPageSize, false, false);
+		TBPTree tree(nBPTreePage, pStorage, pAlloc, 10, nPageSize, false);
 		tree.SetBPTreePerfCounter(pPerf);
 
 		for (int64_t i = 0; i < nCount; ++i)
@@ -299,7 +299,7 @@ void DeleteFromBPTreeMap(CommonLib::IAllocPtr pAlloc, uint32_t nPageSize, Common
 
 		CommonLib::CLogInfo info(Log, "DeleteFromBPTreeMap count: {0}, must exist: {1}", nCount, std::string(bMustExist ? "true" : "false"));
 
-		TBPTree tree(nBPTreePage, pStorage, pAlloc, nNodeCache, nPageSize, false, minSplit);
+		TBPTree tree(nBPTreePage, pStorage, pAlloc, nNodeCache, nPageSize, minSplit);
 		tree.SetBPTreePerfCounter(pPerf);
 
 		for (int64_t i = nBegin; i < nEnd; ++i)
@@ -349,7 +349,7 @@ uint64_t TravelTree(CommonLib::IAllocPtr pAlloc, uint32_t nPageSize, CommonLib::
 
 		CommonLib::CLogInfo info(Log, "TravelTree expected: {0}", (uint64_t)expected.size());
 
-		TBPTree tree(nBPTreePage, pStorage, pAlloc, 10, nPageSize, false, false);
+		TBPTree tree(nBPTreePage, pStorage, pAlloc, 10, nPageSize, false);
 		tree.SetBPTreePerfCounter(pPerf);
 
 		auto it = tree.begin();
@@ -396,7 +396,7 @@ void InfoBPTree(CommonLib::IAllocPtr pAlloc, uint32_t nPageSize, CommonLib::TPre
 	Log.Info("InfoBPTree");
 
 
-	TBPTree tree(nBPTreePage, pStorage, pAlloc, 10, nPageSize, false, false);
+	TBPTree tree(nBPTreePage, pStorage, pAlloc, 10, nPageSize, false);
 	tree.SetBPTreePerfCounter(pPerf);
 
 
@@ -650,7 +650,7 @@ int TestBPMapSignPattern(uint32_t nPageSize, int64_t nCount)
 		});
 
 		runStep(false, [&](bptreedb::storage::IFilePagerPtr pager) {
-			TBPMapType tree(nBPTreePage, pager, pAlloc, 1000, nPageSize, false, true); // min split: left leaves stay full (~65K entries)
+			TBPMapType tree(nBPTreePage, pager, pAlloc, 1000, nPageSize, true); // min split: left leaves stay full (~65K entries)
 			for (int64_t i = 0; i < nCount; ++i)
 				tree.insert(i, valueOf(i));
 			tree.Flush();
@@ -658,7 +658,7 @@ int TestBPMapSignPattern(uint32_t nPageSize, int64_t nCount)
 
 		// small node cache: every leaf is decoded from disk
 		runStep(false, [&](bptreedb::storage::IFilePagerPtr pager) {
-			TBPMapType tree(nBPTreePage, pager, pAlloc, 10, nPageSize, false, false);
+			TBPMapType tree(nBPTreePage, pager, pAlloc, 10, nPageSize, false);
 			int64_t i = 0;
 			for (auto it = tree.begin(); !it.IsNull(); it.Next(), ++i)
 			{
@@ -673,7 +673,7 @@ int TestBPMapSignPattern(uint32_t nPageSize, int64_t nCount)
 
 		// remove every 3rd key (re-encodes and rebalances leaves), then check again
 		runStep(false, [&](bptreedb::storage::IFilePagerPtr pager) {
-			TBPMapType tree(nBPTreePage, pager, pAlloc, 1000, nPageSize, false, false);
+			TBPMapType tree(nBPTreePage, pager, pAlloc, 1000, nPageSize, false);
 			for (int64_t i = 0; i < nCount; i += 3)
 				if (!tree.remove(i))
 					throw CommonLib::CExcBase("Sign test: remove({0}) returned false", i);
@@ -681,7 +681,7 @@ int TestBPMapSignPattern(uint32_t nPageSize, int64_t nCount)
 		});
 
 		runStep(false, [&](bptreedb::storage::IFilePagerPtr pager) {
-			TBPMapType tree(nBPTreePage, pager, pAlloc, 10, nPageSize, false, false);
+			TBPMapType tree(nBPTreePage, pager, pAlloc, 10, nPageSize, false);
 			int64_t i = 1, n = 0;
 			for (auto it = tree.begin(); !it.IsNull(); it.Next(), ++n)
 			{

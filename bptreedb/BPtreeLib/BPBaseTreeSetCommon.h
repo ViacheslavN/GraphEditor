@@ -59,7 +59,7 @@ BPSETBASE_TYPENAME_DECLARATION::TBPTreeNodePtr BPSETBASE_DECLARATION::LoadNodeFr
 		stream.AttachBuffer(m_cachePage->GetPayLoadData(), m_cachePage->GetSize());
 
 		CommonLib::CPrefCounterHolder holder(m_pBPTreePerfCounter, eLoadNode);
-		TBPTreeNodePtr node = LoadNode<TBPTreeNode>(&stream, m_pAllocsSet, m_bMulti, GetNodePageSize(), nAddr, m_pCompressParams, &m_Context);
+		TBPTreeNodePtr node = LoadNode<TBPTreeNode>(&stream, m_pAllocsSet, GetNodePageSize(), nAddr, m_pCompressParams, &m_Context);
 
 		return node;
 	}
@@ -550,7 +550,7 @@ BPSETBASE_TYPENAME_DECLARATION::TBPTreeNodePtr BPSETBASE_DECLARATION::PeekNodeFo
 	storage::IFilePagePtr pPage = m_pStorage->ReadPage(nAddr);
 	CommonLib::CReadMemoryStream stream;
 	stream.AttachBuffer(pPage->GetPayLoadData(), pPage->GetSize());
-	return LoadNode<TBPTreeNode>(&stream, m_pAllocsSet, m_bMulti, GetNodePageSize(), nAddr, m_pCompressParams, &m_Context);
+	return LoadNode<TBPTreeNode>(&stream, m_pAllocsSet, GetNodePageSize(), nAddr, m_pCompressParams, &m_Context);
 }
 
 BPSETBASE_TEMPLATE_PARAMS
@@ -568,9 +568,9 @@ void BPSETBASE_DECLARATION::CheckSubtree(TBPTreeNodePtr pNode, const TKey* pLo, 
 		{
 			const TKey& k = pNode->Key(i);
 			if (pLo && m_comp.LE(k, *pLo))
-				throw CommonLib::CExcBase("node {0}: key {1} below the separator {2}", nAddr, i, *pLo);
+				throw CommonLib::CExcBase("node {0}: key {1} below the separator {2}", nAddr, i, KeyToStr(*pLo));
 			if (pHi && !m_comp.LE(k, *pHi))
-				throw CommonLib::CExcBase("node {0}: key {1} not below the next separator {2}", nAddr, i, *pHi);
+				throw CommonLib::CExcBase("node {0}: key {1} not below the next separator {2}", nAddr, i, KeyToStr(*pHi));
 			if (i > 0 && !m_comp.LE(pNode->Key(i - 1), k))
 				throw CommonLib::CExcBase("node {0}: keys not sorted at {1}", nAddr, i);
 		}

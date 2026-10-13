@@ -45,8 +45,8 @@ namespace bptreedb
 
 
 
-		TBPMap(int64_t nPageBTreeInfo, std::shared_ptr<TStorage> pStorage, CommonLib::IAllocPtr pAlloc, uint32_t nChacheSize, uint32_t nNodesPageSize, bool bMulti , bool bMinSplit ) :
-			TBase(nPageBTreeInfo, pStorage, pAlloc, nChacheSize, nNodesPageSize, bMulti, bMinSplit)
+		TBPMap(int64_t nPageBTreeInfo, std::shared_ptr<TStorage> pStorage, CommonLib::IAllocPtr pAlloc, uint32_t nChacheSize, uint32_t nNodesPageSize, bool bMinSplit = false) :
+			TBase(nPageBTreeInfo, pStorage, pAlloc, nChacheSize, nNodesPageSize, bMinSplit)
 		{
 
 		}
@@ -75,7 +75,7 @@ namespace bptreedb
 			try
 			{
 				
-				TBPTreeNodePtr pNode(new TBPTreeNode(this->m_pAllocsSet, this->m_bMulti, this->GetNodePageSize(), bLeaf, nAddr, this->m_pCompressParams));
+				TBPTreeNodePtr pNode(new TBPTreeNode(this->m_pAllocsSet, this->GetNodePageSize(), bLeaf, nAddr, this->m_pCompressParams));
 				return pNode;
 
 			}
@@ -236,7 +236,7 @@ namespace bptreedb
 					if (FitsInOneInnerNode(level))
 					{
 						this->m_pRoot->Clear();
-						this->m_pRoot->TransformToInner(this->m_pAllocsSet, this->m_bMulti, this->m_nNodePageSize, this->m_pCompressParams);
+						this->m_pRoot->TransformToInner(this->m_pAllocsSet, this->m_nNodePageSize, this->m_pCompressParams);
 						this->m_pRoot->SetLess(level[0].second);
 						for (size_t i = 1; i < level.size(); ++i)
 							this->m_pRoot->InsertInInnerNode(this->m_comp, level[i].first, level[i].second);

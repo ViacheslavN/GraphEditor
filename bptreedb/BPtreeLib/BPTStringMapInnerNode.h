@@ -11,7 +11,7 @@ namespace bptreedb
 			typedef BPTreeInnerNode<StringValue, _TCompressor> TBase;
 
 
-			TBPTreeStringMapInnerNode(TAllocsSetPtr pAllocsSet, bool bMulti, uint32_t nPageSize, TCompressorParamsBasePtr pParams) : TBase (pAllocsSet, bMulti, nPageSize, pParams)
+			TBPTreeStringMapInnerNode(TAllocsSetPtr pAllocsSet, uint32_t nPageSize, TCompressorParamsBasePtr pParams) : TBase (pAllocsSet, nPageSize, pParams)
 			{
 			//	m_pAllocsSet = pAllocsSet;
 			}

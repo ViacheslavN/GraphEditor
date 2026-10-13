@@ -22,7 +22,7 @@ namespace bptreedb
  
 
 	public:
-		TBPNodeHolder(TAllocsSetPtr pAllocSet, bool bMulti, uint32_t nPageSize, bool bLeaf, int64_t nAddr, TCompressorParamsBasePtr pCompressParams) :
+		TBPNodeHolder(TAllocsSetPtr pAllocSet, uint32_t nPageSize, bool bLeaf, int64_t nAddr, TCompressorParamsBasePtr pCompressParams) :
 			m_IsLeaf(bLeaf),
 			m_nAddr(nAddr)
 
@@ -30,12 +30,12 @@ namespace bptreedb
 
 			if (m_IsLeaf)
 			{
-				m_pLeafNode.reset(new TLeafNode(pAllocSet, bMulti, nPageSize - sizeof(byte_t), pCompressParams));
+				m_pLeafNode.reset(new TLeafNode(pAllocSet, nPageSize - sizeof(byte_t), pCompressParams));
 				m_pCurNode = m_pLeafNode.get();
 			}
 			else
 			{
-				m_pInnerNode.reset(new TInnerNode(pAllocSet, bMulti, nPageSize - sizeof(byte_t), pCompressParams));
+				m_pInnerNode.reset(new TInnerNode(pAllocSet, nPageSize - sizeof(byte_t), pCompressParams));
 				m_pCurNode = m_pInnerNode.get();
 			}
 
@@ -337,14 +337,14 @@ namespace bptreedb
 			return m_pLeafNode->AlignmentOf(pNode->m_pLeafNode.get(), bLeft);
 		}
 
-		void TransformToInner(TAllocsSetPtr pAllocsSet, bool bMulti, uint32_t nPageSize, TCompressorParamsBasePtr pCompressParams)
+		void TransformToInner(TAllocsSetPtr pAllocsSet, uint32_t nPageSize, TCompressorParamsBasePtr pCompressParams)
 		{
 			try
 			{
 				if (!IsLeaf())
 					throw CommonLib::CExcBase(" Node addr {0} isn't a leaf node", m_nAddr);
 
-				m_pInnerNode.reset(new TInnerNode(pAllocsSet, bMulti, nPageSize, pCompressParams));
+				m_pInnerNode.reset(new TInnerNode(pAllocsSet, nPageSize, pCompressParams));
 			//	m_pInnerNode->Init(innerComp);
 				m_IsLeaf = false;
 				m_pLeafNode.reset();
@@ -358,14 +358,14 @@ namespace bptreedb
 		}
 
 
-		void TransformToLeaf(TAllocsSetPtr pAllocsSet, bool bMulti, uint32_t nPageSize, TCompressorParamsBasePtr pCompressParams)
+		void TransformToLeaf(TAllocsSetPtr pAllocsSet, uint32_t nPageSize, TCompressorParamsBasePtr pCompressParams)
 		{
 			try
 			{
 				if (IsLeaf())
 					throw CommonLib::CExcBase(" Node addr {0} isn't a inner node", m_nAddr);
 
-				m_pLeafNode.reset(new TLeafNode(pAllocsSet, bMulti, nPageSize, pCompressParams));
+				m_pLeafNode.reset(new TLeafNode(pAllocsSet, nPageSize, pCompressParams));
 				//	m_pInnerNode->Init(innerComp);
 				m_IsLeaf = true;
 				m_pInnerNode.reset();

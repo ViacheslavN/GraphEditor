@@ -21,8 +21,8 @@ namespace bptreedb
 			typedef typename TBase::TLeafNodePtr TLeafNodePtr;
 
 	public:
-		TBPMapNodeHolder(TAllocsSetPtr pAllocsSet, bool bMulti, uint32_t nPageSize, bool bLeaf, int64_t nAddr, TCompressorParamsBasePtr pCompressParams) : 
-			TBase(pAllocsSet, bMulti, nPageSize, bLeaf, nAddr, pCompressParams)
+		TBPMapNodeHolder(TAllocsSetPtr pAllocsSet, uint32_t nPageSize, bool bLeaf, int64_t nAddr, TCompressorParamsBasePtr pCompressParams) : 
+			TBase(pAllocsSet, nPageSize, bLeaf, nAddr, pCompressParams)
 		{}
 
 

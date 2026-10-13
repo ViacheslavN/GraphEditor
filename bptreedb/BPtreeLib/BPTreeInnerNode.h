@@ -28,8 +28,8 @@ public:
 	typedef TDeVector<TLink, TLinkAlloc> TLinkMemSet;
 
 
-	BPTreeInnerNode(TAllocsSetPtr pAllocsSet, bool bMulti, uint32_t nPageSize, TCompressorParamsBasePtr pParams) :
-		m_nLess(-1), m_innerKeyMemSet(TKeyAlloc(pAllocsSet->GetCommonAlloc())), m_innerLinkMemSet(TLinkAlloc(pAllocsSet->GetCommonAlloc())), m_bMulti(bMulti),
+	BPTreeInnerNode(TAllocsSetPtr pAllocsSet, uint32_t nPageSize, TCompressorParamsBasePtr pParams) :
+		m_nLess(-1), m_innerKeyMemSet(TKeyAlloc(pAllocsSet->GetCommonAlloc())), m_innerLinkMemSet(TLinkAlloc(pAllocsSet->GetCommonAlloc())),
 		m_nPageSize(nPageSize), m_Compressor(nPageSize - sizeof(TLink), pAllocsSet, pParams, eInnerNode)
 	{
 
@@ -97,53 +97,13 @@ public:
 	template<class TComp>
 	TLink FindNodeInsert(const TComp& comp, const TKey& key, int32_t& nIndex)
 	{
-		nIndex = -1;
-	//	nIndex = m_innerLinkMemSet.size() - 1;
-	//	return m_innerLinkMemSet[nIndex];
-
-		if (!m_bMulti)
-		{
-			return lower_bound(comp, key, nIndex);
-		}
-
-		auto it = std::upper_bound(m_innerKeyMemSet.begin(), m_innerKeyMemSet.end(), key, comp);
-		if (it == m_innerKeyMemSet.end())
-		{
-			nIndex = (int32_t)m_innerKeyMemSet.size() - 1;
-			return m_innerLinkMemSet[nIndex];
-		}
-		if (it == m_innerKeyMemSet.begin()) //less than all keys
-		{
-			nIndex = -1;
-			return m_nLess;
-		}
-		--it;
-
-		nIndex = (int32_t)std::distance(m_innerKeyMemSet.begin(), it);
-		return m_innerLinkMemSet[nIndex];
+		return lower_bound(comp, key, nIndex);
 	}
 
 	template<class TComp>
 	TLink FindNodeRemove(const TComp& comp, const TKey& key, int32_t& nIndex)
 	{
-		nIndex = -1;
-		if (!m_bMulti)
-		{
-			return lower_bound(comp, key, nIndex);
-		}
-
-		auto it = std::upper_bound(m_innerKeyMemSet.begin(), m_innerKeyMemSet.end(), key, comp);
-		if (it == m_innerKeyMemSet.end())
-			return -1;
-
-		if (it == m_innerKeyMemSet.begin()) //less than all keys
-		{
-			nIndex = -1;
-			return m_nLess;
-		}
-		--it;
-		nIndex = std::distance(m_innerKeyMemSet.begin(), it);
-		return m_innerLinkMemSet[nIndex];
+		return lower_bound(comp, key, nIndex);
 	}
 
 
@@ -152,16 +112,15 @@ public:
 	template<class TComp>
 	TLink upper_bound(const TComp& comp, const TKey& key, int32_t& nIndex)
 	{
+		// the child where the first key > key can be: the last child whose separator <= key
+		// (the keys of a child are >= its separator and < the next one)
 		auto it = std::upper_bound(m_innerKeyMemSet.begin(), m_innerKeyMemSet.end(), key, comp);
-		if (it == m_innerKeyMemSet.end())
-			return -1;
-
 		if (it == m_innerKeyMemSet.begin()) //less than all keys
 		{
 			nIndex = -1;
 			return m_nLess;
 		}
-
+		--it;
 		nIndex = (int32_t)std::distance(m_innerKeyMemSet.begin(), it);
 		return m_innerLinkMemSet[nIndex];
 	}
@@ -209,22 +168,12 @@ public:
 		else
 		{
 
-			if (m_bMulti)
-			{
-				auto it = std::upper_bound(m_innerKeyMemSet.begin(), m_innerKeyMemSet.end(), key, comp);
-				nIndex = (int32_t)std::distance(m_innerKeyMemSet.begin(), it);
-				m_innerKeyMemSet.insert(it, key);
-			}
-			else
-			{
-				auto it = std::lower_bound(m_innerKeyMemSet.begin(), m_innerKeyMemSet.end(), key, comp);
-				if (it != m_innerKeyMemSet.end() && comp.EQ(key, (*it)))
-					return false;
+			auto it = std::lower_bound(m_innerKeyMemSet.begin(), m_innerKeyMemSet.end(), key, comp);
+			if (it != m_innerKeyMemSet.end() && comp.EQ(key, (*it)))
+				return false;
 
-				nIndex = (int32_t)std::distance(m_innerKeyMemSet.begin(), it);
-				m_innerKeyMemSet.insert(it, key);
-
-			}
+			nIndex = (int32_t)std::distance(m_innerKeyMemSet.begin(), it);
+			m_innerKeyMemSet.insert(it, key);
 
 			m_innerLinkMemSet.insert(m_innerLinkMemSet.begin() + nIndex, nLink);
 
@@ -236,28 +185,10 @@ public:
 	template<class TComp>
 	bool Remove(const TComp& comp, const TKey& key)
 	{
-		uint32_t nIndex = -1;
-		bool bFind = false;
-		if (m_bMulti)
-		{
-
-			nIndex = m_innerKeyMemSet.upper_bound(key, comp);
-			if (nIndex && comp.EQ(key, m_innerKeyMemSet[nIndex - 1]))
-			{
-				bFind = true;
-				nIndex -= 1;
-			}
-		}
-		else
-		{
-			nIndex = m_innerKeyMemSet.lower_bound(key, comp);
-		}
-
-		if (!bFind)
-		{
+		auto it = std::lower_bound(m_innerKeyMemSet.begin(), m_innerKeyMemSet.end(), key, comp);
+		if (it == m_innerKeyMemSet.end() || !comp.EQ(key, *it))
 			return false;
-		}
-		return RemoveByIndex(nIndex);
+		return RemoveByIndex((uint32_t)std::distance(m_innerKeyMemSet.begin(), it));
 	}
 
 
@@ -562,7 +493,6 @@ public:
 	TLink m_nLess;
 	TKeyMemSet m_innerKeyMemSet;
 	TLinkMemSet m_innerLinkMemSet;
-	bool m_bMulti;
 	TCompressor  m_Compressor;
 	uint32_t m_nPageSize;
 };

@@ -168,7 +168,7 @@ int64_t CreateTree(CommonLib::IAllocPtr pAlloc, bptreedb::storage::IFilePagerPtr
 {
 	CommonLib::CLogInfo info(Log, "Create string tree");
 
-	TStringTree tree(-1, pStorage, pAlloc, 10, nPageSize, nMaxStr, false, false);
+	TStringTree tree(-1, pStorage, pAlloc, 10, nPageSize, nMaxStr, false);
 
 	bptreedb::TCompressorParamsBasePtr pParams(new bptreedb::CompressorParamsBase());
 	SetStringParams(pParams, bptreedb::eInnerKey);
@@ -290,7 +290,7 @@ int TestStringTree(const STestData& data, const std::vector<uint32_t>& insertOrd
 				nTreePage = CreateTree(pAlloc, pPager);
 			else
 			{
-				TStringTree tree(nTreePage, pPager, pAlloc, nNodeCache, nPageSize, nMaxStr, false, false);
+				TStringTree tree(nTreePage, pPager, pAlloc, nNodeCache, nPageSize, nMaxStr, false);
 				step(&tree);
 				tree.Flush();
 			}

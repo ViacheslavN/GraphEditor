@@ -28,8 +28,8 @@ namespace bptreedb
 		static const uint32_t DefaultMaxValueLen = 1024;
 
 		TBPStringValueMap(int64_t nPageBTreeInfo, std::shared_ptr<TStorage> pStorage, CommonLib::IAllocPtr pAlloc, uint32_t nCacheSize, uint32_t nNodesPageSize,
-			uint32_t nMaxValueLen = DefaultMaxValueLen, bool bMulti = false, bool bMinSplit = false) :
-			TBase(nPageBTreeInfo, pStorage, pAlloc, nCacheSize, nNodesPageSize, bMulti, bMinSplit),
+			uint32_t nMaxValueLen = DefaultMaxValueLen, bool bMinSplit = false) :
+			TBase(nPageBTreeInfo, pStorage, pAlloc, nCacheSize, nNodesPageSize, bMinSplit),
 			m_nMaxValueLen(nMaxValueLen)
 		{
 			if (m_nMaxValueLen * 2 > nNodesPageSize)

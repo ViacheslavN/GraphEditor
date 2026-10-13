@@ -24,8 +24,8 @@ namespace bptreedb
 		typedef TDeVector<TKey, TAlloc> TKeyMemSet;
  
 
-		BPTreeLeafNodeSetBase(TAllocsSetPtr pAllocsSet, bool bMulti, uint32_t nPageSize, TCompressorParamsBasePtr pParams) :
-			m_KeyMemSet(TAlloc(pAllocsSet->GetCommonAlloc())), m_Compressor(nPageSize - 2 * sizeof(TLink), pAllocsSet, pParams, eLeafNode), m_nNext(-1), m_nPrev(-1), m_bMulti(bMulti),
+		BPTreeLeafNodeSetBase(TAllocsSetPtr pAllocsSet, uint32_t nPageSize, TCompressorParamsBasePtr pParams) :
+			m_KeyMemSet(TAlloc(pAllocsSet->GetCommonAlloc())), m_Compressor(nPageSize - 2 * sizeof(TLink), pAllocsSet, pParams, eLeafNode), m_nNext(-1), m_nPrev(-1),
 			m_nPageSize(nPageSize)
 
 		{
@@ -81,23 +81,14 @@ namespace bptreedb
 					nIndex = nInsertLeafIndex;
 				else
 				{
-					if (m_bMulti)
+					auto it = std::lower_bound(m_KeyMemSet.begin(), m_KeyMemSet.end(), key, comp);
+					if (it != m_KeyMemSet.end() && comp.EQ(*it, key))
 					{
-						auto it = std::upper_bound(m_KeyMemSet.begin(), m_KeyMemSet.end(), key, comp);
-						nIndex = (int32_t)std::distance(m_KeyMemSet.begin(), it);
-						m_KeyMemSet.insert(it, key);
+						throw CommonLib::CExcBase("Failed to insert: key exists");
 					}
-					else
-					{
-						auto it = std::lower_bound(m_KeyMemSet.begin(), m_KeyMemSet.end(), key, comp);
-						if (it != m_KeyMemSet.end() && comp.EQ(*it, key))
-						{
-							throw CommonLib::CExcBase("Failed to insert: key exists");
-						}
 
-						nIndex = (int32_t)std::distance(m_KeyMemSet.begin(), it);
-						m_KeyMemSet.insert(it, key);
-					}
+					nIndex = (int32_t)std::distance(m_KeyMemSet.begin(), it);
+					m_KeyMemSet.insert(it, key);
 				}
 			}
 		}
@@ -145,27 +136,11 @@ namespace bptreedb
 		template<class TComp>
 		void Remove(TComp& comp, const TKey& key)
 		{
-			uint32_t nIndex = -1;
-			if (m_bMulti)
-			{
+			auto it = std::lower_bound(m_KeyMemSet.begin(), m_KeyMemSet.end(), key, comp);
+			if (it == m_KeyMemSet.end())
+				throw CommonLib::CExcBase("Failed to remove: key not found");
 
-				auto it = std::upper_bound(m_KeyMemSet.begin(), m_KeyMemSet.end(), key, comp);
-				if (it == m_KeyMemSet.end())
-					throw CommonLib::CExcBase("Failed to remove: key not found");
-
-				if (it != m_KeyMemSet.begin())
-					--it;
-				nIndex = std::distance(m_KeyMemSet.begin(), it);
-
-			}
-			else
-			{
-				auto it = std::lower_bound(m_KeyMemSet.begin(), m_KeyMemSet.end(), key, comp);
-				if (it == m_KeyMemSet.end())
-					throw CommonLib::CExcBase("Failed to remove: key not found");
-
-				nIndex = std::distance(m_KeyMemSet.begin(), it);
-			}
+			uint32_t nIndex = (uint32_t)std::distance(m_KeyMemSet.begin(), it);
 
 			if (!comp.EQ(m_KeyMemSet[nIndex], key))
 				throw CommonLib::CExcBase("Failed to remove: key not found");
@@ -438,7 +413,6 @@ namespace bptreedb
 		TKeyMemSet m_KeyMemSet;
 		TLink m_nNext;
 		TLink m_nPrev;
-		bool m_bMulti;
 		uint32_t m_nPageSize;
 	};
 
@@ -456,8 +430,8 @@ namespace bptreedb
 		typedef typename TBase::TKeyMemSet TLeafMemSet;
 
 
-		BPTreeLeafNode(TAllocsSetPtr pAllocsSet, bool bMulti, uint32_t nPageSize, TCompressorParamsBasePtr leafCompParams) :
-			TBase(pAllocsSet, bMulti, nPageSize, leafCompParams)
+		BPTreeLeafNode(TAllocsSetPtr pAllocsSet, uint32_t nPageSize, TCompressorParamsBasePtr leafCompParams) :
+			TBase(pAllocsSet, nPageSize, leafCompParams)
 		{}
 
 		virtual ~BPTreeLeafNode()

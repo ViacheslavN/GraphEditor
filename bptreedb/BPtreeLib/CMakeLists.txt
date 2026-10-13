@@ -12,6 +12,8 @@ set(SOURCE_FILES_COMPRESSOR
         Compressor/StringCompressor/EmptyStringEncoder.cpp
         Compressor/StringCompressor/ZLibStringEncoder.cpp
 
+        Compressor/BlobCompressor/BlobValueEncoder.cpp
+
         Compressor/CompressorParams.cpp
 )
 
@@ -21,6 +23,8 @@ set(SOURCE_FILES_BPTREE
         BPTreeContext.cpp
         StringPageAlloc.cpp
         StringVal.cpp
+        BlobVal.cpp
+        Blob.cpp
 
 )
 

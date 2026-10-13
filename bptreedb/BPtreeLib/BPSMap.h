@@ -46,8 +46,8 @@ namespace bptreedb
 
 
 
-		TBPSMap(int64_t nPageBTreeInfo, std::shared_ptr<TStorage> pStorage, CommonLib::IAllocPtr pAlloc, uint32_t nChacheSize, uint32_t nNodesPageSize, uint32_t nMaxStr, bool bMulti, bool bMinSplit) :
-			TBase(nPageBTreeInfo, pStorage, pAlloc, nChacheSize, nNodesPageSize, bMulti, bMinSplit),
+		TBPSMap(int64_t nPageBTreeInfo, std::shared_ptr<TStorage> pStorage, CommonLib::IAllocPtr pAlloc, uint32_t nChacheSize, uint32_t nNodesPageSize, uint32_t nMaxStr, bool bMinSplit = false) :
+			TBase(nPageBTreeInfo, pStorage, pAlloc, nChacheSize, nNodesPageSize, bMinSplit),
 			m_nMaxStr(nMaxStr)
 		{
 			 
@@ -129,7 +129,7 @@ namespace bptreedb
 		{
 			try
 			{
-				TBPTreeNodePtr pNode(new TBPTreeNode(this->m_pAllocsSet, this->m_bMulti, this->GetNodePageSize(), bLeaf, nAddr, this->m_pCompressParams));
+				TBPTreeNodePtr pNode(new TBPTreeNode(this->m_pAllocsSet, this->GetNodePageSize(), bLeaf, nAddr, this->m_pCompressParams));
 				return pNode;
 
 			}

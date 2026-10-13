@@ -348,7 +348,7 @@ void BPSETBASE_DECLARATION::RemoveFromInnerNode(TBPTreeNodePtr pCheckNode, const
 				{
 					// the last child is gone: the tree is empty, the root becomes an empty leaf
 					pCheckNode->Clear();
-					pCheckNode->TransformToLeaf(m_pAllocsSet, m_bMulti, m_nNodePageSize, m_pCompressParams);
+					pCheckNode->TransformToLeaf(m_pAllocsSet, m_nNodePageSize, m_pCompressParams);
 					pCheckNode->SetFlags(ROOT_NODE | CHANGE_NODE, true);
 				}
 				else if (!pCheckNode->Count())
@@ -358,7 +358,7 @@ void BPSETBASE_DECLARATION::RemoveFromInnerNode(TBPTreeNodePtr pCheckNode, const
 					if (pNode->IsLeaf())
 					{
 						pCheckNode->Clear();
-						pCheckNode->TransformToLeaf(m_pAllocsSet, m_bMulti, m_nNodePageSize, m_pCompressParams);
+						pCheckNode->TransformToLeaf(m_pAllocsSet, m_nNodePageSize, m_pCompressParams);
 						pCheckNode->UnionWithLeafNode(pNode, false);
 						pCheckNode->SetFlags(ROOT_NODE | CHANGE_NODE, true);
 					}

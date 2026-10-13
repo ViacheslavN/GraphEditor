@@ -47,10 +47,10 @@ namespace bptreedb
 		};
 		typedef std::vector<SPending> TPendingSet;
 
-		BPTreeLeafNodeMap(TAllocsSetPtr pAllocsSet, bool bMulti, uint32_t nPageSize, TCompressorParamsBasePtr pParams) : TBase(pAllocsSet, bMulti, nPageSize, pParams),
+		BPTreeLeafNodeMap(TAllocsSetPtr pAllocsSet, uint32_t nPageSize, TCompressorParamsBasePtr pParams) : TBase(pAllocsSet, nPageSize, pParams),
 			m_ValueMemSet(TValueAlloc(pAllocsSet->GetCommonAlloc()))
 		{
-			if (!bMulti && pParams.get())
+			if (pParams.get())
 			{
 				TCompressorParamsPtr pLeafKeyParams = pParams->GetCompressParams(eLeafKey);
 				if (pLeafKeyParams.get())

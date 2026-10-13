@@ -139,7 +139,6 @@ TIterator BPSETBASE_DECLARATION::last()
 				break;
 			}
 			TBPTreeNodePtr pNode = GetNode(nNextAddr);
-			pNode->SetParent(pParent, nIndex);
 
 			if (pNode->IsLeaf())
 			{
@@ -165,47 +164,13 @@ TIterator BPSETBASE_DECLARATION::upper_bound(const TComparator& comp, const TKey
 {
 	try
 	{
-		int32_t nIndex = 0;
-		if (!m_pRoot.get())
-			LoadTree();
-
-		if (!m_pRoot.get())
-			return TIterator(this, TBPTreeNodePtr(), -1);
-
-
-		if (m_pRoot->IsLeaf())
-		{
-			return TIterator(this, m_pRoot, m_pRoot->leaf_upper_bound(comp, key));
-		}
-
-		nIndex = -1;
-		int64_t nNextAddr = m_pRoot->inner_upper_bound(comp, key, nIndex);
-		TBPTreeNodePtr pParent = m_pRoot;
-
-		for (;;)
-		{
-			if (nNextAddr == -1)
-			{
-				break;
-			}
-
-			TBPTreeNodePtr pNode = GetNode(nNextAddr);
-			pNode->SetParent(pParent, nIndex);
-
-			if (pNode->IsLeaf())
-			{
-				return TIterator(this, pNode, pNode->leaf_upper_bound(comp, key));
-			}
-
-			nNextAddr = pNode->inner_upper_bound(comp, key, nIndex);
-			pParent = pNode;
-		}
-
-		return TIterator(this, TBPTreeNodePtr(), -1);
+		return bound<TIterator>(key, [&comp](TBPTreeNodePtr& pNode, const TKey& k) { return pNode->leaf_upper_bound(comp, k); },
+			[&comp](TBPTreeNodePtr& pNode, const TKey& k, int32_t& nIndex) { return pNode->inner_upper_bound(comp, k, nIndex); });
 	}
 	catch (std::exception& exc)
 	{
 		CommonLib::CExcBase::RegenExcT("TBPlusTreeSetBase failed upper_bound", exc);
+		throw;
 	}
 }
 
@@ -221,57 +186,47 @@ TIterator BPSETBASE_DECLARATION::lower_bound(const TComparator& comp, const TKey
 				return TIterator(this, TBPTreeNodePtr(), -1);
 		}
 
-		int32_t nIndex = 0;
-		if (!m_pRoot.get())
-			LoadTree();
-
-		if (!m_pRoot.get())
-			return TIterator(this, TBPTreeNodePtr(), -1);
-
-		nIndex = -1;
-		if (m_pRoot->IsLeaf())
-		{
-			return TIterator(this, m_pRoot, m_pRoot->leaf_lower_bound(comp, key));
-		}
-
-		int64_t nNextAddr = m_pRoot->inner_lower_bound(comp, key, nIndex);
-		TBPTreeNodePtr pParent = m_pRoot;
-		for (;;)
-		{
-			if (nNextAddr == -1)
-			{
-				break;
-			}
-
-			TBPTreeNodePtr pNode = GetNode(nNextAddr);
-			pNode->SetParent(pParent, nIndex);
-			if (pNode->IsLeaf())
-			{
-				int32_t nLeafIndex = pNode->leaf_lower_bound(comp, key);
-				if (nLeafIndex != -1 && nLeafIndex < (int32_t)pNode->Count())
-					return TIterator(this, pNode, nLeafIndex);
-
-				else if (nIndex < ((int32_t)pParent->Count() - 1))
-				{
-					TBPTreeNodePtr pNode = GetNode(pParent->link(nIndex + 1));
-					pNode->SetParent(pParent, nIndex + 1);
-					return TIterator(this, pNode, 0);
-				}
-
-				if (pNode->next() == -1)
-					return TIterator(this, TBPTreeNodePtr(), -1);
-
-				TBPTreeNodePtr pNodeNext = GetNode(pNode->GetNext());
-			//	SetParentForNextNode(pNode.get(), pNodeNext);
-				return TIterator(this, pNodeNext, 0);
-			}
-			nNextAddr = pNode->inner_lower_bound(comp, key, nIndex);
-			pParent = pNode;
-		}
-		return TIterator(this, TBPTreeNodePtr(), -1);
+		return bound<TIterator>(key, [&comp](TBPTreeNodePtr& pNode, const TKey& k) { return pNode->leaf_lower_bound(comp, k); },
+			[&comp](TBPTreeNodePtr& pNode, const TKey& k, int32_t& nIndex) { return pNode->inner_lower_bound(comp, k, nIndex); });
 	}
 	catch (std::exception& exc)
 	{
 		CommonLib::CExcBase::RegenExcT("TBPlusTreeSetBase failed lower_bound", exc);
+		throw;
 	}
+}
+
+// lower_bound / upper_bound: descends to the leaf of the key; if the key is above every key of that
+// leaf, the result is the first key of the next leaf (leaves other than the root are never empty)
+BPSETBASE_TEMPLATE_PARAMS
+template<class TIterator, class TLeafBound, class TInnerBound>
+TIterator BPSETBASE_DECLARATION::bound(const TKey& key, TLeafBound leafBound, TInnerBound innerBound)
+{
+	if (!m_pRoot.get())
+		LoadTree();
+
+	if (!m_pRoot.get())
+		return TIterator(this, TBPTreeNodePtr(), -1);
+
+	TBPTreeNodePtr pNode = m_pRoot;
+	while (!pNode->IsLeaf())
+	{
+		int32_t nIndex = -1;
+		int64_t nNextAddr = innerBound(pNode, key, nIndex);
+		if (nNextAddr == -1)
+			return TIterator(this, TBPTreeNodePtr(), -1);
+		pNode = GetNode(nNextAddr);
+	}
+
+	int32_t nLeafIndex = leafBound(pNode, key);
+	if (nLeafIndex >= 0 && nLeafIndex < (int32_t)pNode->Count())
+		return TIterator(this, pNode, nLeafIndex);
+
+	if (pNode->GetAddr() == m_nRootAddr || pNode->GetNext() == -1)
+		return TIterator(this, TBPTreeNodePtr(), -1);
+
+	TBPTreeNodePtr pNodeNext = GetNode(pNode->GetNext());
+	if (pNodeNext->Count() == 0)
+		return TIterator(this, TBPTreeNodePtr(), -1);
+	return TIterator(this, pNodeNext, 0);
 }
