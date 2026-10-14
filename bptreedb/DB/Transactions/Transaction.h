@@ -44,6 +44,8 @@ namespace bptreedb
 			virtual bool IsActive() const;
 			virtual eTransactionType GetTransactionType() const { return m_tranType; }
 			virtual eTransactionDataType GetTransactionDataType() const { return m_type; }
+			virtual void SetInsertOnRight(bool bOnRight) { m_bInsertOnRight = bOnRight; }
+			virtual bool GetInsertOnRight() const { return m_bInsertOnRight; }
 
 			virtual ISelectCursorPtr executeQuery(const std::string& sQuery);
 			virtual int64_t execute(const std::string& sSQL);
@@ -58,6 +60,7 @@ namespace bptreedb
 			virtual IUpdateCursorPtr createUpdateCursor(const std::string& sTable, IFieldSetPtr ptrFieldSet, const std::string& sField, const CommonLib::CVariant& var, OpType opType);
 			virtual IUpdateCursorPtr createUpdateCursor(const std::string& sTable, IFieldSetPtr ptrFieldSet, const std::vector<int64_t>& rowIds);
 			virtual IDeleteCursorPtr createDeleteCursor(const std::string& sTable);
+			virtual void GetSpaceStatistics(SDatabaseSpace& space, const std::string& sTable, bool bBlobs);
 
 			bool IsWrite() const { return m_type == eTT_MODIFY || m_type == eTT_DDL; }
 			void CheckActive() const;
@@ -83,6 +86,7 @@ namespace bptreedb
 			eTransactionType m_tranType;
 			std::atomic<bool> m_bActive{ false };
 			bool m_bFailed{ false };
+			bool m_bInsertOnRight{ false };
 
 			std::unique_lock<std::mutex> m_writerLock;
 			std::shared_lock<std::shared_mutex> m_readLock;

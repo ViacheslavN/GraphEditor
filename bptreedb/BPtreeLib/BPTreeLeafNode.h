@@ -61,6 +61,20 @@ namespace bptreedb
 			return m_Compressor.RowSize();
 		}
 
+		// the links to the neighbour leaves as Save writes them (first in the page of the leaf): a page written
+		// before a split gets the new links (TBPlusTreeSetBase::WriteLeafCut)
+		void WriteLinks(CommonLib::IMemoryWriteStream* pStream) const
+		{
+			pStream->Write(m_nNext);
+			pStream->Write(m_nPrev);
+		}
+
+		// the element count limit of the compressor (a node never holds more)
+		uint32_t GetMaxCount() const
+		{
+			return m_Compressor.GetMaxCount();
+		}
+
 		virtual bool IsFree() const
 		{
 			return !(m_nFlag & (ROOT_NODE | BUSY_NODE));

@@ -81,10 +81,28 @@ void BPSETBASE_DECLARATION::CheckLeafNode(TBPTreeNodePtr &pNode)
 		// the new right leaf gets the new key. A key in the middle of a leaf splits it in halves: a min split there
 		// would leave the leaf full and split it again at the next insert (a chain of almost empty leaves).
 		bool bMinSplit = m_bMinSplit && pNode->LeafLastInsertAppend();
+		uint32_t nSplitCount = bMinSplit ? 1 : pNode->LeafSplitCount();
+
+		// A leaf of a cut compressor (zlib values: the size is a guess, the leaf grows over the page by it):
+		// encoded once, the elements that fit are the left leaf - its page is written as it is - the rest
+		// goes to the new right leaf. The other leaves compute their size: a full leaf splits off one element.
+		bool bCut = false;
+		if constexpr (TLeafCutWrite<_TLeafNode>::value)
+		{
+			if (bMinSplit && pNode->Count() <= pNode->LeafMaxCount())
+			{
+				nSplitCount = EncodeLeafCut(pNode);
+				if (nSplitCount == 0)
+					return;          // all fit: the guess was too small, the encoder has the ratio of the leaf now
+				bCut = true;
+			}
+		}
 
 		TBPTreeNodePtr pCheckNode = GetParentNode(pNode);
 		TBPTreeNodePtr pNewRightLeafNode = NewNode(true, true);
-		SplitLeafNode(pNode, pNewRightLeafNode, pCheckNode, bMinSplit ? 1 : pNode->LeafSplitCount());
+		SplitLeafNode(pNode, pNewRightLeafNode, pCheckNode, nSplitCount);
+		if (bCut)
+			WriteLeafCut(pNode);
 
 		while (pCheckNode->IsNeedSplit())
 		{
@@ -109,6 +127,50 @@ void BPSETBASE_DECLARATION::CheckLeafNode(TBPTreeNodePtr &pNode)
 	}
 }
 
+
+BPSETBASE_TEMPLATE_PARAMS
+uint32_t BPSETBASE_DECLARATION::EncodeLeafCut(TBPTreeNodePtr &pNode)
+{
+	try
+	{
+		uint32_t nPageSize = m_cachePage->GetSize();
+		m_cutBuf.assign(nPageSize, 0);
+		CommonLib::CFxMemoryWriteStream stream;
+		stream.AttachBuffer(m_cutBuf.data(), nPageSize);
+		CommonLib::CPrefCounterHolder holder(m_pBPTreePerfCounter, eSaveLeafNode);
+		return pNode->Save(&stream, &m_Context);
+	}
+	catch (std::exception& exc)
+	{
+		CommonLib::CExcBase::RegenExcT("[TBPlusTreeSetBase] failed EncodeLeafCut", exc);
+		throw;
+	}
+}
+
+// after the split: the page encoded by EncodeLeafCut has the elements the leaf has now, only its link to
+// the next leaf changed
+BPSETBASE_TEMPLATE_PARAMS
+void BPSETBASE_DECLARATION::WriteLeafCut(TBPTreeNodePtr &pNode)
+{
+	try
+	{
+		m_cachePage->Erase(0);
+		m_cachePage->SetAddr(pNode->GetAddr());
+		memcpy(m_cachePage->GetPayLoadData(), m_cutBuf.data(), (std::min)((size_t)m_cachePage->GetSize(), m_cutBuf.size()));
+
+		CommonLib::CFxMemoryWriteStream stream;
+		stream.AttachBuffer(m_cachePage->GetPayLoadData(), m_cachePage->GetSize());
+		pNode->WriteLeafLinks(&stream);
+
+		m_pStorage->SavePage(m_cachePage);
+		pNode->SetFlags(CHANGE_NODE, false);
+	}
+	catch (std::exception& exc)
+	{
+		CommonLib::CExcBase::RegenExcT("[TBPlusTreeSetBase] failed WriteLeafCut", exc);
+		throw;
+	}
+}
 
 BPSETBASE_TEMPLATE_PARAMS
 void BPSETBASE_DECLARATION::TransformRootToInner()

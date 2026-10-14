@@ -144,24 +144,38 @@ namespace bptreedb
 		{
 			std::lock_guard<std::recursive_mutex> locker(m_mutex);
 			std::vector<int64_t> addrs;
-			addrs.reserve(m_memory.size() + m_spilled.size());
+			addrs.reserve(m_memory.size());
 			for (const auto& item : m_memory)
 				addrs.push_back(item.first);
-			for (const auto& item : m_spilled)
-				addrs.push_back(item.first);
 			std::sort(addrs.begin(), addrs.end());
-
-			m_buffer.resize(m_nPageSize);
 			for (int64_t nAddr : addrs)
+				func(nAddr, m_memory.find(nAddr)->second.m_data.data());
+
+			if (m_spilled.empty())
+				return;
+
+			// slot -> address, the file is read by blocks of consecutive slots
+			std::vector<std::pair<uint64_t, int64_t> > slots;
+			slots.reserve(m_spilled.size());
+			for (const auto& item : m_spilled)
+				slots.emplace_back(item.second, item.first);
+			std::sort(slots.begin(), slots.end());
+
+			const size_t nMaxBlockPages = 1024;   // 8 MB of 8K pages
+			std::vector<byte_t> block;
+			for (size_t i = 0; i < slots.size(); )
 			{
-				auto it = m_memory.find(nAddr);
-				if (it != m_memory.end())
-					func(nAddr, it->second.m_data.data());
-				else
-				{
-					ReadData(nAddr, m_buffer.data(), m_nPageSize);
-					func(nAddr, m_buffer.data());
-				}
+				size_t nCount = 1;
+				while (i + nCount < slots.size() && nCount < nMaxBlockPages && slots[i + nCount].first == slots[i].first + nCount)
+					++nCount;
+
+				block.resize(nCount * (size_t)m_nPageSize);
+				m_ptrTempFile->SetFilePos64(slots[i].first * m_nPageSize, CommonLib::soFromBegin);
+				if (m_ptrTempFile->Read(block.data(), (uint32_t)block.size()) != (std::streamsize)block.size())
+					throw CommonLib::CExcBase("[CTranStorageIO] failed to read the temporary pages from slot {0}", slots[i].first);
+				for (size_t j = 0; j < nCount; ++j)
+					func(slots[i + j].second, block.data() + j * (size_t)m_nPageSize);
+				i += nCount;
 			}
 		}
 

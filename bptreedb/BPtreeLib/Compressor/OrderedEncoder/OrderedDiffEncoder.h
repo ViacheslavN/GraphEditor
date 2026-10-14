@@ -7,6 +7,8 @@
 #include "../CompressorParams.h"
 #include "../EntropyEncoder/UnsignedNumLenEncoder.h"
 #include "../StringCompressor/ZLibStringEncoder.h"
+#include "../StringCompressor/ZlibCutStringEncoder.h"
+#include "../../NodeCompressorTraits.h"
 #include "../../../../CommonLib/stream/MemoryStream.h"
 #include <memory>
 #include <vector>
@@ -274,26 +276,84 @@ namespace bptreedb
 		}
 	};
 
+	// numbers in any order (the values of the value trees, by row id): the difference of TOrderedBits modulo 2^64
+	// as ZigZag - equal neighbours and steps of 1 cost only the length symbol (no raw bits), small steps a few
+	// bits. The size is computed by NumLen (an upper bound), not estimated.
+	template <class T>
+	struct TValueDiffTraits
+	{
+		static constexpr size_t Streams = 1;
+		static uint32_t FirstSize() { return sizeof(T); }
+		static void Diff(const T& cur, const T& prev, uint64_t* s) { s[0] = ZigZag((int64_t)(TOrderedBits<T>::ToBits(cur) - TOrderedBits<T>::ToBits(prev))); }
+		static void Apply(const T& prev, const uint64_t* s, T& cur) { cur = TOrderedBits<T>::FromBits(TOrderedBits<T>::ToBits(prev) + (uint64_t)UnZigZag(s[0])); }
+		static bool WriteFirstSafe(const T& v, CommonLib::IMemoryWriteStream* p) { return p->WriteSafe((const byte_t*)&v, sizeof(T)); }
+		static void ReadFirst(T& v, CommonLib::IMemoryReadStream* p) { p->ReadBytes((byte_t*)&v, sizeof(T)); }
+	};
+
 	// unique number keys (int / float / double) sorted by TOrderedComp
 	template <class T>
 	using TOrderedDiffEncoder = TDiffStreamsEncoder<T, TOrderedDiffTraits<T> >;
+
+	// float / double in any order: the XOR of the bits with the previous value (as Gorilla), as two NumLen streams -
+	// the trailing zero bits of the XOR and the XOR without them. Equal neighbours cost only the length symbols,
+	// values that differ in a few bits (the same exponent, round numbers) a few bits. The size is computed.
+	template <class T>
+	struct TXorDiffTraits
+	{
+		static_assert(std::is_floating_point<T>::value, "TXorDiffTraits: float or double");
+		typedef typename std::conditional<sizeof(T) == 4, uint32_t, uint64_t>::type TBits;
+
+		static constexpr size_t Streams = 2;
+		static uint32_t FirstSize() { return sizeof(T); }
+		static uint64_t Bits(const T& v) { TBits b; memcpy(&b, &v, sizeof(T)); return (uint64_t)b; }
+		static uint32_t TrailingZeros(uint64_t x)
+		{
+			uint32_t n = 0;
+			while ((x & 0xFF) == 0) { x >>= 8; n += 8; }
+			while ((x & 1) == 0) { x >>= 1; ++n; }
+			return n;
+		}
+		static void Diff(const T& cur, const T& prev, uint64_t* s)
+		{
+			uint64_t x = Bits(cur) ^ Bits(prev);
+			uint32_t nZeros = x != 0 ? TrailingZeros(x) : 0;
+			s[0] = nZeros;
+			s[1] = x >> nZeros;
+		}
+		static void Apply(const T& prev, const uint64_t* s, T& cur)
+		{
+			TBits b = (TBits)(Bits(prev) ^ (s[1] << s[0]));
+			memcpy(&cur, &b, sizeof(T));
+		}
+		static bool WriteFirstSafe(const T& v, CommonLib::IMemoryWriteStream* p) { return p->WriteSafe((const byte_t*)&v, sizeof(T)); }
+		static void ReadFirst(T& v, CommonLib::IMemoryReadStream* p) { p->ReadBytes((byte_t*)&v, sizeof(T)); }
+	};
+
+	// number values in the row order: integers - differences, float / double - XOR
+	template <class T>
+	using TNumberValueEncoder = TDiffStreamsEncoder<T, typename std::conditional<std::is_floating_point<T>::value, TXorDiffTraits<T>, TValueDiffTraits<T> >::type>;
 
 	// TMultiKey<number> keys
 	template <class T>
 	using TOrderedMultiKeyEncoder = TDiffStreamsEncoder<TMultiKey<T>, TOrderedMultiDiffTraits<T> >;
 
-	// TMultiKey<StringValue> keys: the strings by CZlibStringComp (one zlib block), the row ids as zigzag
+	// TMultiKey<StringValue> keys: the strings by TStringEncoder (one zlib block), the row ids as zigzag
 	// differences by NumLen.
 	//   uint32 size of the string block, string block, int64 first row id, uint32 size, NumLen stream
-	class TStringMultiKeyEncoder
+	// TStringEncoder = CZlibCutStringComp (TStringMultiKeyCutEncoder): EncodeCut - the first keys that fit
+	// (TCutNodeCompressor with the keys as the cut side)
+	template <class TStringEncoder>
+	class TStringMultiKeyEncoderT
 	{
 	public:
 		typedef TMultiKey<StringValue> TKey;
 		typedef CommonLib::STLAllocator<TKey> TAlloc;
 		typedef TDeVector<TKey, TAlloc> TValueMemSet;
-		typedef CZlibStringComp::TValueMemSet TStringMemSet;
+		typedef typename TStringEncoder::TValueMemSet TStringMemSet;
+		typedef typename TStringEncoder::TAlloc TStringAlloc;
+		static constexpr bool CanCut = TIsCutEncoder<TStringEncoder>::value;
 
-		TStringMultiKeyEncoder(TAllocsSetPtr pAllocsSet, TCompressorParamsBasePtr pParams, ECompressParams type) :
+		TStringMultiKeyEncoderT(TAllocsSetPtr pAllocsSet, TCompressorParamsBasePtr pParams, ECompressParams type) :
 			m_pAllocsSet(pAllocsSet), m_strings(pAllocsSet, pParams, type), m_subs(pAllocsSet, pParams, type)
 		{
 		}
@@ -364,7 +424,7 @@ namespace bptreedb
 					return 0;
 				size_t nStart = pStream->Pos();
 
-				TStringMemSet strings(CZlibStringComp::TAlloc(m_pAllocsSet->GetCommonAlloc()));
+				TStringMemSet strings(TStringAlloc(m_pAllocsSet->GetCommonAlloc()));
 				for (uint32_t i = 0; i < n; ++i)
 					strings.push_back(vecKeys[i].m_key);
 
@@ -418,6 +478,81 @@ namespace bptreedb
 			}
 		}
 
+		// the first nEncoded keys that fit in maxSize (CanCut): the strings are cut, the row ids of those keys after
+		// them (their size is computed: reserved for all the keys, a prefix never needs more)
+		void EncodeCut(const TValueMemSet& vecKeys, CommonLib::IMemoryWriteStream* pStream, uint32_t maxSize, uint32_t& nEncoded)
+		{
+			nEncoded = 0;
+			uint32_t n = (uint32_t)vecKeys.size();
+			if (n == 0)
+				return;
+			try
+			{
+				size_t nStart = pStream->Pos();
+				size_t nLimit = (std::min)((size_t)pStream->Size(), nStart + maxSize);
+				uint32_t nSubsReserve = m_subs.GetCompressSize();
+				nSubsReserve += nSubsReserve / 8 + 64;
+				size_t nFixed = sizeof(uint32_t) + sizeof(int64_t) + sizeof(uint32_t);
+				if (nStart + nFixed + nSubsReserve >= nLimit)
+					return;
+
+				TStringMemSet strings(TStringAlloc(m_pAllocsSet->GetCommonAlloc()));
+				for (uint32_t i = 0; i < n; ++i)
+					strings.push_back(vecKeys[i].m_key);
+
+				pStream->Write((uint32_t)0);
+				size_t nBlockStart = pStream->Pos();
+				uint32_t nStrings = 0;
+				m_strings.EncodeCut(strings, pStream, (uint32_t)(nLimit - nBlockStart - (nFixed - sizeof(uint32_t)) - nSubsReserve), nStrings);
+				if (nStrings == 0)
+				{
+					pStream->Seek(nStart, CommonLib::soFromBegin);
+					return;
+				}
+				size_t nEnd = pStream->Pos();
+				pStream->Seek(nStart, CommonLib::soFromBegin);
+				pStream->Write((uint32_t)(nEnd - nBlockStart));
+				pStream->Seek(nEnd, CommonLib::soFromBegin);
+
+				// the row ids of the encoded keys, then the statistics of all the keys again
+				pStream->Write(vecKeys[0].m_nSub);
+				m_subs.Clear();
+				m_subSymbols.resize(nStrings);
+				for (uint32_t i = 1; i < nStrings; ++i)
+				{
+					m_subSymbols[i] = Sub(vecKeys[i], vecKeys[i - 1]);
+					m_subs.AddSymbol(m_subSymbols[i]);
+				}
+				size_t nSizePos = pStream->Pos();
+				pStream->Write((uint32_t)0);
+				size_t nStreamStart = pStream->Pos();
+				bool bOk = true;
+				if (nStrings > 1)
+				{
+					bOk = m_subs.BeginEncoding(pStream);
+					for (uint32_t i = 1; bOk && i < nStrings; ++i)
+						bOk = m_subs.EncodeSymbol(m_subSymbols[i]);
+					bOk = bOk && m_subs.FinishEncoding(pStream);
+				}
+				nEnd = pStream->Pos();
+				m_subs.Clear();
+				for (uint32_t i = 1; i < n; ++i)
+					m_subs.AddSymbol(Sub(vecKeys[i], vecKeys[i - 1]));
+				if (!bOk || nEnd > nLimit)
+					throw CommonLib::CExcBase("the row ids don't fit in their reserve {0}", nSubsReserve);
+
+				pStream->Seek(nSizePos, CommonLib::soFromBegin);
+				pStream->Write((uint32_t)(nEnd - nStreamStart));
+				pStream->Seek(nEnd, CommonLib::soFromBegin);
+				nEncoded = nStrings;
+			}
+			catch (std::exception& exc)
+			{
+				CommonLib::CExcBase::RegenExcT("[TStringMultiKeyEncoder] failed to encode the keys that fit, count: {0}", n, exc);
+				throw;
+			}
+		}
+
 		void Decode(uint32_t nCount, TValueMemSet& vecKeys, CommonLib::IMemoryReadStream* pStream, uint32_t nCompSize, CBPTreeContext* pContext)
 		{
 			try
@@ -426,7 +561,7 @@ namespace bptreedb
 					return;
 
 				uint32_t nBlockSize = pStream->ReadIntu32();
-				TStringMemSet strings(CZlibStringComp::TAlloc(m_pAllocsSet->GetCommonAlloc()));
+				TStringMemSet strings(TStringAlloc(m_pAllocsSet->GetCommonAlloc()));
 				m_strings.Decode(nCount, strings, pStream, nBlockSize, pContext);
 
 				int64_t nSub = pStream->ReadInt64();
@@ -476,17 +611,20 @@ namespace bptreedb
 		const TStringMemSet& EmptyStrings() const
 		{
 			if (!m_pEmpty)
-				m_pEmpty.reset(new TStringMemSet(CZlibStringComp::TAlloc(m_pAllocsSet->GetCommonAlloc())));
+				m_pEmpty.reset(new TStringMemSet(TStringAlloc(m_pAllocsSet->GetCommonAlloc())));
 			return *m_pEmpty;
 		}
 
 	private:
 		TAllocsSetPtr m_pAllocsSet;
-		CZlibStringComp m_strings;
+		TStringEncoder m_strings;
 		CUnsignedNumLenEncoder m_subs;
 		std::vector<uint64_t> m_subSymbols;
 		mutable std::unique_ptr<TStringMemSet> m_pEmpty;
 	};
+
+	typedef TStringMultiKeyEncoderT<CZlibStringComp> TStringMultiKeyEncoder;          // the indexes of older files
+	typedef TStringMultiKeyEncoderT<CZlibCutStringComp> TStringMultiKeyCutEncoder;
 
 	// value encoder that writes nothing (TBPMultiMap without values: the row id is in the key)
 	template <class _TValue>

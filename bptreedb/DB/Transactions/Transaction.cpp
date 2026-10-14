@@ -7,6 +7,7 @@
 #include "../Cursors/DeleteCursor.h"
 #include "../SQLEngine/SQLDriver.h"
 #include "../SQLEngine/Statement.h"
+#include <filesystem>
 
 namespace bptreedb
 {
@@ -404,6 +405,33 @@ namespace bptreedb
 			catch (std::exception& excSrc)
 			{
 				CommonLib::CExcBase::RegenExcT("failed to create an update cursor of {0} by {1}", sTable, sField, excSrc);
+				throw;
+			}
+		}
+
+		void CTransaction::GetSpaceStatistics(SDatabaseSpace& space, const std::string& sTable, bool bBlobs)
+		{
+			try
+			{
+				CheckActive();
+				space = SDatabaseSpace();
+				space.m_nPageSize = Context()->m_nPageSize;
+				std::error_code ec;
+				uint64_t nFileSize = (uint64_t)std::filesystem::file_size(std::filesystem::path(Context()->m_sPath), ec);
+				if (!ec && nFileSize > CDatabase::HeaderSize)
+					space.m_nFilePages = (nFileSize - CDatabase::HeaderSize + space.m_nPageSize - 1) / space.m_nPageSize;
+
+				std::vector<CTablePtr> tables;
+				if (sTable.empty())
+					tables = Schema()->GetTables();
+				else
+					tables.push_back(Schema()->GetTableThrow(sTable));
+				for (const CTablePtr& ptrTable : tables)
+					ptrTable->GetSpace(*this, bBlobs, space.m_trees);
+			}
+			catch (std::exception& excSrc)
+			{
+				CommonLib::CExcBase::RegenExcT("failed to get the space statistics{0}", sTable.empty() ? std::string() : " of " + sTable, excSrc);
 				throw;
 			}
 		}

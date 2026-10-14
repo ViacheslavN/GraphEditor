@@ -3,6 +3,7 @@
 
 #include "../../Cartography.h"
 #include "../../../GeoDatabase/TableCopier.h"
+#include "../../../GeoDatabase/GeoDatabaseBPTreeDB/BPtreeDBContext.h"
 #include "SymbologyModel.h"
 #include <memory>
 
@@ -87,10 +88,30 @@ namespace TestMapDraw
         std::shared_ptr<SSymbology> ptrSymbology;   // null - default symbol
     };
 
-    // table to query values from (dialogs): shapefile (ANSI path to .shp) or SQLite (UTF-8 path) + table
+    // the database files: SQLite (.sqlite, .db) or BPtreeDB (.btdb), the format is told by the extension
+    enum EDatabaseFormat
+    {
+        DatabaseSQLite = 0,
+        DatabaseBPtreeDB = 1
+    };
+
+    // a new database (conversions)
+    struct SDatabaseOptions
+    {
+        EDatabaseFormat format = DatabaseBPtreeDB;
+        GraphEngine::GeoDatabase::SBPtreeDBSpatialIndexParams spatialIndex;   // BPtreeDB: the spatial index of the new tables
+        // BPtreeDB: the changed pages a write transaction keeps in memory (the rest go to the "-tran" file and are
+        // read back by the commit); a conversion writes the whole database in one transaction
+        uint32_t nTranMemoryMB = 2048;
+        // conversions (shape file / database -> database): the geometry is written compressed (GeometryCompression
+        // blobs, the precision by the units of the coordinate system: 1e-7 degree, 1 cm...), SQLite and BPtreeDB
+        bool bCompressGeometry = true;
+    };
+
+    // table to query values from (dialogs): shapefile (ANSI path to .shp) or database (UTF-8 path) + table
     struct SDataSource
     {
-        bool        bSQLite = false;
+        bool        bDatabase = false;
         std::string sPath;
         std::string sTable;
     };
@@ -121,20 +142,37 @@ namespace TestMapDraw
         // opens the raster file (TIFF / GeoTIFF, UTF-8 path) and adds it as a raster layer with the default renderer, returns the layer
         GraphEngine::Cartography::ILayerPtr AddRaster(const std::string& sFilePathUtf8);
 
-        // adds the spatial tables of an SQLite database as layers (sTableName empty - all of them), returns the number of added layers
-        // annotation and symbology are set only for the tables which have their fields
-        int AddSQLiteDatabase(const std::string& sDatabasePath, const std::string& sTableName = std::string(), const SLayerParams& params = SLayerParams());
+        // adds the spatial tables of a database (SQLite / BPtreeDB, UTF-8 path) as layers (sTableName empty - all of them),
+        // returns the number of added layers; annotation and symbology are set only for the tables which have their fields
+        int AddDatabase(const std::string& sDatabasePath, const std::string& sTableName = std::string(), const SLayerParams& params = SLayerParams());
+        int AddDatabase(const std::string& sDatabasePath, const std::vector<std::string>& vecTableNames, const SLayerParams& params = SLayerParams());
         // the layers made by a converter (OSM ...) in a separate map: moved into the project map (on the top),
         // the workspace of their tables is registered for the project save / load; returns the number of layers
         int AddConvertedLayers(GraphEngine::GeoDatabase::IWorkspacePtr ptrWorkspace, GraphEngine::Cartography::IMapPtr ptrSourceMap);
-        // spatial tables of an SQLite database with their attribute fields (UTF-8 path)
-        static std::vector<STableInfo> GetSQLiteTables(const std::string& sDatabasePath);
+        // spatial tables of a database with their attribute fields (UTF-8 path)
+        static std::vector<STableInfo> GetDatabaseTables(const std::string& sDatabasePath);
 
-        // copies the shapefile into an SQLite database (created if it doesn't exist) as a new spatial table,
-        // returns the table name; progress gets the number of copied features and can cancel
-        static std::string ConvertShapefileToSQLite(const std::string& sShapefilePath, const std::string& sDatabasePath,
-                                                    GraphEngine::GeoDatabase::CTableCopier::TProgress progress = GraphEngine::GeoDatabase::CTableCopier::TProgress(),
-                                                    int64_t* pnCopied = nullptr);
+        // ---- database files (UTF-8 paths)
+
+        static EDatabaseFormat DatabaseFormatOf(const std::string& sPathUtf8);   // .btdb - BPtreeDB, else SQLite
+        static const char* DatabaseExtension(EDatabaseFormat format);           // ".sqlite" / ".btdb"
+        // the files of a database: the file + these suffixes (SQLite journals, BPtreeDB redo log / transaction pages)
+        static const std::vector<std::string>& DatabaseFileSuffixes();
+        // opens a database; a BPtreeDB file is opened once in the process: the workspace already open (the map,
+        // a dialog, a conversion) is shared - two instances of one file would damage it
+        static GraphEngine::GeoDatabase::IDatabaseWorkspacePtr OpenDatabase(const std::string& sPathUtf8);
+        // creates a new database (the file is overwritten), throws when the BPtreeDB file is open
+        static GraphEngine::GeoDatabase::IDatabaseWorkspacePtr CreateDatabase(const std::string& sPathUtf8, const SDatabaseOptions& options);
+        static std::vector<std::string> GetSpatialTableNames(GraphEngine::GeoDatabase::IDatabaseWorkspacePtr ptrWorkspace);
+        static bool IsSameFile(const std::string& sPathUtf8, const std::string& sOtherPathUtf8);
+
+        // copies a shapefile (ANSI path to .shp) or the spatial tables of a database (UTF-8 path; sSourceTable empty - all of
+        // them) into a database (SQLite / BPtreeDB by the extension; created with options if it doesn't exist) as new spatial
+        // tables, returns their names; progress gets the number of copied features (all the tables) and can cancel
+        static std::vector<std::string> ConvertToDatabase(const std::string& sSourcePath, const std::string& sSourceTable,
+                                                          const std::string& sDatabasePath, const SDatabaseOptions& options,
+                                                          GraphEngine::GeoDatabase::CTableCopier::TProgress progress = GraphEngine::GeoDatabase::CTableCopier::TProgress(),
+                                                          int64_t* pnCopied = nullptr);
 
         // extent of the layer in the map coordinate system (a point / zero-size extent is expanded a bit),
         // false - the layer has no extent or it can't be projected

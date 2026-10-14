@@ -321,6 +321,39 @@ namespace bptreedb
 				}
 			}
 
+			// The pages of the tree without reading the leaves: the inner nodes are read, the leaves are the entries
+			// of the nodes of level 1. nLevels - with the leaves.
+			void GetPages(uint64_t& nInner, uint64_t& nLeaves, uint32_t& nLevels)
+			{
+				nInner = nLeaves = 0;
+				nLevels = m_pRoot->Level() + 1;
+				if (m_pRoot->IsLeaf())
+				{
+					nLeaves = 1;
+					return;
+				}
+
+				std::vector<int64_t> stack;
+				auto visit = [&](const TNodePtr& pNode)
+				{
+					nInner += 1;
+					if (pNode->Level() == 1)
+						nLeaves += pNode->Count();
+					else
+						for (const TEntry& e : pNode->Entries())
+							stack.push_back(e.m_nValue);
+				};
+
+				visit(m_pRoot);
+				while (!stack.empty())
+				{
+					int64_t nAddr = stack.back();
+					stack.pop_back();
+					visit(GetNode(nAddr));
+					CheckCache(false);
+				}
+			}
+
 			// checks the structure: levels, MBRs of the children, the entry count; throws on an error
 			void Check()
 			{
@@ -802,24 +835,75 @@ namespace bptreedb
 			// bulk load
 
 			// the most entries from nStart (up to nEnd) that fit in a node of nLimit bytes
+			// The number of entries from nStart that fit in a node (bulk load). Every probe of a compressed size is
+			// a compression of the entries, so the search starts from the count of the previous node (the nodes of a
+			// level compress alike) and gallops from it: 2..3 compressions per node instead of a binary search over
+			// 1..MaxCount (13 compressions, the first of MaxCount entries - the most of the bulk load time).
 			size_t FitCount(const TEntries& v, size_t nStart, size_t nEnd, uint32_t nLimit)
 			{
 				size_t nMax = std::min<size_t>(nEnd - nStart, m_params.m_nMaxCount);
 				const TEntry* p = v.data() + nStart;
-				if (m_compressor.Fits(p, nMax, nLimit))
-					return nMax;
-				if (!m_compressor.Fits(p, 1, nLimit))
-					throw CommonLib::CExcBase("[TRTree] one entry doesn't fit in a node");
 
-				size_t lo = 1, hi = nMax;        // lo fits, hi doesn't
-				while (hi - lo > 1)
+				// all of them uncompressed: no compression
+				if (TCompressor::HeadSize + nMax * TCompressor::RawEntrySize <= nLimit)
+					return nMax;
+
+				auto fits = [&](size_t nCount) { return m_compressor.Fits(p, nCount, nLimit); };
+
+				size_t nGuess = m_nBulkFit != 0 ? m_nBulkFit : (size_t)(nLimit / TCompressor::RawEntrySize);   // the raw capacity
+				nGuess = (std::max<size_t>)(1, (std::min)(nGuess, nMax));
+
+				size_t lo, hi;   // lo fits, hi doesn't (hi == nMax + 1: unknown)
+				if (fits(nGuess))
+				{
+					lo = nGuess;
+					hi = nMax + 1;
+					size_t nStep = (std::max<size_t>)(1, lo / 16);
+					while (lo < nMax)
+					{
+						size_t nNext = (std::min)(nMax, lo + nStep);
+						if (!fits(nNext))
+						{
+							hi = nNext;
+							break;
+						}
+						lo = nNext;
+						nStep *= 2;
+					}
+				}
+				else
+				{
+					hi = nGuess;
+					lo = 0;
+					size_t nStep = (std::max<size_t>)(1, hi / 16);
+					while (hi > 1)
+					{
+						size_t nNext = hi > nStep ? hi - nStep : 1;
+						if (fits(nNext))
+						{
+							lo = nNext;
+							break;
+						}
+						hi = nNext;
+						nStep *= 2;
+					}
+					if (lo == 0)
+						throw CommonLib::CExcBase("[TRTree] one entry doesn't fit in a node");
+				}
+
+				// between lo and hi; a node a few entries short is good enough (1/64 of the count)
+				size_t nTolerance = (std::max<size_t>)(1, lo / 64);
+				while (hi <= nMax && hi - lo > nTolerance)
 				{
 					size_t mid = lo + (hi - lo) / 2;
-					if (m_compressor.Fits(p, mid, nLimit))
+					if (fits(mid))
 						lo = mid;
 					else
 						hi = mid;
 				}
+
+				if (lo < nMax || nMax == m_params.m_nMaxCount)
+					m_nBulkFit = lo;     // the last node of a slice (nMax small) doesn't tell the capacity
 				return lo;
 			}
 
@@ -831,6 +915,7 @@ namespace bptreedb
 
 				size_t n = level.size();
 				std::sort(level.begin(), level.end(), byX);
+				m_nBulkFit = 0;     // the nodes of another level compress differently
 
 				// node capacity by the first entries: the number of vertical slices
 				size_t nCap = FitCount(level, 0, n, nLimit);
@@ -900,6 +985,7 @@ namespace bptreedb
 			uint32_t m_nPageMax{ 0 };     // bytes for the entries in a page
 			uint32_t m_nPageLimit{ 0 };   // the same minus a reserve: the limit for "the node is full"
 			uint32_t m_nMinCount{ 2 };
+			size_t m_nBulkFit{ 0 };       // bulk load: the entries of the last full node (the guess of FitCount)
 
 			TNodePtr m_pRoot;
 			std::unordered_map<int64_t, SCacheItem> m_cache;

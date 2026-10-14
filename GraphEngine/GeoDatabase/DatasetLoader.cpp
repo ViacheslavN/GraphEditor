@@ -3,6 +3,7 @@
 #include "GeoDatabaseShape/ShapefileWorkspace.h"
 #include "GeoDatabaseSQlite/SQLiteWorkspace.h"
 #include "GeoDatabaseRaster/RasterWorkspace.h"
+#include "GeoDatabaseBPTreeDB/CBPtreeDBWorkspace.h"
 
 namespace GraphEngine {
     namespace GeoDatabase {
@@ -74,6 +75,8 @@ namespace GraphEngine {
                     return CShapfileWorkspace::Open(ptrObj);
                 case wtSqlLite:
                     return CSQLiteWorkspace::Open(ptrObj);
+                case wtBPtreeDB:
+                    return CBPtreeDBWorkspace::Open(ptrObj);
                 case wtRaster:
                     return CRasterWorkspace::Open(ptrObj);
                 default:

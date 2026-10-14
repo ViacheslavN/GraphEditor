@@ -1,4 +1,4 @@
-// AddSQLiteDlg.cpp : implementation of the CAddSQLiteDlg class
+// AddSQLiteDlg.cpp : implementation of the CAddSQLiteDlg class ("Add Database": SQLite / BPtreeDB)
 //
 /////////////////////////////////////////////////////////////////////////////
 
@@ -50,12 +50,12 @@ void CAddSQLiteDlg::LoadTables(const std::wstring& sPath)
 	{
 		try
 		{
-			m_vecTables = TestMapDraw::CMapProject::GetSQLiteTables(WideToUtf8(sPath));
+			m_vecTables = TestMapDraw::CMapProject::GetDatabaseTables(WideToUtf8(sPath));
 		}
 		catch (std::exception& exc)
 		{
 			std::wstring sMsg = L"Failed to read tables of the database:\n" + ExceptionText(exc);
-			MessageBox(sMsg.c_str(), L"Add SQLite Database", MB_OK | MB_ICONWARNING);
+			MessageBox(sMsg.c_str(), L"Add Database", MB_OK | MB_ICONWARNING);
 		}
 	}
 
@@ -86,8 +86,8 @@ void CAddSQLiteDlg::UpdatePages()
 {
 	int nTable = GetSelectedTable();
 	TestMapDraw::SDataSource source;
-	source.bSQLite = true;
-	source.sPath = WideToUtf8(m_sTablesPath);   // SQLite opens files with UTF-8 names
+	source.bDatabase = true;
+	source.sPath = WideToUtf8(m_sTablesPath);   // the databases open files with UTF-8 names
 	source.sTable = nTable >= 0 ? m_vecTables[nTable].sName : std::string();
 	m_pages.SetSource(nTable >= 0 ? &m_vecTables[nTable] : nullptr, source);
 }
@@ -96,7 +96,7 @@ LRESULT CAddSQLiteDlg::OnBrowse(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndC
 {
 	std::wstring sCurrent = GetPathText();
 	CFileDialog fileDlg(TRUE, _T("sqlite"), sCurrent.empty() ? NULL : sCurrent.c_str(), OFN_HIDEREADONLY | OFN_FILEMUSTEXIST,
-		_T("SQLite database (*.sqlite;*.db)\0*.sqlite;*.db\0All Files (*.*)\0*.*\0"), m_hWnd);
+		_T("Databases (*.sqlite;*.db;*.btdb)\0*.sqlite;*.db;*.btdb\0SQLite database (*.sqlite;*.db)\0*.sqlite;*.db\0BPtreeDB database (*.btdb)\0*.btdb\0All Files (*.*)\0*.*\0"), m_hWnd);
 	if(fileDlg.DoModal() != IDOK)
 		return 0;
 
@@ -128,7 +128,7 @@ LRESULT CAddSQLiteDlg::OnOK(WORD /*wNotifyCode*/, WORD wID, HWND /*hWndCtl*/, BO
 	std::wstring sPath = GetPathText();
 	if(sPath.empty() || ::GetFileAttributesW(sPath.c_str()) == INVALID_FILE_ATTRIBUTES)
 	{
-		MessageBox(L"Select an existing SQLite database.", L"Add SQLite Database", MB_OK | MB_ICONWARNING);
+		MessageBox(L"Select an existing database (SQLite / BPtreeDB).", L"Add Database", MB_OK | MB_ICONWARNING);
 		m_editPath.SetFocus();
 		return 0;
 	}
@@ -136,7 +136,7 @@ LRESULT CAddSQLiteDlg::OnOK(WORD /*wNotifyCode*/, WORD wID, HWND /*hWndCtl*/, BO
 	LoadTables(sPath);
 	if(m_vecTables.empty())
 	{
-		MessageBox(L"The database has no spatial tables.", L"Add SQLite Database", MB_OK | MB_ICONWARNING);
+		MessageBox(L"The database has no spatial tables.", L"Add Database", MB_OK | MB_ICONWARNING);
 		m_editPath.SetFocus();
 		return 0;
 	}

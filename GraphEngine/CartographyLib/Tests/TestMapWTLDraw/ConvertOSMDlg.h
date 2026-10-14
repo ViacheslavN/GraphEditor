@@ -1,5 +1,5 @@
 // ConvertOSMDlg.h : "Convert from OpenStreetMap" dialog - the OSM file, its layers / tables and their columns
-// (Analyze before the conversion, the unchecked ones go to the exclude list), the output SQLite database and the conversion settings
+// (Analyze before the conversion, the unchecked ones go to the exclude list), the output database (SQLite / BPtreeDB) and the conversion settings
 //
 /////////////////////////////////////////////////////////////////////////////
 
@@ -8,6 +8,7 @@
 #ifdef HAVE_OSM_CONVERTOR
 
 #include "../../../Convertors/OSM/OSMConvertorLib/OSMConvertorLib.h"
+#include "MapProject.h"
 
 class CConvertOSMDlg : public CDialogImpl<CConvertOSMDlg>
 {
@@ -25,6 +26,8 @@ public:
 	const std::wstring& GetOutputPath() const { return m_sOutputPath; }
 	const GraphEngine::Convertors::SOSMConvertSettings& GetSettings() const { return m_settings; }
 	bool GetAddToMap() const { return m_bAddToMap; }
+	// the format of the output database (by the extension of GetOutputPath) and the BPtreeDB spatial index
+	const TestMapDraw::SDatabaseOptions& GetDatabaseOptions() const { return m_dbOptions; }
 
 	BEGIN_MSG_MAP(CConvertOSMDlg)
 		MESSAGE_HANDLER(WM_INITDIALOG, OnInitDialog)
@@ -43,6 +46,7 @@ public:
 		COMMAND_HANDLER(IDC_OSM_SCALE_VALUE, EN_CHANGE, OnCompressChanged)
 		NOTIFY_HANDLER(IDC_OSM_DATASETS, TVN_ITEMCHANGED, OnDatasetChanged)
 		COMMAND_ID_HANDLER(IDC_OSM_OUTPUT_BROWSE, OnOutputBrowse)
+		COMMAND_HANDLER(IDC_OSM_DB_FORMAT, CBN_SELCHANGE, OnDbFormatChanged)
 		COMMAND_ID_HANDLER(IDC_OSM_SELECT_ALL, OnSelectAll)
 		COMMAND_ID_HANDLER(IDC_OSM_CLEAR_ALL, OnSelectAll)
 		COMMAND_HANDLER(IDC_OSM_PATH, EN_CHANGE, OnPathChanged)
@@ -63,6 +67,8 @@ public:
 	LRESULT OnSplit(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnOutputBrowse(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnCompressChanged(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
+	// the output gets the extension of the format, the spatial index is for BPtreeDB
+	LRESULT OnDbFormatChanged(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnExportTags(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnDatasetChanged(int /*idCtrl*/, LPNMHDR pnmh, BOOL& /*bHandled*/);
 	LRESULT OnSelectAll(WORD /*wNotifyCode*/, WORD wID, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
@@ -72,6 +78,7 @@ public:
 	LRESULT OnTempChanged(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 
 private:
+	bool IsBPtreeDBFormat() const;
 	// analyzes the file: metadata, layers / tables, their columns (progress window, can be canceled), true - done;
 	// the split data (osm_split.xml) are opened at once
 	bool AnalyzeMap(const std::wstring& sPath);
@@ -121,6 +128,9 @@ private:
 	bool          m_bExportTags;    // the tags table is converted (off by default: it is the biggest table)
 	bool          m_bUpdating;      // the tree / check box are changed by the code
 	static std::wstring s_sTempDir; // the folder of the temporary files, kept while the application runs
+	TestMapDraw::SDatabaseOptions m_dbOptions;
+	static int s_nDbFormat;         // the output format (0 - SQLite, 1 - BPtreeDB), kept while the application runs
+	static int s_nSpatialIndex;     // BPtreeDB: 0 - R-tree, 1 - Z-order
 };
 
 #endif

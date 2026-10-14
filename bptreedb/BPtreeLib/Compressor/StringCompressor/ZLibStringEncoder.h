@@ -44,6 +44,8 @@ namespace bptreedb
 		uint32_t Count() const;
 	private:
 		void UpdateRatio(uint32_t nCompSize);
+		// the output is full: the ratio of the input compressed so far (the split point is by the estimate)
+		void UpdateRatioOverflow(uint64_t nRawIn, uint32_t nOut);
 		void ProcessDecodeBuffer(const byte_t* buffer, uint32_t bufSize, std::vector<byte_t>& strPart, uint32_t& readCount, uint32_t count, TValueMemSet& vecValues);
 
 	private:

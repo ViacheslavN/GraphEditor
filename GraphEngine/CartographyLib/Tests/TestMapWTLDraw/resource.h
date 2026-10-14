@@ -35,6 +35,18 @@
 #define IDC_LABEL_DUP_DISTANCE          1156
 #define IDD_CONVERT_OSM                 107
 #define IDD_OSM_PROGRESS                108
+#define IDD_CONVERT_DB                  114
+#define IDC_OSM_DB_FORMAT               1261
+#define IDC_OSM_SPATIAL_INDEX           1262
+#define IDC_CONV_SOURCE                 1263
+#define IDC_CONV_SOURCE_BROWSE          1264
+#define IDC_CONV_SOURCE_TABLE           1265
+#define IDC_CONV_OUTPUT                 1266
+#define IDC_CONV_OUTPUT_BROWSE          1267
+#define IDC_CONV_FORMAT                 1268
+#define IDC_CONV_SPATIAL_INDEX          1269
+#define IDC_CONV_INFO                   1270
+#define IDC_CONV_COMPRESS               1271
 #define IDC_OSM_PATH                    1160
 #define IDC_OSM_BROWSE                  1161
 #define IDC_OSM_ANALYZE                 1162
@@ -192,7 +204,7 @@
 #define ID_ZOOM_OUT                     32780
 #define ID_CLEAR_SELECTION              32781
 #define ID_ADD_SQLITE_DB                32782
-#define ID_CONVERT_SHAPE_TO_SQLITE      32783
+#define ID_CONVERT_TO_DATABASE          32783
 #define ID_VIEW_3D                      32784
 #define ID_TILT_UP                      32785
 #define ID_TILT_DOWN                    32786
@@ -216,7 +228,7 @@
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        201
 #define _APS_NEXT_COMMAND_VALUE         32800
-#define _APS_NEXT_CONTROL_VALUE         1261
-#define _APS_NEXT_SYMED_VALUE           114
+#define _APS_NEXT_CONTROL_VALUE         1272
+#define _APS_NEXT_SYMED_VALUE           115
 #endif
 #endif

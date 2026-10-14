@@ -3,6 +3,7 @@
 
 #include "BPTreeLeafNode.h"
 #include "AllocsSet.h"
+#include "NodeCompressorTraits.h"
 
 namespace bptreedb
 {
@@ -86,6 +87,9 @@ namespace bptreedb
 				}
 
 				// doesn't fit: the caller (SaveNode) splits off nRet last elements and saves again
+				// (a cut compressor: nRet is exactly what didn't fit, the stream has the page of the others)
+				if constexpr (TIsCutWrite<TCompressor>::value)
+					return nRet;
 				if (m_bSplitAtFit)
 					return SplitCount(true);
 

@@ -74,6 +74,7 @@ namespace bptreedb
 			CommonLib::CZCompressStream zStream(m_compressLevel);
 			zStream.AttachOut((Bytef*)pStream->Buffer() + pStream->Pos(), streamSize);
 
+			uint64_t nRawIn = 0;
 			for (uint32_t i = 0, sz = (uint32_t)vecValues.size(); i < sz; ++i)
 			{
 				zStream.AttachIn((Bytef*)vecValues[i].CStr(), (uInt)vecValues[i].Length());
@@ -81,11 +82,15 @@ namespace bptreedb
 				while (zStream.GetAvailIn() != 0)
 				{
 					if (zStream.GetAvailOut() == 0)
+					{
+						UpdateRatioOverflow(nRawIn + vecValues[i].Length() - zStream.GetAvailIn(), streamSize);
 						return (uint32_t)(vecValues.size()) / 2;
+					}
 
 					zStream.Compress();
 
 				}
+				nRawIn += vecValues[i].Length();
 			}
 
 			// Z_STREAM_END: everything is written; Z_OK / Z_BUF_ERROR: the output buffer is full
@@ -94,6 +99,7 @@ namespace bptreedb
 			{
 				if (res != Z_OK && res != Z_BUF_ERROR)
 					throw CommonLib::CExcBase("deflate finish error {0}", res);
+				UpdateRatioOverflow(nRawIn, streamSize);
 				return (uint32_t)(vecValues.size()) / 2;
 			}
 
@@ -209,6 +215,13 @@ namespace bptreedb
 	{
 		if (nCompSize != 0 && m_nRowSize > 256)   // small nodes say little about the data
 			m_dRatio = (double)m_nRowSize / (double)nCompSize;
+	}
+
+	void CZlibStringComp::UpdateRatioOverflow(uint64_t nRawIn, uint32_t nOut)
+	{
+		// zlib keeps some input in its buffers: the ratio is a lower bound, the estimate stays on the safe side
+		if (nOut != 0 && nRawIn > 256)
+			m_dRatio = (std::max)(1.0, (double)nRawIn / (double)nOut);
 	}
 
 	void CZlibStringComp::Clear()

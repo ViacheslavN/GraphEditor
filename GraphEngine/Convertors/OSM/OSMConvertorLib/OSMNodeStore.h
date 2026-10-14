@@ -62,7 +62,7 @@ namespace GraphEngine {
             void Clear();
             void Add(const int64_t* pRefs, uint32_t nStart, uint32_t nCount);
             void Resolve(IOSMNodeLookup& lookup, size_t nTotalRefs, const std::function<bool()>& fnContinue = std::function<bool()>());
-            static const size_t ResolveChunk = 1024;
+            static constexpr size_t ResolveChunk = 1024;   // constexpr: inline (std::min takes it by reference)
 
             // the ref by its index in pRefs (only the added ranges)
             bool Get(size_t nRef, int32_t& nLon, int32_t& nLat) const

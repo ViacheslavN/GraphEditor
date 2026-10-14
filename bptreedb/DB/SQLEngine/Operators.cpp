@@ -1,5 +1,6 @@
 #include "Operators.h"
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <limits>
 
@@ -1008,5 +1009,102 @@ namespace bptreedb
 			m_seen.clear();
 			m_rightSet.clear();
 		}
+			//------------------------------------------------------------------------------------------
+		// space statistics
+
+		CSpaceStatsOp::CSpaceStatsOp(bool bBlobs) : COperator((uint32_t)ColumnNames().size()), m_bBlobs(bBlobs)
+		{
+		}
+
+		bool CSpaceStatsOp::IsSpaceTable(const std::string& sName, bool& bBlobs)
+		{
+			std::string s = sName;
+			std::transform(s.begin(), s.end(), s.begin(), [](unsigned char ch) { return (char)std::tolower(ch); });
+			if (s == "bptreedb_space")
+			{
+				bBlobs = false;
+				return true;
+			}
+			if (s == "bptreedb_space_full")
+			{
+				bBlobs = true;
+				return true;
+			}
+			return false;
+		}
+
+		const std::vector<std::string>& CSpaceStatsOp::ColumnNames()
+		{
+			static const std::vector<std::string> names = { "table_name", "object", "kind", "type", "levels",
+				"inner_pages", "leaf_pages", "blob_pages", "info_pages", "pages", "bytes", "size_mb" };
+			return names;
+		}
+
+		const std::vector<eDataTypes>& CSpaceStatsOp::ColumnTypes()
+		{
+			static const std::vector<eDataTypes> types = { dtString, dtString, dtString, dtString, dtInteger64,
+				dtInteger64, dtInteger64, dtInteger64, dtInteger64, dtInteger64, dtInteger64, dtDouble };
+			return types;
+		}
+
+		void CSpaceStatsOp::Open(SExecContext& exec, const SEvalContext* pOuter)
+		{
+			SetContext(exec, pOuter);
+			m_rows.clear();
+			m_nPos = 0;
+
+			SDatabaseSpace space;
+			exec.m_ptrTran->GetSpaceStatistics(space, std::string(), m_bBlobs);
+			const double dMB = 1024.0 * 1024.0;
+
+			auto addRow = [&](const std::string& sTable, const std::string& sObject, const std::string& sKind, const std::string& sType,
+				const TValue& levels, const TValue& inner, const TValue& leaves, const TValue& blobs, const TValue& info, uint64_t nPages)
+			{
+				TRow row(ColumnNames().size());
+				row[0] = sTable;
+				row[1] = sObject;
+				row[2] = sKind;
+				row[3] = sType;
+				row[4] = levels;
+				row[5] = inner;
+				row[6] = leaves;
+				row[7] = blobs;
+				row[8] = info;
+				row[9] = (int64_t)nPages;
+				row[10] = (int64_t)(nPages * space.m_nPageSize);
+				row[11] = (double)(nPages * space.m_nPageSize) / dMB;
+				m_rows.push_back(std::move(row));
+			};
+
+			uint64_t nTreePages = 0;
+			for (const SSpaceInfo& info : space.m_trees)
+			{
+				nTreePages += info.Pages();
+				// the blob pages: NULL when they weren't counted (without _full a blob tree has them uncounted)
+				TValue blobs = info.m_bBlobsCounted || m_bBlobs ? TValue((int64_t)info.m_nBlobPages) : TValue();
+				addRow(info.m_sTable, info.m_sObject, info.m_sKind, info.m_type == dtUnknown ? std::string() : std::string(db::DataTypeName(info.m_type)),
+					TValue((int64_t)info.m_nLevels), TValue((int64_t)info.m_nInnerPages), TValue((int64_t)info.m_nLeafPages), blobs,
+					TValue((int64_t)info.m_nInfoPages), info.Pages());
+			}
+
+			addRow(std::string(), std::string(), "file", std::string(), TValue(), TValue(), TValue(), TValue(), TValue(), space.m_nFilePages);
+			uint64_t nOther = space.m_nFilePages > nTreePages ? space.m_nFilePages - nTreePages : 0;
+			addRow(std::string(), m_bBlobs ? "schema, unused pages" : "schema, unused pages, big blobs", "other", std::string(),
+				TValue(), TValue(), TValue(), TValue(), TValue(), nOther);
+		}
+
+		bool CSpaceStatsOp::Next()
+		{
+			if (m_nPos >= m_rows.size())
+				return false;
+			m_row = m_rows[m_nPos++];
+			return true;
+		}
+
+		void CSpaceStatsOp::Explain(std::string& sText, int nDepth) const
+		{
+			Line(sText, nDepth, m_bBlobs ? "system table bptreedb_space_full" : "system table bptreedb_space");
+		}
+
 	}
 }

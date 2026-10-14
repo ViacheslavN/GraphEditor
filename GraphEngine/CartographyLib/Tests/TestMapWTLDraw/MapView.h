@@ -45,7 +45,7 @@ public:
 		COMMAND_ID_HANDLER(ID_ADD_SHAPE_FILE, OnAddShapeFile)
 		COMMAND_ID_HANDLER(ID_ADD_SQLITE_DB, OnAddSQLiteDb)
 		COMMAND_ID_HANDLER(ID_ADD_RASTER, OnAddRaster)
-		COMMAND_ID_HANDLER(ID_CONVERT_SHAPE_TO_SQLITE, OnConvertShapeToSQLite)
+		COMMAND_ID_HANDLER(ID_CONVERT_TO_DATABASE, OnConvertToDatabase)
 		COMMAND_ID_HANDLER(ID_CONVERT_FROM_OSM, OnConvertFromOSM)
 		COMMAND_ID_HANDLER(ID_REMOVE_ALL_LAYERS, OnRemoveAllLayers)
 		COMMAND_ID_HANDLER(ID_CLEAR_SELECTION, OnClearSelection)
@@ -80,7 +80,7 @@ public:
 	LRESULT OnAddShapeFile(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnAddSQLiteDb(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnAddRaster(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
-	LRESULT OnConvertShapeToSQLite(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
+	LRESULT OnConvertToDatabase(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnConvertFromOSM(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnRemoveAllLayers(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
 	LRESULT OnClearSelection(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/);
@@ -95,11 +95,15 @@ public:
 	bool OpenProject(const wchar_t *pszFile);
 	bool SaveProject(const wchar_t *pszFile);
 	bool AddShapeFile(const wchar_t *pszFile, const TestMapDraw::SLayerParams& params = TestMapDraw::SLayerParams());
-	bool AddSQLiteDatabase(const wchar_t *pszFile, const std::string& sTableName = std::string(), const TestMapDraw::SLayerParams& params = TestMapDraw::SLayerParams());
+	// a database (SQLite / BPtreeDB by the extension): the spatial tables (sTableName empty - all of them) as layers
+	bool AddDatabase(const wchar_t *pszFile, const std::string& sTableName = std::string(), const TestMapDraw::SLayerParams& params = TestMapDraw::SLayerParams());
+	bool AddDatabase(const wchar_t *pszFile, const std::vector<std::string>& vecTableNames);
 	double GetCurrentScale() const; // scale denominator of the map view, 0 - no map yet
 	bool AddRaster(const wchar_t *pszFile);
-	// copies the shape file into the SQLite database in a background thread
-	bool StartConvertToSQLite(const wchar_t *pszShapeFile, const wchar_t *pszDatabase);
+	// copies a shape file or the spatial tables of a database (sSourceTable empty - all of them) into a database
+	// (SQLite / BPtreeDB) in a background thread
+	bool StartConvertToDatabase(const std::wstring& sSource, const std::string& sSourceTable, const std::wstring& sDatabase,
+	                            const TestMapDraw::SDatabaseOptions& options);
 	bool IsConverting() const;
 	void Redraw();
 
@@ -155,13 +159,13 @@ private:
 	uint64_t m_nDrawCounter;   // GetDrawCounter() at the last check
 	int m_nProgressTicks;      // timer ticks since the last repaint while drawing
 
-	// shape file -> SQLite conversion
+	// shape file / database -> database conversion
 	std::thread m_convertThread;
 	std::atomic<bool> m_bConverting;
 	std::atomic<bool> m_bConvertCancel;
 	std::wstring m_sConvertDatabase;
-	std::wstring m_sConvertShapeFile;
-	std::string m_sConvertTable;  // set by the thread, read after WM_CONVERT_FINISHED
+	std::wstring m_sConvertSource;
+	std::vector<std::string> m_vecConvertTables;  // set by the thread, read after WM_CONVERT_FINISHED
 	std::string m_sConvertError;
 	int64_t m_nConverted;
 

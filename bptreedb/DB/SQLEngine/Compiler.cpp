@@ -27,6 +27,12 @@ namespace bptreedb
 				return true;
 			}
 
+			// the row id of a table as in SQLite: ROWID, _ROWID_, OID (a field of the table with the name comes first)
+			bool IsRowIdName(const std::string& sName)
+			{
+				return EqualNoCase(sName, "ROWID") || EqualNoCase(sName, "_ROWID_") || EqualNoCase(sName, "OID");
+			}
+
 			eDataTypes NormType(eDataTypes type)
 			{
 				if (IsIntegerType(type))
@@ -174,7 +180,7 @@ namespace bptreedb
 					sCanonical = ptrField->GetName();
 					return Use(sCanonical, type);
 				}
-				if (EqualNoCase(sName, "ROWID"))
+				if (IsRowIdName(sName))
 				{
 					type = dtInteger64;
 					sCanonical = "rowid";
@@ -192,7 +198,7 @@ namespace bptreedb
 							return true;
 					return false;
 				}
-				if (m_ptrFields->FindField(sName) >= 0 || EqualNoCase(sName, "ROWID"))
+				if (m_ptrFields->FindField(sName) >= 0 || IsRowIdName(sName))
 					return true;
 				for (int32_t i = 0; i < m_ptrFields->GetFieldCount(); ++i)
 					if (EqualNoCase(m_ptrFields->GetField(i)->GetName(), sName))
@@ -683,7 +689,20 @@ namespace bptreedb
 			case eTableRefType::Subquery:
 				{
 					SSource source;
-					if (ptrRef->m_type == eTableRefType::Table)
+					bool bSpaceBlobs = false;
+					if (ptrRef->m_type == eTableRefType::Table && !FindTable(static_cast<const STableName&>(*ptrRef).m_sName).get() &&
+						CSpaceStatsOp::IsSpaceTable(static_cast<const STableName&>(*ptrRef).m_sName, bSpaceBlobs))
+					{
+						// a system table (the space statistics): a source with its own operator, like a subquery
+						const STableName& name = static_cast<const STableName&>(*ptrRef);
+						source.m_kind = SSource::Subquery;
+						source.m_plan.m_ptrRoot = std::make_shared<CSpaceStatsOp>(bSpaceBlobs);
+						source.m_plan.m_names = CSpaceStatsOp::ColumnNames();
+						source.m_plan.m_types = CSpaceStatsOp::ColumnTypes();
+						source.m_plan.m_nColumns = (uint32_t)source.m_plan.m_names.size();
+						source.m_sAlias = name.m_sAlias.empty() ? name.m_sName : name.m_sAlias;
+					}
+					else if (ptrRef->m_type == eTableRefType::Table)
 					{
 						const STableName& name = static_cast<const STableName&>(*ptrRef);
 						source.m_ptrTable = GetTable(name.m_sName, name.m_pos);

@@ -12,7 +12,6 @@
 
 namespace bptreedb
 {
-
 		template<class _TKey, class _TValue,  class _TKeyEncoder = TEmptyValueEncoder<_TKey>, class _TValueEncoder = TEmptyValueEncoder<_TValue> >
 		class TBaseNodeCompressor
 		{

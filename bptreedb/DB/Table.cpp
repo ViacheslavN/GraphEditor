@@ -334,8 +334,9 @@ namespace bptreedb
 					if (ptrField->GetIsUnique())
 					{
 						CIndexPtr ptrIndex = std::make_shared<CIndex>(itUnique, ptrField);
+						ptrIndex->SetFormat(CIndex::NewFormat(ptrField->GetType()));
 						SFieldTrees& trees = ptrTrees->m_fields[ptrField->GetId()];
-						trees.m_ptrIndex = CreateIndexTree(m_ptrContext, ptrTrees->m_ptrPager, ptrField->GetType(), -1);
+						trees.m_ptrIndex = CreateIndexTree(m_ptrContext, ptrTrees->m_ptrPager, ptrField->GetType(), -1, ptrIndex->GetFormat());
 						ptrIndex->SetTreePage(trees.m_ptrIndex->GetInfoPage());
 						bool bChanged = false;
 						BuildIndex(ptrField, ptrIndex, trees, bChanged);
@@ -424,6 +425,8 @@ namespace bptreedb
 				}
 
 				CIndexPtr ptrIndex = std::make_shared<CIndex>(prop.m_type, ptrField);
+				if (!ptrIndex->IsSpatial())
+					ptrIndex->SetFormat(CIndex::NewFormat(type));
 				STableTreesPtr ptrTrees = tran.Trees(*this);
 				std::lock_guard<std::recursive_mutex> treesLocker(ptrTrees->m_mutex);
 				SFieldTrees& trees = Trees(*ptrTrees, ptrField);
@@ -437,7 +440,7 @@ namespace bptreedb
 					}
 					else
 					{
-						trees.m_ptrIndex = CreateIndexTree(m_ptrContext, ptrTrees->m_ptrPager, type, -1);
+						trees.m_ptrIndex = CreateIndexTree(m_ptrContext, ptrTrees->m_ptrPager, type, -1, ptrIndex->GetFormat());
 						ptrIndex->SetTreePage(trees.m_ptrIndex->GetInfoPage());
 					}
 				}
@@ -451,7 +454,7 @@ namespace bptreedb
 				bool bChanged = false;
 				try
 				{
-					BuildIndex(ptrField, ptrIndex, trees, bChanged);
+					BuildIndex(ptrField, ptrIndex, trees, bChanged, ptrIndex->IsSpatial() ? prop.m_pSpatialEntries : nullptr);
 				}
 				catch (...)
 				{
@@ -474,8 +477,30 @@ namespace bptreedb
 			}
 		}
 
-		void CTable::BuildIndex(const CFieldPtr& ptrField, const CIndexPtr& ptrIndex, SFieldTrees& trees, bool& bChanged)
+		void CTable::BuildIndex(const CFieldPtr& ptrField, const CIndexPtr& ptrIndex, SFieldTrees& trees, bool& bChanged,
+		                        std::vector<std::pair<CommonLib::bbox, int64_t> >* pSpatialEntries)
 		{
+			bool bZOrder = ptrIndex->GetType() == itSpatialZOrder;
+			const CommonLib::bbox& extent = ptrIndex->GetSpatialParams().m_extent;
+			if (ptrIndex->IsSpatial() && pSpatialEntries)
+			{
+				// the boxes of the caller
+				if (bZOrder)
+				{
+					for (const auto& e : *pSpatialEntries)
+					{
+						if (!InExtent(e.first, extent))
+							throw CommonLib::CExcBase("the geometry of row {0} is outside the extent of the Z-order index", e.second);
+					}
+				}
+				if (pSpatialEntries->empty())
+					return;
+
+				bChanged = true;
+				trees.m_ptrSpatial->Build(*pSpatialEntries);
+				return;
+			}
+
 			IValueReaderPtr ptrReader = trees.m_ptrValues->CreateReader();
 			if (!ptrIndex->IsSpatial())
 			{
@@ -483,8 +508,6 @@ namespace bptreedb
 				return;
 			}
 
-			bool bZOrder = ptrIndex->GetType() == itSpatialZOrder;
-			const CommonLib::bbox& extent = ptrIndex->GetSpatialParams().m_extent;
 			std::vector<std::pair<CommonLib::bbox, int64_t> > entries;
 			int64_t nRowId = 0;
 			CommonLib::CVariant value;
@@ -562,7 +585,7 @@ namespace bptreedb
 						trees.m_ptrSpatial = CreateSpatialIndexTree(m_ptrContext, tableTrees.m_ptrPager, ptrIndex->GetSpatialParams(), ptrIndex->GetTreePage());
 				}
 				else if (trees.m_ptrIndex.get() == nullptr)
-					trees.m_ptrIndex = CreateIndexTree(m_ptrContext, tableTrees.m_ptrPager, ptrField->GetType(), ptrIndex->GetTreePage());
+					trees.m_ptrIndex = CreateIndexTree(m_ptrContext, tableTrees.m_ptrPager, ptrField->GetType(), ptrIndex->GetTreePage(), ptrIndex->GetFormat());
 			}
 			return trees;
 		}
@@ -634,6 +657,7 @@ namespace bptreedb
 			{
 				tran.CheckWrite();
 				CheckNotDropped();
+				bMinSplit = bMinSplit || tran.GetInsertOnRight();
 				STableTreesPtr ptrTrees = tran.Trees(*this);
 				std::lock_guard<std::recursive_mutex> locker(ptrTrees->m_mutex);
 
@@ -775,10 +799,15 @@ namespace bptreedb
 
 				try
 				{
+					bool bMinSplit = tran.GetInsertOnRight();
 					for (SChange& c : changes)
 					{
 						RemoveValue(c.m_ptrField, *c.m_pTrees, nRowId, c.m_oldValue);
+						if (bMinSplit && c.m_pTrees->m_ptrIndex.get())
+							c.m_pTrees->m_ptrIndex->SetMinSplit(true);
 						InsertValue(c.m_ptrField, *c.m_pTrees, nRowId, c.m_newValue);
+						if (bMinSplit && c.m_pTrees->m_ptrIndex.get())
+							c.m_pTrees->m_ptrIndex->SetMinSplit(false);
 					}
 				}
 				catch (...)
@@ -806,6 +835,53 @@ namespace bptreedb
 			STableTreesPtr ptrTrees = tran.Trees(*this);
 			std::lock_guard<std::recursive_mutex> locker(ptrTrees->m_mutex);
 			return RowTree(*ptrTrees)->Scan();
+		}
+
+		void CTable::GetSpace(CTransaction& tran, bool bBlobs, std::vector<SSpaceInfo>& space)
+		{
+			std::lock_guard<std::recursive_mutex> locker(m_mutex);
+			try
+			{
+				STableTreesPtr ptrTrees = tran.Trees(*this);
+				std::lock_guard<std::recursive_mutex> treesLocker(ptrTrees->m_mutex);
+
+				auto add = [&](const std::string& sObject, const char* pszKind, eDataTypes type, ITree* pTree)
+				{
+					STreeSpace tree;
+					pTree->GetSpace(tree, bBlobs);
+					SSpaceInfo info;
+					info.m_sTable = m_sName;
+					info.m_sObject = sObject;
+					info.m_sKind = pszKind;
+					info.m_type = type;
+					info.m_nLevels = tree.m_nLevels;
+					info.m_nInnerPages = tree.m_nInnerPages;
+					info.m_nLeafPages = tree.m_nLeafPages;
+					info.m_nBlobPages = tree.m_nBlobPages;
+					info.m_nInfoPages = tree.m_nInfoPages;
+					info.m_bBlobsCounted = tree.m_bBlobsCounted;
+					space.push_back(info);
+				};
+
+				add(std::string(), "rows", dtUnknown, RowTree(*ptrTrees).get());
+				for (const CFieldPtr& ptrField : m_fields)
+				{
+					SFieldTrees& trees = Trees(*ptrTrees, ptrField);
+					add(ptrField->GetName(), "values", ptrField->GetType(), trees.m_ptrValues.get());
+
+					CIndexPtr ptrIndex = ptrField->GetIndexImpl();
+					if (trees.m_ptrIndex.get())
+						add(ptrField->GetName(), ptrIndex.get() && ptrIndex->GetType() == itUnique ? "unique index" : "index", ptrField->GetType(), trees.m_ptrIndex.get());
+					if (trees.m_ptrSpatial.get())
+						add(ptrField->GetName(), ptrIndex.get() && ptrIndex->GetType() == itSpatialZOrder ? "spatial index Z-order" : "spatial index R-tree",
+							ptrField->GetType(), trees.m_ptrSpatial.get());
+				}
+			}
+			catch (std::exception& excSrc)
+			{
+				CommonLib::CExcBase::RegenExcT("table '{0}': failed to count the pages", m_sName, excSrc);
+				throw;
+			}
 		}
 
 		IValueReaderPtr CTable::CreateReader(CTransaction& tran, CFieldPtr ptrField)

@@ -39,12 +39,13 @@ namespace
 		return EndsWith(sPath, L"osm_split.xml");
 	}
 
-	// C:\data\czech-republic-latest.osm.pbf -> C:\data\czech-republic-latest.sqlite,
-	// C:\data\czech_split\osm_split.xml -> C:\data\czech_split.sqlite
-	std::wstring DefaultOutputPath(const std::wstring& sOSMPath)
+	// C:\data\czech-republic-latest.osm.pbf -> C:\data\czech-republic-latest.sqlite (.btdb),
+	// C:\data\czech_split\osm_split.xml -> C:\data\czech_split.sqlite (.btdb)
+	std::wstring DefaultOutputPath(const std::wstring& sOSMPath, bool bBPtreeDB)
 	{
+		const wchar_t* pszExt = bBPtreeDB ? L".btdb" : L".sqlite";
 		if(IsSplitData(sOSMPath))
-			return std::filesystem::path(sOSMPath).parent_path().wstring() + L".sqlite";
+			return std::filesystem::path(sOSMPath).parent_path().wstring() + pszExt;
 		std::wstring sPath = sOSMPath;
 		for(const wchar_t* pszSuffix : {L".osm.pbf", L".pbf", L".osm"})
 		{
@@ -54,7 +55,7 @@ namespace
 				break;
 			}
 		}
-		return sPath + L".sqlite";
+		return sPath + pszExt;
 	}
 
 	std::wstring GeometryText(eOSMGeometryType type)
@@ -116,6 +117,8 @@ namespace
 }
 
 std::wstring CConvertOSMDlg::s_sTempDir;
+int CConvertOSMDlg::s_nDbFormat = 1;
+int CConvertOSMDlg::s_nSpatialIndex = 0;
 
 CConvertOSMDlg::CConvertOSMDlg() : m_bAddToMap(true), m_bExportTags(false), m_bUpdating(false)
 {
@@ -155,6 +158,17 @@ LRESULT CConvertOSMDlg::OnInitDialog(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*
 
 	SetDlgItemText(IDC_OSM_TEMP_DIR, s_sTempDir.c_str());
 	UpdateTempInfo();
+
+	// the output database: the order of the items is EDatabaseFormat / eBPtreeDBSpatialIndexType
+	CComboBox comboFormat = GetDlgItem(IDC_OSM_DB_FORMAT);
+	comboFormat.AddString(L"SQLite (.sqlite)");
+	comboFormat.AddString(L"BPtreeDB (.btdb)");
+	comboFormat.SetCurSel(s_nDbFormat);
+	CComboBox comboIndex = GetDlgItem(IDC_OSM_SPATIAL_INDEX);
+	comboIndex.AddString(L"R-tree");
+	comboIndex.AddString(L"Z-order (the grid of the data)");
+	comboIndex.SetCurSel(s_nSpatialIndex);
+	comboIndex.EnableWindow(IsBPtreeDBFormat());
 
 	UpdateInfo();
 	return TRUE;
@@ -226,7 +240,22 @@ void CConvertOSMDlg::SetMap(IOSMMapPtr ptrMap, const std::wstring& sPath)
 
 	std::wstring sOutput = Trim(GetText(m_editOutput));
 	if(sOutput.empty() || IsSplitData(sPath))
-		m_editOutput.SetWindowText(DefaultOutputPath(sPath).c_str());
+		m_editOutput.SetWindowText(DefaultOutputPath(sPath, IsBPtreeDBFormat()).c_str());
+}
+
+bool CConvertOSMDlg::IsBPtreeDBFormat() const
+{
+	return CComboBox(GetDlgItem(IDC_OSM_DB_FORMAT)).GetCurSel() == (int)TestMapDraw::DatabaseBPtreeDB;
+}
+
+LRESULT CConvertOSMDlg::OnDbFormatChanged(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/)
+{
+	bool bBPtreeDB = IsBPtreeDBFormat();
+	std::wstring sOutput = Trim(GetText(m_editOutput));
+	if(!sOutput.empty())
+		m_editOutput.SetWindowText(WithDatabaseExtension(sOutput, bBPtreeDB).c_str());
+	GetDlgItem(IDC_OSM_SPATIAL_INDEX).EnableWindow(bBPtreeDB);
+	return 0;
 }
 
 LRESULT CConvertOSMDlg::OnSplit(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/)
@@ -540,7 +569,7 @@ LRESULT CConvertOSMDlg::OnBrowse(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWnd
 
 	// only the path: the file is analyzed by Analyze (a big file takes minutes) or converted at once by Convert all
 	m_editPath.SetWindowText(fileDlg.m_szFileName);
-	m_editOutput.SetWindowText(DefaultOutputPath(fileDlg.m_szFileName).c_str());
+	m_editOutput.SetWindowText(DefaultOutputPath(fileDlg.m_szFileName, IsBPtreeDBFormat()).c_str());
 	UpdateInfo();
 	GotoDlgCtrl(GetDlgItem(IDC_OSM_ANALYZE));
 	return 0;
@@ -654,9 +683,10 @@ LRESULT CConvertOSMDlg::OnPathChanged(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /
 LRESULT CConvertOSMDlg::OnOutputBrowse(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/)
 {
 	std::wstring sCurrent = Trim(GetText(m_editOutput));
-	CFileDialog fileDlg(FALSE, _T("sqlite"), sCurrent.empty() ? NULL : sCurrent.c_str(), OFN_HIDEREADONLY,
-		_T("SQLite database (*.sqlite;*.db)\0*.sqlite;*.db\0All Files (*.*)\0*.*\0"), m_hWnd);
-	fileDlg.m_ofn.lpstrTitle = _T("Output SQLite database");
+	bool bBPtreeDB = IsBPtreeDBFormat();
+	CFileDialog fileDlg(FALSE, bBPtreeDB ? _T("btdb") : _T("sqlite"), sCurrent.empty() ? NULL : sCurrent.c_str(), OFN_HIDEREADONLY,
+		DatabaseFileFilter(bBPtreeDB), m_hWnd);
+	fileDlg.m_ofn.lpstrTitle = _T("Output database");
 	if(fileDlg.DoModal() != IDOK)
 		return 0;
 
@@ -724,7 +754,7 @@ LRESULT CConvertOSMDlg::OnConvertAll(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*
 		return 0;
 	}
 	if(Trim(GetText(m_editOutput)).empty())
-		m_editOutput.SetWindowText(DefaultOutputPath(sPath).c_str());
+		m_editOutput.SetWindowText(DefaultOutputPath(sPath, IsBPtreeDBFormat()).c_str());
 
 	IOSMMapPtr ptrMap;
 	try
@@ -759,23 +789,26 @@ LRESULT CConvertOSMDlg::OnConvertAll(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*
 
 bool CConvertOSMDlg::PrepareRun()
 {
-	// the output database is created by the conversion
+	// the output database is created by the conversion, its extension tells the format
 	std::wstring sOutput = Trim(GetText(m_editOutput));
 	if(sOutput.empty())
 	{
-		MessageBox(L"Set the output SQLite database.", Caption, MB_OK | MB_ICONWARNING);
+		MessageBox(L"Set the output database.", Caption, MB_OK | MB_ICONWARNING);
 		GotoDlgCtrl(m_editOutput);
 		return false;
 	}
+	bool bBPtreeDB = IsBPtreeDBFormat();
+	sOutput = WithDatabaseExtension(sOutput, bBPtreeDB);
+	m_editOutput.SetWindowText(sOutput.c_str());
 	if(FileExists(sOutput))
 	{
 		std::wstring sMsg = L"The database already exists:\n" + sOutput + L"\n\nReplace it?";
 		if(MessageBox(sMsg.c_str(), Caption, MB_YESNO | MB_ICONQUESTION) != IDYES)
 			return false;
 
-		for(const wchar_t* pszSuffix : {L"", L"-wal", L"-shm", L"-journal"})
+		for(const std::string& sSuffix : TestMapDraw::CMapProject::DatabaseFileSuffixes())
 		{
-			std::wstring sFile = sOutput + pszSuffix;
+			std::wstring sFile = sOutput + Utf8ToWide(sSuffix);
 			if(FileExists(sFile) && !::DeleteFileW(sFile.c_str()))
 			{
 				std::wstring sError = L"Failed to delete " + sFile + L"\n(is it opened in the map?)";
@@ -823,6 +856,10 @@ bool CConvertOSMDlg::PrepareRun()
 	m_settings.sNameLanguage = WideToUtf8(Trim(szLanguage));
 	m_bAddToMap = IsDlgButtonChecked(IDC_OSM_ADD_TO_MAP) == BST_CHECKED;
 	m_sOutputPath = sOutput;
+	s_nDbFormat = bBPtreeDB ? 1 : 0;
+	s_nSpatialIndex = CComboBox(GetDlgItem(IDC_OSM_SPATIAL_INDEX)).GetCurSel() == 1 ? 1 : 0;
+	m_dbOptions.format = bBPtreeDB ? TestMapDraw::DatabaseBPtreeDB : TestMapDraw::DatabaseSQLite;
+	m_dbOptions.spatialIndex.type = s_nSpatialIndex == 1 ? GraphEngine::GeoDatabase::bsitZOrder : GraphEngine::GeoDatabase::bsitRTree;
 	return true;
 }
 

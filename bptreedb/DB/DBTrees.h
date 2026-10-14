@@ -47,6 +47,17 @@ namespace bptreedb
 			size_t m_nPos{ 0 };
 		};
 
+		// the pages of a tree (space statistics)
+		struct STreeSpace
+		{
+			uint64_t m_nInnerPages{ 0 };
+			uint64_t m_nLeafPages{ 0 };
+			uint64_t m_nBlobPages{ 0 };      // the stream pages of the big blobs (counted with bBlobs)
+			uint64_t m_nInfoPages{ 0 };      // the info page of the tree
+			uint32_t m_nLevels{ 0 };         // with the leaves
+			bool m_bBlobsCounted{ false };
+		};
+
 		class ITree
 		{
 		public:
@@ -55,6 +66,10 @@ namespace bptreedb
 			virtual int64_t GetInfoPage() const = 0;
 			virtual void Flush() = 0;                 // writes the changed nodes (nothing if not changed)
 			virtual uint64_t GetChangeCount() const = 0;
+			// The pages of the tree: the inner nodes are read, the leaves are counted by the links of the lowest
+			// inner level (not read). bBlobs: a tree with big blobs reads its leaves and follows the page chains
+			// of the blobs (the other trees ignore it).
+			virtual void GetSpace(STreeSpace& space, bool bBlobs) = 0;
 		};
 
 		class IRowTree : public ITree
@@ -125,9 +140,12 @@ namespace bptreedb
 		// Storage of a field's values, chosen by the type and the length of the field.
 		enum EValueStorage
 		{
-			evsNumber = 1,       // fixed size numbers in the leaves
-			evsString = 2,       // strings in the leaves (up to MaxInlineString())
+			evsNumber = 1,       // fixed size numbers in the leaves, zlib (TShuffleZlibEncoder): the files of older versions
+			evsNumberNumLen = 5, // fixed size numbers in the leaves, NumLen of the differences (TNumberValueEncoder)
+			evsString = 2,       // strings in the leaves (up to MaxInlineString()), zlib per leaf: the files of older versions
+			evsStringCut = 6,    // strings in the leaves, cut compressor: a leaf is encoded once and cut where the page is full
 			evsBlob = 3          // blobs, long strings, geometry: inline or in stream pages
+			// 4 - not used (was the row id field)
 		};
 		EValueStorage ChooseValueStorage(eDataTypes type, uint32_t nLength, uint32_t nPageSize);
 		uint32_t MaxInlineString(uint32_t nPageSize);
@@ -136,7 +154,8 @@ namespace bptreedb
 		// commit) or the committed pages. nInfoPage == -1 creates a new tree (GetInfoPage gives its address).
 		IRowTreePtr CreateRowTree(SDBContextPtr ptrContext, storage::IFilePagerPtr ptrPager, int64_t nInfoPage);
 		IValueFieldPtr CreateValueField(SDBContextPtr ptrContext, storage::IFilePagerPtr ptrPager, eDataTypes type, EValueStorage storageType, uint32_t nLength, int64_t nInfoPage);
-		IIndexTreePtr CreateIndexTree(SDBContextPtr ptrContext, storage::IFilePagerPtr ptrPager, eDataTypes type, int64_t nInfoPage);
+		// nFormat: CIndex::GetFormat
+		IIndexTreePtr CreateIndexTree(SDBContextPtr ptrContext, storage::IFilePagerPtr ptrPager, eDataTypes type, int64_t nInfoPage, uint32_t nFormat = 0);
 
 		// the parameters of a spatial index stored in the schema
 		struct SSpatialIndexParams

@@ -7,6 +7,7 @@
 #include "Compressor/CompressorParams.h"
 #include "BPTreePerfCounter.h"
 #include "AllocsSet.h"
+#include "NodeCompressorTraits.h"
 #include "../StorageLib/PageObject.h"
 
 namespace bptreedb
@@ -186,6 +187,11 @@ namespace bptreedb
 		//insert
 		TBPTreeNodePtr findLeafNodeForInsert(const TKey& key);
 		void CheckLeafNode(TBPTreeNodePtr &pNode);
+		// the estimate says the leaf is full: encodes it into a scratch page, true - it fits (no split)
+		// a leaf of a cut compressor (NodeCompressorTraits.h): encodes it into m_cutBuf, returns the elements that
+		// didn't fit (0 - all fit); WriteLeafCut writes the page of the encoded elements (the links of the leaf now)
+		uint32_t EncodeLeafCut(TBPTreeNodePtr &pNode);
+		void WriteLeafCut(TBPTreeNodePtr &pNode);
 		void TransformRootToInner();
 		void SplitLeafNode(TBPTreeNodePtr &pNode, TBPTreeNodePtr &pNewNode, TBPTreeNodePtr &pParentNode, int32_t nCount);
 		void SplitRootInnerNode();
@@ -239,6 +245,7 @@ namespace bptreedb
 		typedef utils::TCacheLRU_2Q<TLink, TBPTreeNodePtr, TBPTreeFreeChecker> TNodesCache;
 		TNodesCache m_NodeCache;
 		CBPTreeContext m_Context;
+		std::vector<byte_t> m_cutBuf;        // EncodeLeafCut
 	};
 
 #define  BPSETBASE_TEMPLATE_PARAMS 	template <	class _TKey, class _TComp, class _TStorage,	class _TInnerNode,	class _TLeafNode, class _TNodeHolder>

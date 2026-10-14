@@ -1,6 +1,8 @@
 #include "TableCopier.h"
 #include "QueryFilter.h"
 #include "Field.h"
+#include "../../CommonLib/SpatialData/GeoShape.h"
+#include "../../GeometryCompression/ShapeCompressor.h"
 
 namespace GraphEngine {
     namespace GeoDatabase {
@@ -31,7 +33,7 @@ namespace GraphEngine {
         }
 
         ITablePtr CTableCopier::CopySpatialTable(ITablePtr ptrSource, IDatabaseWorkspacePtr ptrTarget, const std::string& sTargetName,
-                                                 TProgress progress, int64_t nProgressStep)
+                                                 TProgress progress, int64_t nProgressStep, const SCopyOptions& options)
         {
             try
             {
@@ -67,6 +69,12 @@ namespace GraphEngine {
 
                 Geometry::IEnvelopePtr ptrExtent = ptrSource->GetExtent();
                 Geometry::ISpatialReferencePtr ptrSpatRef = ptrSource->GetSpatialReference();
+
+                // the geometry compression: the precision by the units of the source coordinate system
+                int nScaleExponent = options.nScaleExponent;
+                if(options.bCompressGeometry && nScaleExponent == SCopyOptions::AutoScale)
+                    nScaleExponent = ptrSpatRef.get() ? GeometryCompression::CompressParamsForUnits(ptrSpatRef->GetUnits()).nScaleExponent : 4;
+                std::shared_ptr<CommonLib::CGeoShape> ptrCompressed = std::make_shared<CommonLib::CGeoShape>();
 
                 ITablePtr ptrTargetTable = ptrTarget->CreateTableWithSpatialIndex(sTargetName, sTargetName, sTargetName + "_sidx", sShapeField, sOIDField, ptrFields,
                                                                                 ptrSource->GetGeometryType(),
@@ -112,7 +120,17 @@ namespace GraphEngine {
                         else if(type == dtString)
                             ptrInsert->BindText(col, ptrCursor->ReadText(srcCol), true);
                         else if(type == dtGeometry)
-                            ptrInsert->BindShape(col, ptrCursor->ReadShape(srcCol), true);
+                        {
+                            CommonLib::IGeoShapePtr ptrShape = ptrCursor->ReadShape(srcCol);
+                            if(options.bCompressGeometry && ptrShape.get() && !CommonLib::CGeoShape::IsCompressed(ptrShape->Data(), ptrShape->Size()))
+                            {
+                                // a copy: the shape of the cursor stays as it is
+                                ptrCompressed->Import(ptrShape->Data(), ptrShape->Size());
+                                if(ptrCompressed->Compress(nScaleExponent))
+                                    ptrShape = ptrCompressed;
+                            }
+                            ptrInsert->BindShape(col, ptrShape, true);
+                        }
                         else if(type == dtBlob)
                         {
                             byte_t* pBuf = nullptr;

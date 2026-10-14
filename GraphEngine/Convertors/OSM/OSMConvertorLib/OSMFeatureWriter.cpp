@@ -84,8 +84,16 @@ namespace GraphEngine {
                 // the column can be excluded: no overview layer then
                 if(overview.sIndexColumn.empty() || ptrTable->GetFields()->FindField(overview.sIndexColumn) < 0)
                     continue;
-                ptrTransaction->Executequery("CREATE INDEX IF NOT EXISTS \"" + sTable + "_" + overview.sIndexColumn + "\" ON \"" + sTable +
-                                             "\"(\"" + overview.sIndexColumn + "\")");
+                // the index only speeds up the query of the overview layer: a database that can't index the column
+                // (bptreedb indexes strings up to 256 bytes, a text column without a length is longer) reads it without
+                try
+                {
+                    ptrTransaction->Executequery("CREATE INDEX IF NOT EXISTS \"" + sTable + "_" + overview.sIndexColumn + "\" ON \"" + sTable +
+                                                 "\"(\"" + overview.sIndexColumn + "\")");
+                }
+                catch (std::exception&)
+                {
+                }
             }
             return std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
         }

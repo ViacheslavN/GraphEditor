@@ -24,6 +24,7 @@ set(SOURCE_FILES
         TestFields.cpp
         TestShapefile.cpp
         TestSQLite.cpp
+        TestBPtreeDB.cpp
         TestTableCopier.cpp
         TestRTreeBuilder.cpp
         TestRaster.cpp

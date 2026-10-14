@@ -54,8 +54,10 @@ namespace bptreedb
 			static void ReadHeader(const std::wstring& sPath, uint32_t& nPageSize, int64_t& nSchemaPage);
 			void CloseStorage();
 
+		public:
+			static constexpr uint32_t HeaderSize = 4096;      // the raw header before the pages of the file
+
 		private:
-			static constexpr uint32_t HeaderSize = 4096;
 			static constexpr uint32_t FormatVersion = 1;
 
 			std::wstring m_sPath;

@@ -101,6 +101,8 @@ namespace bptreedb
 			IRowSourcePtr Select(CTransaction& tran, CFieldPtr ptrField, const CommonLib::CVariant& key, OpType op);
 			IRowSourcePtr SpatialSelect(CTransaction& tran, CFieldPtr ptrField, const CommonLib::bbox& extent, eSpatialQueryMode mode);
 			IValueReaderPtr CreateReader(CTransaction& tran, CFieldPtr ptrField);
+			// the pages of the trees of the table (ITransaction::GetSpaceStatistics)
+			void GetSpace(CTransaction& tran, bool bBlobs, std::vector<SSpaceInfo>& space);
 
 		private:
 			IRowTreePtr RowTree(STableTrees& trees);
@@ -114,7 +116,9 @@ namespace bptreedb
 			void RemoveValue(const CFieldPtr& ptrField, SFieldTrees& trees, int64_t nRowId, const CommonLib::CVariant& value);
 			// fills the new (empty) index of the field from the values: sorted / STR bulk load. bChanged is set
 			// when the index tree starts to change (a duplicate or a geometry outside the Z-order extent throws before)
-			void BuildIndex(const CFieldPtr& ptrField, const CIndexPtr& ptrIndex, SFieldTrees& trees, bool& bChanged);
+			// pSpatialEntries: the boxes of the rows given by the caller (a spatial index), null - read from the values
+			void BuildIndex(const CFieldPtr& ptrField, const CIndexPtr& ptrIndex, SFieldTrees& trees, bool& bChanged,
+			                std::vector<std::pair<CommonLib::bbox, int64_t> >* pSpatialEntries = nullptr);
 
 		private:
 			SDBContextPtr m_ptrContext;

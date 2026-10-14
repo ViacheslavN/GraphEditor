@@ -115,6 +115,32 @@ namespace bptreedb
 			bool m_bScanAll{ false };
 		};
 
+		// The system tables of the space statistics (ITransaction::GetSpaceStatistics), read in FROM like tables:
+		//   bptreedb_space       the pages of the trees counted from the inner nodes (fast)
+		//   bptreedb_space_full  also the stream pages of the big blobs (the leaves of the blob trees are read)
+		// A row per tree (the rows, the values of a field, an index), then the rows of the file: 'file' (the pages of
+		// the file) and 'other' (the pages not in the trees: the schema, the pages a tree doesn't use any more and,
+		// without _full, the big blobs).
+		class CSpaceStatsOp : public COperator
+		{
+		public:
+			explicit CSpaceStatsOp(bool bBlobs);
+
+			// the system table of the name (case-insensitive), false - not a system table
+			static bool IsSpaceTable(const std::string& sName, bool& bBlobs);
+			static const std::vector<std::string>& ColumnNames();
+			static const std::vector<eDataTypes>& ColumnTypes();
+
+			void Open(SExecContext& exec, const SEvalContext* pOuter) override;
+			bool Next() override;
+			void Explain(std::string& sText, int nDepth) const override;
+
+		private:
+			bool m_bBlobs;
+			std::vector<TRow> m_rows;
+			size_t m_nPos{ 0 };
+		};
+
 		// a subquery in FROM: its visible columns into the range of the row
 		class CSubquerySourceOp : public COperator
 		{

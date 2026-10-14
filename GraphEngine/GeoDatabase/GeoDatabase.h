@@ -21,7 +21,8 @@ namespace GraphEngine
             wtOracle,
             wtMSSQL,
             wtPostGIS,
-            wtRaster
+            wtRaster,
+            wtBPtreeDB           // bptreedb (GeoDatabaseBPTreeDB)
         };
 
         enum eDatasetType

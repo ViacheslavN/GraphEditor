@@ -16,7 +16,7 @@ namespace bptreedb
 
 		void CIndex::Write(CommonLib::IWriteStream* pStream) const
 		{
-			pStream->Write((uint32_t)m_type);
+			pStream->Write((uint32_t)m_type | (m_nFormat << 16));
 			pStream->Write(m_nTreePage);
 			if (IsSpatial())
 			{
@@ -31,7 +31,9 @@ namespace bptreedb
 		void CIndex::Read(CommonLib::IReadStream* pStream, CFieldPtr ptrField)
 		{
 			m_ptrField = ptrField;
-			m_type = (eIndexTypes)pStream->ReadIntu32();
+			uint32_t nType = pStream->ReadIntu32();
+			m_type = (eIndexTypes)(nType & 0xFFFF);
+			m_nFormat = nType >> 16;
 			m_nTreePage = pStream->ReadInt64();
 			m_spatial.m_type = m_type;
 			if (IsSpatial())

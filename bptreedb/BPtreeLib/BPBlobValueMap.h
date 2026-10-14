@@ -95,6 +95,21 @@ namespace bptreedb
 		//------------------------------------------------------------------------------------------
 		// read
 
+		// the stream pages of a big blob (the chain is followed: the next page is in the header of a page)
+		uint64_t StreamPageCount(const BlobValue& value) const
+		{
+			uint64_t nCount = 0;
+			int64_t nAddr = value.IsInline() ? -1 : value.Addr();
+			while (nAddr > 0)
+			{
+				storage::IFilePagePtr ptrPage = this->m_pStorage->ReadPage(nAddr);
+				nAddr = ptrPage->GetReadStream()->ReadInt64();
+				if (++nCount > ((uint64_t)1 << 40))
+					throw CommonLib::CExcBase("TBPBlobValueMap: the page chain of blob {0} has a loop", value.Addr());
+			}
+			return nCount;
+		}
+
 		IBlobPtr GetBlob(const BlobValue& value) const
 		{
 			if (value.IsInline())

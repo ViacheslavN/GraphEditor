@@ -29,7 +29,9 @@ namespace bptreedb
 			virtual void DropData(int64_t nAddr, uint32_t nSize);
 
 			size_t PrivatePageCount() const;
-			// calls func(addr, data) for every private page in the order of the addresses
+			// calls func(addr, data) for every private page: the pages in memory in the order of the addresses, then
+			// the spilled ones in the order of the temporary file (read sequentially by big blocks: in the order of
+			// the addresses a big transaction would read its file at random, on an HDD the commit takes ages)
 			void ForEachPage(const std::function<void(int64_t, const byte_t*)>& func);
 			void Clear();          // drops the private pages and the temporary file
 

@@ -87,6 +87,23 @@ set(COMMON_SOURCE_FILES
         GeoDatabaseRaster/RasterWorkspace.h
         GeoDatabaseRaster/RasterWorkspace.cpp
         GeoDatabaseRaster/TIFF/TIFF.cpp
+        GeoDatabaseBPTreeDB/BPtreeDBContext.h
+        GeoDatabaseBPTreeDB/BPtreeDBContext.cpp
+        GeoDatabaseBPTreeDB/BPtreeDBUtils.h
+        GeoDatabaseBPTreeDB/BPtreeDBUtils.cpp
+        GeoDatabaseBPTreeDB/CBPtreeDBWorkspace.h
+        GeoDatabaseBPTreeDB/CBPtreeDBWorkspace.cpp
+        GeoDatabaseBPTreeDB/BPtreeDBTableBase.h
+        GeoDatabaseBPTreeDB/BPtreeDBTable.h
+        GeoDatabaseBPTreeDB/BPtreeDBTable.cpp
+        GeoDatabaseBPTreeDB/BPtreeDBSpatialTable.h
+        GeoDatabaseBPTreeDB/BPtreeDBSpatialTable.cpp
+        GeoDatabaseBPTreeDB/BPtreeDBSelectCursor.h
+        GeoDatabaseBPTreeDB/BPtreeDBSelectCursor.cpp
+        GeoDatabaseBPTreeDB/BPtreeDBInsertCursor.h
+        GeoDatabaseBPTreeDB/BPtreeDBInsertCursor.cpp
+        GeoDatabaseBPTreeDB/BPtreeDBTransaction.h
+        GeoDatabaseBPTreeDB/BPtreeDBTransaction.cpp
 
 )
 
@@ -111,6 +128,7 @@ target_link_libraries(${PROJECT_NAME} PUBLIC CommonLib)
 target_link_libraries(${PROJECT_NAME} PUBLIC GeometryCompression)
 target_link_libraries(${PROJECT_NAME} PUBLIC ShapeLib)
 target_link_libraries(${PROJECT_NAME} PUBLIC Tiff)
+target_link_libraries(${PROJECT_NAME} PUBLIC DBLib)      # bptreedb (GeoDatabaseBPTreeDB)
 
 if(GRAPHENGINE_BUILD_TESTS)
     add_subdirectory(Tests)

@@ -9,6 +9,7 @@
 #include "../../selectors/SimpleSymbolSelector.h"
 #include "../../../GeoDatabase/GeoDatabaseShape/ShapefileWorkspace.h"
 #include "../../../GeoDatabase/GeoDatabaseSQlite/SQLiteWorkspace.h"
+#include "../../../GeoDatabase/GeoDatabaseBPTreeDB/CBPtreeDBWorkspace.h"
 #include "../../../GeoDatabase/GeoDatabaseRaster/RasterWorkspace.h"
 #include "../../../../CommonLib/filesystem/filesystem.h"
 #include "../../../GeoDatabase/WorkspaceHolder.h"
@@ -29,6 +30,10 @@
 #include <filesystem>
 #include <functional>
 #include <map>
+#include <mutex>
+#include <algorithm>
+#include <cwctype>
+#include <cctype>
 
 using namespace GraphEngine;
 
@@ -50,6 +55,57 @@ namespace TestMapDraw
             size_t nExt = sName.find_last_of('.');
             if(nExt != std::string::npos)
                 sName = sName.substr(0, nExt);
+        }
+
+        // ---- the BPtreeDB files open in the process (one workspace per file)
+
+        std::mutex& DatabaseMutex()
+        {
+            static std::mutex mutex;
+            return mutex;
+        }
+
+        std::map<std::wstring, std::weak_ptr<GeoDatabase::IDatabaseWorkspace>>& OpenDatabases()
+        {
+            static std::map<std::wstring, std::weak_ptr<GeoDatabase::IDatabaseWorkspace>> databases;
+            return databases;
+        }
+
+        // the full path in lower case: the key of a file
+        std::wstring DatabaseKey(const std::string& sPathUtf8)
+        {
+            std::filesystem::path path = std::filesystem::u8path(sPathUtf8);
+            std::error_code ec;
+            std::filesystem::path full = std::filesystem::weakly_canonical(path, ec);
+            std::wstring sKey = (ec ? path : full).wstring();
+            std::transform(sKey.begin(), sKey.end(), sKey.begin(), [](wchar_t ch) { return (wchar_t)std::towlower(ch); });
+            return sKey;
+        }
+
+        // the open workspace of the file (the registry or the workspaces of a loaded project), null - not open
+        GeoDatabase::IDatabaseWorkspacePtr FindOpenBPtreeDB(const std::wstring& sKey)
+        {
+            auto it = OpenDatabases().find(sKey);
+            if(it != OpenDatabases().end())
+            {
+                GeoDatabase::IDatabaseWorkspacePtr ptrWorkspace = it->second.lock();
+                if(ptrWorkspace.get())
+                    return ptrWorkspace;
+                OpenDatabases().erase(it);
+            }
+
+            std::vector<GeoDatabase::IWorkspacePtr> vecWorkspaces = GeoDatabase::CWorkspaceHolder::GetWorkspaces();
+            for(size_t i = 0; i < vecWorkspaces.size(); ++i)
+            {
+                GeoDatabase::CBPtreeDBWorkspace* pWorkspace = dynamic_cast<GeoDatabase::CBPtreeDBWorkspace*>(vecWorkspaces[i].get());
+                if(pWorkspace && DatabaseKey(pWorkspace->GetDatabasePath()) == sKey)
+                {
+                    GeoDatabase::IDatabaseWorkspacePtr ptrWorkspace = std::dynamic_pointer_cast<GeoDatabase::IDatabaseWorkspace>(vecWorkspaces[i]);
+                    OpenDatabases()[sKey] = ptrWorkspace;
+                    return ptrWorkspace;
+                }
+            }
+            return GeoDatabase::IDatabaseWorkspacePtr();
         }
 
         Display::Color LayerColor(int nIndex)
@@ -199,9 +255,9 @@ namespace TestMapDraw
             std::string sName;
             SplitShapefilePath(source.sPath, sDir, sName);
 
-            if(source.bSQLite)
+            if(source.bDatabase)
             {
-                GeoDatabase::IDatabaseWorkspacePtr ptrDb = GeoDatabase::CSQLiteWorkspace::Open(sName.c_str(), source.sPath.c_str(), CommonLib::CGuid::CreateNew());
+                GeoDatabase::IDatabaseWorkspacePtr ptrDb = CMapProject::OpenDatabase(source.sPath);
                 ptrWorkspace = ptrDb;
                 return ptrDb->GetTable(source.sTable);
             }
@@ -773,6 +829,7 @@ namespace TestMapDraw
                 {
                     case GeoDatabase::wtShapeFile: sKind = "Shape files"; break;
                     case GeoDatabase::wtSqlLite:   sKind = "SQLite"; break;
+                    case GeoDatabase::wtBPtreeDB:  sKind = "BPtreeDB"; break;
                     case GeoDatabase::wtRaster:    sKind = "Raster"; break;
                     default:                       sKind = "Workspace"; break;
                 }
@@ -1094,19 +1151,14 @@ namespace TestMapDraw
         }
     }
 
-    std::vector<STableInfo> CMapProject::GetSQLiteTables(const std::string& sDatabasePath)
+    std::vector<STableInfo> CMapProject::GetDatabaseTables(const std::string& sDatabasePath)
     {
         try
         {
-            std::string sDir;
-            std::string sName;
-            SplitShapefilePath(sDatabasePath, sDir, sName);
+            // temporary workspace, not registered in CWorkspaceHolder (a BPtreeDB file open in the map is shared)
+            GeoDatabase::IDatabaseWorkspacePtr ptrWorkspace = OpenDatabase(sDatabasePath);
 
-            // temporary workspace, not registered in CWorkspaceHolder
-            GeoDatabase::IDatabaseWorkspacePtr ptrWorkspace = GeoDatabase::CSQLiteWorkspace::Open(sName.c_str(), sDatabasePath.c_str(), CommonLib::CGuid::CreateNew());
-            GeoDatabase::CSQLiteWorkspace* pSQLiteWorkspace = dynamic_cast<GeoDatabase::CSQLiteWorkspace*>(ptrWorkspace.get());
-
-            std::vector<std::string> vecNames = pSQLiteWorkspace->GetSpatialTableNames();
+            std::vector<std::string> vecNames = GetSpatialTableNames(ptrWorkspace);
             std::vector<STableInfo> vecTables;
             for(size_t i = 0; i < vecNames.size(); ++i)
             {
@@ -1121,7 +1173,7 @@ namespace TestMapDraw
         }
         catch (std::exception& exc)
         {
-            CommonLib::CExcBase::RegenExc("Failed to read tables of SQLite database {0}", sDatabasePath, exc);
+            CommonLib::CExcBase::RegenExc("Failed to read tables of database {0}", sDatabasePath, exc);
             throw;
         }
     }
@@ -1152,31 +1204,40 @@ namespace TestMapDraw
         return (int)vecLayers.size();
     }
 
-    int CMapProject::AddSQLiteDatabase(const std::string& sDatabasePath, const std::string& sTableName, const SLayerParams& params)
+    int CMapProject::AddDatabase(const std::string& sDatabasePath, const std::string& sTableName, const SLayerParams& params)
+    {
+        std::vector<std::string> vecTableNames;
+        if(!sTableName.empty())
+            vecTableNames.push_back(sTableName);
+        return AddDatabase(sDatabasePath, vecTableNames, params);
+    }
+
+    int CMapProject::AddDatabase(const std::string& sDatabasePath, const std::vector<std::string>& vecTableNames, const SLayerParams& params)
     {
         try
         {
-            std::string sDir;
-            std::string sName;
-            SplitShapefilePath(sDatabasePath, sDir, sName);
+            GeoDatabase::IDatabaseWorkspacePtr ptrWorkspace = OpenDatabase(sDatabasePath);
 
-            GeoDatabase::IDatabaseWorkspacePtr ptrWorkspace = GeoDatabase::CSQLiteWorkspace::Open(sName.c_str(), sDatabasePath.c_str(), CommonLib::CGuid::CreateNew());
-            GeoDatabase::CSQLiteWorkspace* pSQLiteWorkspace = dynamic_cast<GeoDatabase::CSQLiteWorkspace*>(ptrWorkspace.get());
-
-            std::vector<std::string> vecTables = pSQLiteWorkspace->GetSpatialTableNames();
-            if(!sTableName.empty())
+            std::vector<std::string> vecTables = GetSpatialTableNames(ptrWorkspace);
+            if(!vecTableNames.empty())
             {
-                if(std::find(vecTables.begin(), vecTables.end(), sTableName) == vecTables.end())
-                    throw CommonLib::CExcBase("Spatial table {0} not found", sTableName);
-
-                vecTables.assign(1, sTableName);
+                for(const std::string& sTableName : vecTableNames)
+                {
+                    if(std::find(vecTables.begin(), vecTables.end(), sTableName) == vecTables.end())
+                        throw CommonLib::CExcBase("Spatial table {0} not found", sTableName);
+                }
+                vecTables = vecTableNames;
             }
 
             if(vecTables.empty())
                 throw CommonLib::CExcBase("The database has no spatial tables");
 
-            GeoDatabase::CWorkspaceHolder::AddWorkspace(ptrWorkspace);
-            m_vecWorkspaces.push_back(ptrWorkspace);
+            // a BPtreeDB workspace is shared: registered once
+            if(std::find(m_vecWorkspaces.begin(), m_vecWorkspaces.end(), ptrWorkspace) == m_vecWorkspaces.end())
+            {
+                GeoDatabase::CWorkspaceHolder::AddWorkspace(ptrWorkspace);
+                m_vecWorkspaces.push_back(ptrWorkspace);
+            }
 
             for(size_t i = 0; i < vecTables.size(); ++i)
             {
@@ -1201,49 +1262,220 @@ namespace TestMapDraw
         }
         catch (std::exception& exc)
         {
-            CommonLib::CExcBase::RegenExc("Failed to add SQLite database {0}", sDatabasePath, exc);
+            CommonLib::CExcBase::RegenExc("Failed to add database {0}", sDatabasePath, exc);
             throw;
         }
     }
 
-    std::string CMapProject::ConvertShapefileToSQLite(const std::string& sShapefilePath, const std::string& sDatabasePath,
-                                                      GeoDatabase::CTableCopier::TProgress progress, int64_t* pnCopied)
+    EDatabaseFormat CMapProject::DatabaseFormatOf(const std::string& sPathUtf8)
+    {
+        std::string sExt = std::filesystem::u8path(sPathUtf8).extension().string();
+        std::transform(sExt.begin(), sExt.end(), sExt.begin(), [](unsigned char ch) { return (char)std::tolower(ch); });
+        return sExt == ".btdb" ? DatabaseBPtreeDB : DatabaseSQLite;
+    }
+
+    const char* CMapProject::DatabaseExtension(EDatabaseFormat format)
+    {
+        return format == DatabaseBPtreeDB ? ".btdb" : ".sqlite";
+    }
+
+    const std::vector<std::string>& CMapProject::DatabaseFileSuffixes()
+    {
+        static const std::vector<std::string> suffixes = { "", "-wal", "-shm", "-journal", "-redo", "-tran" };
+        return suffixes;
+    }
+
+    bool CMapProject::IsSameFile(const std::string& sPathUtf8, const std::string& sOtherPathUtf8)
+    {
+        return DatabaseKey(sPathUtf8) == DatabaseKey(sOtherPathUtf8);
+    }
+
+    GeoDatabase::IDatabaseWorkspacePtr CMapProject::OpenDatabase(const std::string& sPathUtf8)
     {
         try
         {
             std::string sDir;
             std::string sName;
-            SplitShapefilePath(sShapefilePath, sDir, sName);
+            SplitShapefilePath(sPathUtf8, sDir, sName);
 
-            GeoDatabase::IDatabaseWorkspacePtr ptrShapeWorkspace = std::dynamic_pointer_cast<GeoDatabase::IDatabaseWorkspace>(
-                    GeoDatabase::CShapfileWorkspace::Open(sName.c_str(), sDir.c_str(), CommonLib::CGuid::CreateNew()));
-            GeoDatabase::ITablePtr ptrShapeTable = ptrShapeWorkspace->GetTable(sName);
+            if(DatabaseFormatOf(sPathUtf8) == DatabaseSQLite)
+                return GeoDatabase::CSQLiteWorkspace::Open(sName.c_str(), sPathUtf8.c_str(), CommonLib::CGuid::CreateNew());
 
-            std::string sDbDir;
-            std::string sDbName;
-            SplitShapefilePath(sDatabasePath, sDbDir, sDbName);
-            GeoDatabase::IDatabaseWorkspacePtr ptrDbWorkspace = CommonLib::CFileUtils::IsFileExist(sDatabasePath) ?
-                    GeoDatabase::CSQLiteWorkspace::Open(sDbName.c_str(), sDatabasePath.c_str(), CommonLib::CGuid::CreateNew()) :
-                    GeoDatabase::CSQLiteWorkspace::Create(sDbName.c_str(), sDatabasePath.c_str(), CommonLib::CGuid::CreateNew());
-
-            // unique table name in the database
-            std::vector<std::string> vecTables = dynamic_cast<GeoDatabase::CSQLiteWorkspace*>(ptrDbWorkspace.get())->GetSpatialTableNames();
-            std::string sBaseName = GeoDatabase::CTableCopier::MakeValidTableName(sName);
-            std::string sTableName = sBaseName;
-            for(int i = 1; std::find(vecTables.begin(), vecTables.end(), sTableName) != vecTables.end(); ++i)
-                sTableName = sBaseName + "_" + std::to_string(i);
-
-            int64_t nCopied = 0;
-            GeoDatabase::CTableCopier::CopySpatialTable(ptrShapeTable, ptrDbWorkspace, sTableName,
-                [&](int64_t nRows) { nCopied = nRows; return progress ? progress(nRows) : true; });
-
-            if(pnCopied)
-                *pnCopied = nCopied;
-            return sTableName;
+            std::lock_guard<std::mutex> lock(DatabaseMutex());
+            std::wstring sKey = DatabaseKey(sPathUtf8);
+            GeoDatabase::IDatabaseWorkspacePtr ptrWorkspace = FindOpenBPtreeDB(sKey);
+            if(!ptrWorkspace.get())
+            {
+                ptrWorkspace = GeoDatabase::CBPtreeDBWorkspace::Open(sName.c_str(), sPathUtf8.c_str(), CommonLib::CGuid::CreateNew());
+                OpenDatabases()[sKey] = ptrWorkspace;
+            }
+            return ptrWorkspace;
         }
         catch (std::exception& exc)
         {
-            CommonLib::CExcBase::RegenExc("Failed to convert {0} to SQLite", sShapefilePath, exc);
+            CommonLib::CExcBase::RegenExc("Failed to open database {0}", sPathUtf8, exc);
+            throw;
+        }
+    }
+
+    GeoDatabase::IDatabaseWorkspacePtr CMapProject::CreateDatabase(const std::string& sPathUtf8, const SDatabaseOptions& options)
+    {
+        try
+        {
+            std::string sDir;
+            std::string sName;
+            SplitShapefilePath(sPathUtf8, sDir, sName);
+
+            if(options.format == DatabaseSQLite)
+                return GeoDatabase::CSQLiteWorkspace::Create(sName.c_str(), sPathUtf8.c_str(), CommonLib::CGuid::CreateNew());
+
+            std::lock_guard<std::mutex> lock(DatabaseMutex());
+            std::wstring sKey = DatabaseKey(sPathUtf8);
+            if(FindOpenBPtreeDB(sKey).get())
+                throw CommonLib::CExcBase("the database is open (in the map?), it can't be replaced");
+
+            bptreedb::SDatabaseParams params;
+            params.m_nTranMemoryPages = (uint32_t)(((uint64_t)options.nTranMemoryMB << 20) / params.m_nPageSize);
+            GeoDatabase::IDatabaseWorkspacePtr ptrWorkspace = GeoDatabase::CBPtreeDBWorkspace::Create(sName.c_str(), sPathUtf8.c_str(), CommonLib::CGuid::CreateNew(), params);
+            dynamic_cast<GeoDatabase::CBPtreeDBWorkspace*>(ptrWorkspace.get())->SetDefaultSpatialIndex(options.spatialIndex);
+            OpenDatabases()[sKey] = ptrWorkspace;
+            return ptrWorkspace;
+        }
+        catch (std::exception& exc)
+        {
+            CommonLib::CExcBase::RegenExc("Failed to create database {0}", sPathUtf8, exc);
+            throw;
+        }
+    }
+
+    std::vector<std::string> CMapProject::GetSpatialTableNames(GeoDatabase::IDatabaseWorkspacePtr ptrWorkspace)
+    {
+        if(GeoDatabase::CSQLiteWorkspace* pSQLite = dynamic_cast<GeoDatabase::CSQLiteWorkspace*>(ptrWorkspace.get()))
+            return pSQLite->GetSpatialTableNames();
+        if(GeoDatabase::CBPtreeDBWorkspace* pBPtreeDB = dynamic_cast<GeoDatabase::CBPtreeDBWorkspace*>(ptrWorkspace.get()))
+            return pBPtreeDB->GetSpatialTableNames();
+
+        throw CommonLib::CExcBase("not a database workspace (SQLite / BPtreeDB)");
+    }
+
+    namespace
+    {
+        // a table of the name exists in the database (BPtreeDB: also the tables without geometry)
+        bool TableExists(GeoDatabase::IDatabaseWorkspacePtr ptrWorkspace, const std::vector<std::string>& vecSpatialTables, const std::string& sName)
+        {
+            if(std::find(vecSpatialTables.begin(), vecSpatialTables.end(), sName) != vecSpatialTables.end())
+                return true;
+
+            GeoDatabase::CBPtreeDBWorkspace* pBPtreeDB = dynamic_cast<GeoDatabase::CBPtreeDBWorkspace*>(ptrWorkspace.get());
+            return pBPtreeDB && pBPtreeDB->GetDatabase()->GetSchema()->GetTable(sName).get() != nullptr;
+        }
+
+        bool IsShapefilePath(const std::string& sPath)
+        {
+            std::string sExt = sPath.size() >= 4 ? sPath.substr(sPath.size() - 4) : std::string();
+            std::transform(sExt.begin(), sExt.end(), sExt.begin(), [](unsigned char ch) { return (char)std::tolower(ch); });
+            return sExt == ".shp";
+        }
+    }
+
+    std::vector<std::string> CMapProject::ConvertToDatabase(const std::string& sSourcePath, const std::string& sSourceTable,
+                                                            const std::string& sDatabasePath, const SDatabaseOptions& options,
+                                                            GeoDatabase::CTableCopier::TProgress progress, int64_t* pnCopied)
+    {
+        GeoDatabase::IDatabaseWorkspacePtr ptrDbWorkspace;
+        bool bBulk = false;
+        try
+        {
+            // the source tables
+            std::vector<GeoDatabase::ITablePtr> vecSourceTables;
+            std::vector<std::string> vecSourceNames;
+            GeoDatabase::IDatabaseWorkspacePtr ptrSourceWorkspace;
+            if(IsShapefilePath(sSourcePath))
+            {
+                std::string sDir;
+                std::string sName;
+                SplitShapefilePath(sSourcePath, sDir, sName);
+                ptrSourceWorkspace = std::dynamic_pointer_cast<GeoDatabase::IDatabaseWorkspace>(
+                        GeoDatabase::CShapfileWorkspace::Open(sName.c_str(), sDir.c_str(), CommonLib::CGuid::CreateNew()));
+                vecSourceTables.push_back(ptrSourceWorkspace->GetTable(sName));
+                vecSourceNames.push_back(sName);
+            }
+            else
+            {
+                if(IsSameFile(sSourcePath, sDatabasePath))
+                    throw CommonLib::CExcBase("the source and the output are the same database");
+
+                ptrSourceWorkspace = OpenDatabase(sSourcePath);
+                vecSourceNames = sSourceTable.empty() ? GetSpatialTableNames(ptrSourceWorkspace) : std::vector<std::string>{ sSourceTable };
+                if(vecSourceNames.empty())
+                    throw CommonLib::CExcBase("the source database has no spatial tables");
+                for(const std::string& sName : vecSourceNames)
+                    vecSourceTables.push_back(ptrSourceWorkspace->GetTable(sName));
+            }
+
+            // the output: a new database is created with the options, an existing one gets more tables
+            if(CommonLib::CFileUtils::IsFileExist(sDatabasePath))
+                ptrDbWorkspace = OpenDatabase(sDatabasePath);
+            else
+            {
+                SDatabaseOptions dbOptions = options;
+                dbOptions.format = DatabaseFormatOf(sDatabasePath);
+                ptrDbWorkspace = CreateDatabase(sDatabasePath, dbOptions);
+            }
+
+            // BPtreeDB: the spatial index of the options; the indexes are built once at the end of every table
+            if(GeoDatabase::CBPtreeDBWorkspace* pBPtreeDB = dynamic_cast<GeoDatabase::CBPtreeDBWorkspace*>(ptrDbWorkspace.get()))
+            {
+                pBPtreeDB->SetDefaultSpatialIndex(options.spatialIndex);
+                ptrDbWorkspace->SetBulkLoadMode(true);
+                bBulk = true;
+            }
+
+            std::vector<std::string> vecTables = GetSpatialTableNames(ptrDbWorkspace);
+            std::vector<std::string> vecCreated;
+            GeoDatabase::CTableCopier::SCopyOptions copyOptions;
+            copyOptions.bCompressGeometry = options.bCompressGeometry;   // the precision by the units of every source table
+            int64_t nTotal = 0;
+            for(size_t i = 0; i < vecSourceTables.size(); ++i)
+            {
+                // unique table name in the database
+                std::string sBaseName = GeoDatabase::CTableCopier::MakeValidTableName(vecSourceNames[i]);
+                std::string sTableName = sBaseName;
+                for(int n = 1; TableExists(ptrDbWorkspace, vecTables, sTableName); ++n)
+                    sTableName = sBaseName + "_" + std::to_string(n);
+
+                int64_t nCopied = 0;
+                GeoDatabase::CTableCopier::CopySpatialTable(vecSourceTables[i], ptrDbWorkspace, sTableName,
+                    [&](int64_t nRows) { nCopied = nRows; return progress ? progress(nTotal + nRows) : true; }, 1000, copyOptions);
+
+                nTotal += nCopied;
+                vecTables.push_back(sTableName);
+                vecCreated.push_back(sTableName);
+            }
+
+            if(bBulk)
+            {
+                bBulk = false;
+                ptrDbWorkspace->SetBulkLoadMode(false);
+            }
+
+            if(pnCopied)
+                *pnCopied = nTotal;
+            return vecCreated;
+        }
+        catch (std::exception& exc)
+        {
+            if(bBulk)
+            {
+                try
+                {
+                    ptrDbWorkspace->SetBulkLoadMode(false);
+                }
+                catch (...)
+                {
+                }
+            }
+            CommonLib::CExcBase::RegenExc("Failed to convert {0} to {1}", sSourcePath, sDatabasePath, exc);
             throw;
         }
     }

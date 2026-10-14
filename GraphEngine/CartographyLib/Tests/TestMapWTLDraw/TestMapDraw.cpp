@@ -27,7 +27,7 @@ int Run(LPTSTR lpstrCmdLine = NULL, int nCmdShow = SW_SHOWDEFAULT)
 
 	wndMain.ShowWindow(nCmdShow);
 
-	// TestMapWTLDraw.exe file.shp | file.sqlite - opens the data at start
+	// TestMapWTLDraw.exe file.shp | file.sqlite | file.btdb - opens the data at start
 	if(lpstrCmdLine && lpstrCmdLine[0] != 0)
 	{
 		std::wstring sFile = lpstrCmdLine;
@@ -39,8 +39,8 @@ int Run(LPTSTR lpstrCmdLine = NULL, int nCmdShow = SW_SHOWDEFAULT)
 		if(nDot != std::wstring::npos)
 			sExt = sFile.substr(nDot);
 
-		if(_wcsicmp(sExt.c_str(), L".sqlite") == 0 || _wcsicmp(sExt.c_str(), L".db") == 0)
-			wndMain.m_view.AddSQLiteDatabase(sFile.c_str());
+		if(_wcsicmp(sExt.c_str(), L".sqlite") == 0 || _wcsicmp(sExt.c_str(), L".db") == 0 || _wcsicmp(sExt.c_str(), L".btdb") == 0)
+			wndMain.m_view.AddDatabase(sFile.c_str());
 		else
 			wndMain.m_view.AddShapeFile(sFile.c_str());
 	}

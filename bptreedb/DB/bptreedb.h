@@ -138,6 +138,12 @@ namespace bptreedb
 		CommonLib::bbox m_extent;
 		double m_dCellSize{ 0 };
 		uint32_t m_nGridCells{ 1u << 20 };
+
+		// itSpatialRTree / itSpatialZOrder on a table with rows: the bounding boxes of the geometries (box, row id),
+		// when the caller has them already (f.e. collected while the rows were inserted). The index is built from
+		// them, the geometry values aren't read (a big table: the reading of all the geometry blobs is the most of
+		// the time). They have to be the boxes of all the non NULL geometries of the field; the vector is used up.
+		std::vector<std::pair<CommonLib::bbox, int64_t> >* m_pSpatialEntries{ nullptr };
 	};
 
 	// Parameters of the database (used by Create; Open uses the cache sizes only).
@@ -151,6 +157,30 @@ namespace bptreedb
 		uint32_t m_nSpatialCacheSize{ 1000 };
 		uint32_t m_nCompressLevel{ 6 };           // zlib level of the node compressors
 		uint32_t m_nTranMemoryPages{ 4096 };      // changed pages a write transaction keeps in memory (the rest in a file)
+	};
+
+	// Space statistics of a tree of a table (ITransaction::GetSpaceStatistics).
+	struct SSpaceInfo
+	{
+		std::string m_sTable;
+		std::string m_sObject;              // the field, "" - the rows of the table (the row tree)
+		std::string m_sKind;                // "rows", "values", "index", "unique index", "spatial index R-tree", "spatial index Z-order"
+		eDataTypes m_type{ dtUnknown };     // the type of the field
+		uint32_t m_nLevels{ 0 };            // the levels of the tree with the leaves
+		uint64_t m_nInnerPages{ 0 };
+		uint64_t m_nLeafPages{ 0 };
+		uint64_t m_nBlobPages{ 0 };         // the stream pages of the big blobs (values over 1 KB), with bBlobs
+		uint64_t m_nInfoPages{ 0 };         // the info page of the tree
+		bool m_bBlobsCounted{ false };      // m_nBlobPages is counted (a blob tree with bBlobs)
+
+		uint64_t Pages() const { return m_nInnerPages + m_nLeafPages + m_nBlobPages + m_nInfoPages; }
+	};
+
+	struct SDatabaseSpace
+	{
+		uint32_t m_nPageSize{ 0 };
+		uint64_t m_nFilePages{ 0 };         // the pages of the database file (the committed ones)
+		std::vector<SSpaceInfo> m_trees;
 	};
 
 	typedef std::shared_ptr<class IField> IFieldPtr;
@@ -413,6 +443,14 @@ namespace bptreedb
 		virtual eTransactionType GetTransactionType() const = 0;
 		virtual eTransactionDataType GetTransactionDataType() const = 0;
 
+		// Insert on the right: the rows the transaction inserts / updates come in the order of the indexed values
+		// (a sorted load, an export). The index trees split a full leaf by one element (min split) when the new key
+		// is the last one of the leaf, so the leaves stay full; a key in the middle splits it in halves anyway, the
+		// setting is only about the fill. The row and value trees always do this (the row ids only grow).
+		// Off by default (random inserts: leaves split in halves). createInsertCursor(..., bMinSplit) - for one cursor.
+		virtual void SetInsertOnRight(bool bOnRight) = 0;
+		virtual bool GetInsertOnRight() const = 0;
+
 		// SQL (DB/SQLEngine): SELECT with joins, subqueries, GROUP BY, ORDER BY, LIMIT, UNION; INSERT, UPDATE, DELETE;
 		// CREATE / DROP TABLE, ALTER TABLE ADD / DROP COLUMN, CREATE / DROP INDEX. Write statements need a write
 		// transaction (DDL - eTT_DDL). A table is read by its indexes when the conditions allow it.
@@ -442,6 +480,14 @@ namespace bptreedb
 		virtual IUpdateCursorPtr createUpdateCursor(const std::string& sTable, IFieldSetPtr ptrFieldSet, const std::string& sField, const CommonLib::CVariant& var, OpType opType) = 0;
 		virtual IUpdateCursorPtr createUpdateCursor(const std::string& sTable, IFieldSetPtr ptrFieldSet, const std::vector<int64_t>& rowIds) = 0;
 		virtual IDeleteCursorPtr createDeleteCursor(const std::string& sTable) = 0;
+
+		// Space statistics: the pages of the trees of the tables (sTable empty - all of them): the rows, the values
+		// of every field, the indexes. Fast: the inner nodes are read, the leaves are counted by the links of the
+		// lowest inner level. bBlobs: also the stream pages of the big blobs (values over 1 KB: long strings, blobs,
+		// geometry) - the leaves of those trees are read and the page chains followed. The pages not in the trees
+		// (the schema, the pages a tree doesn't use any more) are m_nFilePages minus the sum.
+		// SQL: SELECT * FROM bptreedb_space (bptreedb_space_full - with the blobs).
+		virtual void GetSpaceStatistics(SDatabaseSpace& space, const std::string& sTable = std::string(), bool bBlobs = false) = 0;
 	};
 
 	class IDatabase

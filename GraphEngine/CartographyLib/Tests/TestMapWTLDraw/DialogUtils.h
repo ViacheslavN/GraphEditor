@@ -81,6 +81,44 @@ namespace DialogUtils
 		return dScale;
 	}
 
+	inline bool EndsWithNoCase(const std::wstring& sText, const wchar_t* pszSuffix)
+	{
+		size_t nLen = wcslen(pszSuffix);
+		return sText.size() >= nLen && _wcsicmp(sText.c_str() + sText.size() - nLen, pszSuffix) == 0;
+	}
+
+	// a BPtreeDB database file (.btdb), else SQLite
+	inline bool IsBPtreeDBPath(const std::wstring& sPath)
+	{
+		return EndsWithNoCase(sPath, L".btdb");
+	}
+
+	// the path with the extension of the database format: a database extension (.sqlite, .db, .btdb) is replaced,
+	// another one is kept and the extension is added
+	inline std::wstring WithDatabaseExtension(const std::wstring& sPath, bool bBPtreeDB)
+	{
+		if(sPath.empty())
+			return sPath;
+
+		std::wstring sResult = sPath;
+		for(const wchar_t* pszExt : {L".sqlite", L".db", L".btdb"})
+		{
+			if(EndsWithNoCase(sResult, pszExt))
+			{
+				sResult.resize(sResult.size() - wcslen(pszExt));
+				break;
+			}
+		}
+		return sResult + (bBPtreeDB ? L".btdb" : L".sqlite");
+	}
+
+	// the filter of the file dialogs of a database format
+	inline const wchar_t* DatabaseFileFilter(bool bBPtreeDB)
+	{
+		return bBPtreeDB ? L"BPtreeDB database (*.btdb)\0*.btdb\0All Files (*.*)\0*.*\0"
+		                 : L"SQLite database (*.sqlite;*.db)\0*.sqlite;*.db\0All Files (*.*)\0*.*\0";
+	}
+
 	// "50000", empty for 0
 	inline std::wstring FormatScale(double dScale)
 	{

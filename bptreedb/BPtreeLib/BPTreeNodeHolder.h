@@ -459,6 +459,25 @@ namespace bptreedb
 			m_pInnerNode->UpdateLink(nIndex, nLink);
 		}
 
+		// the start of the page of a leaf as Save writes it: the leaf flag and the links to the neighbours
+		void WriteLeafLinks(CommonLib::IMemoryWriteStream* pStream)
+		{
+			if (!IsLeaf())
+				throw CommonLib::CExcBase("BTNode holder WriteLeafLinks()  Node addr {0} isn't a leaf node", m_nAddr);
+
+			pStream->Write(m_IsLeaf);
+			m_pLeafNode->WriteLinks(pStream);
+		}
+
+		// the element count limit of the leaf compressor
+		uint32_t LeafMaxCount() const
+		{
+			if (!IsLeaf())
+				throw CommonLib::CExcBase("BTNode holder LeafMaxCount()  Node addr {0} isn't a leaf node", m_nAddr);
+
+			return m_pLeafNode->GetMaxCount();
+		}
+
 	protected:
 		bool m_IsLeaf;
 		int64_t m_nAddr;

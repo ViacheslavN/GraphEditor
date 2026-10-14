@@ -152,16 +152,22 @@ namespace bptreedb
 				TBPTreeNodePtr pLeaf = this->NewNode(true, false);
 				std::vector<std::pair<TKey, TValue>> carry;
 
-				// writes pNode; the elements that don't fit after all go to carry (ascending)
+				// writes pNode; the elements that don't fit after all go to carry (ascending).
+				// A leaf of a cut compressor (NodeCompressorTraits.h) is filled over the page by its estimate: the
+				// encoding says exactly which elements don't fit, the page of the others is written as it is.
 				auto saveLeaf = [&](TBPTreeNodePtr& pNode)
 				{
-					while (this->TrySaveNode(pNode) != 0)
+					uint32_t nRet = 0;
+					while ((nRet = this->TrySaveNode(pNode)) != 0)
 					{
 						uint32_t nNodeCount = pNode->Count();
 						if (nNodeCount < 2)
 							throw CommonLib::CExcBase("BulkLoad: one element doesn't fit in a leaf");
 
-						uint32_t nMove = std::max<uint32_t>(1, nNodeCount / 64);
+						constexpr bool bCut = TLeafCutWrite<TLeafNode>::value;
+						uint32_t nMove = bCut ? nRet : std::max<uint32_t>(1, nNodeCount / 64);
+						if (nMove >= nNodeCount)
+							throw CommonLib::CExcBase("BulkLoad: wrong count {0} of the elements that don't fit, the leaf has {1}", nMove, nNodeCount);
 						std::vector<std::pair<TKey, TValue>> moved;
 						for (uint32_t i = nNodeCount - nMove; i < nNodeCount; ++i)
 							moved.emplace_back(pNode->Key(i), pNode->Value(i));
@@ -169,6 +175,14 @@ namespace bptreedb
 							pNode->RemoveByIndex(pNode->Count() - 1);
 
 						carry.insert(carry.begin(), moved.begin(), moved.end());
+
+						if constexpr (bCut)
+						{
+							// the cache page has the encoded page of the elements the leaf has now
+							this->m_pStorage->SavePage(this->m_cachePage);
+							pNode->SetFlags(CHANGE_NODE, false);
+							break;
+						}
 					}
 				};
 
@@ -224,7 +238,18 @@ namespace bptreedb
 					TBPTreeNodePtr pNext = this->NewNode(true, false);
 					pLeaf->SetNext(pNext->GetAddr());
 					pNext->SetPrev(pLeaf->GetAddr());
-					this->TrySaveNode(pLeaf);       // rewrite with the new next link (same content, fits)
+					if constexpr (TLeafCutWrite<TLeafNode>::value)
+					{
+						// the cache page has the page of the leaf (saveLeaf): only the link changes (encoding the
+						// leaf again could cut it at another element)
+						CommonLib::CFxMemoryWriteStream stream;
+						stream.AttachBuffer(this->m_cachePage->GetPayLoadData(), this->m_cachePage->GetSize());
+						pLeaf->WriteLeafLinks(&stream);
+						this->m_pStorage->SavePage(this->m_cachePage);
+						pLeaf->SetFlags(CHANGE_NODE, false);
+					}
+					else
+						this->TrySaveNode(pLeaf);       // rewrite with the new next link (same content, fits)
 					pLeaf = pNext;
 					for (auto& kv : carry)
 						pLeaf->AppendInLeaf(kv.first, kv.second);

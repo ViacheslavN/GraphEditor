@@ -93,10 +93,10 @@ BEGIN
     POPUP "&Layers"
     BEGIN
         MENUITEM "Add &Shape File...\tCtrl+A",  ID_ADD_SHAPE_FILE
-        MENUITEM "Add S&QLite database...\tCtrl+D", ID_ADD_SQLITE_DB
+        MENUITEM "Add &Database (SQLite / BPtreeDB)...\tCtrl+D", ID_ADD_SQLITE_DB
         MENUITEM "Add &Raster (TIFF / GeoTIFF)...\tCtrl+T", ID_ADD_RASTER
         MENUITEM SEPARATOR
-        MENUITEM "&Convert Shape File to SQLite...", ID_CONVERT_SHAPE_TO_SQLITE
+        MENUITEM "&Convert to Database (SQLite / BPtreeDB)...", ID_CONVERT_TO_DATABASE
         MENUITEM SEPARATOR
         MENUITEM "New &group layer",            ID_NEW_GROUP_LAYER
         MENUITEM "Layer &properties...",        ID_LAYER_PROPERTIES
@@ -108,7 +108,7 @@ BEGIN
     POPUP "&Conversions"
     BEGIN
         MENUITEM "Convert from &OSM (.osm / .pbf)...", ID_CONVERT_FROM_OSM
-        MENUITEM "Convert &Shape File to SQLite...", ID_CONVERT_SHAPE_TO_SQLITE
+        MENUITEM "Convert Shape File / &Database to Database...", ID_CONVERT_TO_DATABASE
     END
     POPUP "&Map"
     BEGIN
@@ -184,7 +184,7 @@ END
 
 IDD_ADD_SQLITE DIALOG 0, 0, 372, 320
 STYLE DS_SETFONT | DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
-CAPTION "Add SQLite Database"
+CAPTION "Add Database (SQLite / BPtreeDB)"
 FONT 8, "MS Shell Dlg"
 BEGIN
     LTEXT           "Path:",IDC_STATIC,7,10,30,8
@@ -197,7 +197,7 @@ BEGIN
     PUSHBUTTON      "Cancel",IDCANCEL,315,299,50,14
 END
 
-IDD_CONVERT_OSM DIALOG 0, 0, 372, 458
+IDD_CONVERT_OSM DIALOG 0, 0, 372, 474
 STYLE DS_SETFONT | DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION "Convert from OpenStreetMap"
 FONT 8, "MS Shell Dlg"
@@ -214,37 +214,66 @@ BEGIN
     PUSHBUTTON      "Clear all",IDC_OSM_CLEAR_ALL,61,213,50,14
     PUSHBUTTON      "Split into files...",IDC_OSM_SPLIT,150,213,80,14
     CONTROL         "Keep node coordinates (nodes.flat/.sorted)",IDC_OSM_KEEP_NODES,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,236,215,129,10
-    GROUPBOX        "Output",IDC_STATIC,7,232,358,140
-    LTEXT           "SQLite database:",IDC_STATIC,14,246,58,8
+    GROUPBOX        "Output",IDC_STATIC,7,232,358,156
+    LTEXT           "Database:",IDC_STATIC,14,246,58,8
     EDITTEXT        IDC_OSM_OUTPUT,74,243,262,14,ES_AUTOHSCROLL
     PUSHBUTTON      "...",IDC_OSM_OUTPUT_BROWSE,339,243,20,14
-    CONTROL         "Web Mercator (EPSG:3857), otherwise longitude / latitude",IDC_OSM_WEB_MERCATOR,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,14,262,210,10
-    CONTROL         "Add the layers to the map",IDC_OSM_ADD_TO_MAP,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,232,262,120,10
-    LTEXT           "Names language:",IDC_STATIC,14,278,58,8
-    EDITTEXT        IDC_OSM_LANGUAGE,74,276,30,12,ES_AUTOHSCROLL
-    LTEXT           "(f.e. en, empty - name)",IDC_STATIC,108,278,80,8
-    LTEXT           "Node cache, MB:",IDC_STATIC,232,278,58,8
-    EDITTEXT        IDC_OSM_NODE_CACHE,292,276,40,12,ES_NUMBER
-    CONTROL         "Export the tags table (all the OSM tags of the converted objects, makes the database several times bigger)",IDC_OSM_EXPORT_TAGS,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,14,293,345,10
-    LTEXT           "Node store:",IDC_STATIC,14,309,58,8
-    COMBOBOX        IDC_OSM_NODE_STORE,74,307,150,60,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
-    LTEXT           "",IDC_OSM_NODE_STORE_INFO,230,305,130,18
-    LTEXT           "Write buffer, MB:",IDC_STATIC,14,327,58,8
-    EDITTEXT        IDC_OSM_WRITE_BUFFER,74,325,40,12,ES_NUMBER
-    LTEXT           "the flat node store: the nodes are collected in memory, written by big blocks in the background",IDC_STATIC,118,327,241,8
-    LTEXT           "Temporary files:",IDC_STATIC,14,343,58,8
-    EDITTEXT        IDC_OSM_TEMP_DIR,74,341,262,14,ES_AUTOHSCROLL
-    PUSHBUTTON      "...",IDC_OSM_TEMP_BROWSE,339,341,20,14
-    LTEXT           "",IDC_OSM_TEMP_INFO,74,358,285,8
-    GROUPBOX        "Geometry compression",IDC_STATIC,7,376,358,62
-    CONTROL         "Compress the geometry (about 4 times smaller): the coordinates are stored as integers",IDC_OSM_COMPRESS,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,14,389,345,10
-    CONTROL         "Automatic scale (by the units)",IDC_OSM_SCALE_AUTO,"Button",BS_AUTORADIOBUTTON | WS_GROUP | WS_TABSTOP,24,403,140,10
-    CONTROL         "Maximum (all the digits of the doubles)",IDC_OSM_SCALE_MAX,"Button",BS_AUTORADIOBUTTON,170,403,180,10
-    CONTROL         "Manual, decimal places:",IDC_OSM_SCALE_MANUAL,"Button",BS_AUTORADIOBUTTON,24,418,96,10
-    EDITTEXT        IDC_OSM_SCALE_VALUE,122,416,28,12,ES_AUTOHSCROLL | WS_GROUP
-    LTEXT           "",IDC_OSM_SCALE_INFO,156,418,204,16
-    DEFPUSHBUTTON   "Run",IDOK,258,441,50,14
-    PUSHBUTTON      "Cancel",IDCANCEL,315,441,50,14
+    LTEXT           "Format:",IDC_STATIC,14,263,58,8
+    COMBOBOX        IDC_OSM_DB_FORMAT,74,261,110,60,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    LTEXT           "Spatial index (BPtreeDB):",IDC_STATIC,192,263,84,8
+    COMBOBOX        IDC_OSM_SPATIAL_INDEX,278,261,81,60,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    CONTROL         "Web Mercator (EPSG:3857), otherwise longitude / latitude",IDC_OSM_WEB_MERCATOR,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,14,278,210,10
+    CONTROL         "Add the layers to the map",IDC_OSM_ADD_TO_MAP,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,232,278,120,10
+    LTEXT           "Names language:",IDC_STATIC,14,294,58,8
+    EDITTEXT        IDC_OSM_LANGUAGE,74,292,30,12,ES_AUTOHSCROLL
+    LTEXT           "(f.e. en, empty - name)",IDC_STATIC,108,294,80,8
+    LTEXT           "Node cache, MB:",IDC_STATIC,232,294,58,8
+    EDITTEXT        IDC_OSM_NODE_CACHE,292,292,40,12,ES_NUMBER
+    CONTROL         "Export the tags table (all the OSM tags of the converted objects, makes the database several times bigger)",IDC_OSM_EXPORT_TAGS,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,14,309,345,10
+    LTEXT           "Node store:",IDC_STATIC,14,325,58,8
+    COMBOBOX        IDC_OSM_NODE_STORE,74,323,150,60,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    LTEXT           "",IDC_OSM_NODE_STORE_INFO,230,321,130,18
+    LTEXT           "Write buffer, MB:",IDC_STATIC,14,343,58,8
+    EDITTEXT        IDC_OSM_WRITE_BUFFER,74,341,40,12,ES_NUMBER
+    LTEXT           "the flat node store: the nodes are collected in memory, written by big blocks in the background",IDC_STATIC,118,343,241,8
+    LTEXT           "Temporary files:",IDC_STATIC,14,359,58,8
+    EDITTEXT        IDC_OSM_TEMP_DIR,74,357,262,14,ES_AUTOHSCROLL
+    PUSHBUTTON      "...",IDC_OSM_TEMP_BROWSE,339,357,20,14
+    LTEXT           "",IDC_OSM_TEMP_INFO,74,374,285,8
+    GROUPBOX        "Geometry compression",IDC_STATIC,7,392,358,62
+    CONTROL         "Compress the geometry (about 4 times smaller): the coordinates are stored as integers",IDC_OSM_COMPRESS,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,14,405,345,10
+    CONTROL         "Automatic scale (by the units)",IDC_OSM_SCALE_AUTO,"Button",BS_AUTORADIOBUTTON | WS_GROUP | WS_TABSTOP,24,419,140,10
+    CONTROL         "Maximum (all the digits of the doubles)",IDC_OSM_SCALE_MAX,"Button",BS_AUTORADIOBUTTON,170,419,180,10
+    CONTROL         "Manual, decimal places:",IDC_OSM_SCALE_MANUAL,"Button",BS_AUTORADIOBUTTON,24,434,96,10
+    EDITTEXT        IDC_OSM_SCALE_VALUE,122,432,28,12,ES_AUTOHSCROLL | WS_GROUP
+    LTEXT           "",IDC_OSM_SCALE_INFO,156,434,204,16
+    DEFPUSHBUTTON   "Run",IDOK,258,457,50,14
+    PUSHBUTTON      "Cancel",IDCANCEL,315,457,50,14
+END
+
+IDD_CONVERT_DB DIALOG 0, 0, 372, 174
+STYLE DS_SETFONT | DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Convert to Database"
+FONT 8, "MS Shell Dlg"
+BEGIN
+    GROUPBOX        "Source",IDC_STATIC,7,7,358,54
+    LTEXT           "Shape file or database:",IDC_STATIC,14,22,80,8
+    EDITTEXT        IDC_CONV_SOURCE,96,19,240,14,ES_AUTOHSCROLL
+    PUSHBUTTON      "...",IDC_CONV_SOURCE_BROWSE,339,19,20,14
+    LTEXT           "Table:",IDC_STATIC,14,42,80,8
+    COMBOBOX        IDC_CONV_SOURCE_TABLE,96,40,180,120,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    GROUPBOX        "Output",IDC_STATIC,7,65,358,84
+    LTEXT           "Database (new or existing):",IDC_STATIC,14,80,80,8
+    EDITTEXT        IDC_CONV_OUTPUT,96,77,240,14,ES_AUTOHSCROLL
+    PUSHBUTTON      "...",IDC_CONV_OUTPUT_BROWSE,339,77,20,14
+    LTEXT           "Format:",IDC_STATIC,14,98,80,8
+    COMBOBOX        IDC_CONV_FORMAT,96,96,100,60,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    LTEXT           "Spatial index:",IDC_STATIC,206,98,50,8
+    COMBOBOX        IDC_CONV_SPATIAL_INDEX,258,96,101,60,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    CONTROL         "Compress the geometry (integer coordinates, the precision by the units: 1e-7 degree, 1 cm)",IDC_CONV_COMPRESS,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,14,114,345,10
+    LTEXT           "",IDC_CONV_INFO,14,128,345,18
+    DEFPUSHBUTTON   "Convert",IDOK,258,155,50,14
+    PUSHBUTTON      "Cancel",IDCANCEL,315,155,50,14
 END
 
 IDD_OSM_PROGRESS DIALOG 0, 0, 520, 290
@@ -639,8 +668,8 @@ BEGIN
     ID_ZOOM_IN              "Zoom in\nZoom In"
     ID_ZOOM_OUT             "Zoom out\nZoom Out"
     ID_CLEAR_SELECTION      "Clear the selection (cancels a running conversion)\nClear Selection"
-    ID_ADD_SQLITE_DB        "Add the spatial tables of an SQLite database as layers\nAdd SQLite Database"
-    ID_CONVERT_SHAPE_TO_SQLITE "Copy a shape file into an SQLite database as a spatial table\nConvert to SQLite"
+    ID_ADD_SQLITE_DB        "Add the spatial tables of a database (SQLite / BPtreeDB) as layers\nAdd Database"
+    ID_CONVERT_TO_DATABASE  "Copy a shape file or the spatial tables of a database into an SQLite / BPtreeDB database\nConvert to Database"
     ID_VIEW_3D              "Switch between the plan view and the pseudo 3D (perspective) view\n3D View"
     ID_TILT_UP              "Tilt the 3D view more (look farther ahead)\nTilt Up"
     ID_TILT_DOWN            "Tilt the 3D view less (closer to the plan view)\nTilt Down"

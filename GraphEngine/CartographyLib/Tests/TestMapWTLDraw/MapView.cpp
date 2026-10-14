@@ -8,6 +8,7 @@
 #include "MapView.h"
 #include "AddShapeFileDlg.h"
 #include "AddSQLiteDlg.h"
+#include "ConvertDatabaseDlg.h"
 #include "ConvertOSMDlg.h"
 #include "OSMProgressDlg.h"
 #include "LayerPropertiesDlg.h"
@@ -829,19 +830,36 @@ bool CMapView::AddShapeFile(const wchar_t *pszFile, const TestMapDraw::SLayerPar
 	}
 }
 
-bool CMapView::AddSQLiteDatabase(const wchar_t *pszFile, const std::string& sTableName, const TestMapDraw::SLayerParams& params)
+bool CMapView::AddDatabase(const wchar_t *pszFile, const std::string& sTableName, const TestMapDraw::SLayerParams& params)
 {
 	try
 	{
 		m_ptrDrawer->StopDraw(true);
 		bool bFirstLayer = !m_project.HasDataLayers();
-		m_project.AddSQLiteDatabase(ToUtf8(pszFile), sTableName, params);
+		m_project.AddDatabase(ToUtf8(pszFile), sTableName, params);   // the databases open UTF-8 names
 		OnLayersAdded(bFirstLayer);
 		return true;
 	}
 	catch (std::exception& exc)
 	{
-		ShowError(exc, L"Add SQLite database");
+		ShowError(exc, L"Add database");
+		return false;
+	}
+}
+
+bool CMapView::AddDatabase(const wchar_t *pszFile, const std::vector<std::string>& vecTableNames)
+{
+	try
+	{
+		m_ptrDrawer->StopDraw(true);
+		bool bFirstLayer = !m_project.HasDataLayers();
+		m_project.AddDatabase(ToUtf8(pszFile), vecTableNames);
+		OnLayersAdded(bFirstLayer);
+		return true;
+	}
+	catch (std::exception& exc)
+	{
+		ShowError(exc, L"Add database");
 		return false;
 	}
 }
@@ -881,7 +899,7 @@ LRESULT CMapView::OnAddSQLiteDb(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndC
 	if ( dlg.DoModal(m_hWnd) != IDOK )
 		return 0;
 
-	AddSQLiteDatabase(dlg.GetPath().c_str(), dlg.GetTableName(), dlg.GetLayerParams());
+	AddDatabase(dlg.GetPath().c_str(), dlg.GetTableName(), dlg.GetLayerParams());
 	return 0;
 }
 
@@ -898,26 +916,20 @@ void CMapView::StopConversion()
 	m_bConverting = false;
 }
 
-LRESULT CMapView::OnConvertShapeToSQLite(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/)
+LRESULT CMapView::OnConvertToDatabase(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/)
 {
 	if(m_bConverting)
 	{
-		::MessageBox(m_hWnd, L"A conversion is already running (Esc - cancel).", L"Convert to SQLite", MB_OK | MB_ICONINFORMATION);
+		::MessageBox(m_hWnd, L"A conversion is already running (Esc - cancel).", L"Convert to Database", MB_OK | MB_ICONINFORMATION);
 		return 0;
 	}
 
-	CFileDialog shapeDlg(TRUE, _T("shp"), NULL, OFN_HIDEREADONLY | OFN_FILEMUSTEXIST, _T("ESRI shape files (*.shp)\0*.shp\0All Files (*.*)\0*.*\0"), m_hWnd);
-	shapeDlg.m_ofn.lpstrTitle = _T("Shape file to convert");
-	if ( shapeDlg.DoModal() != IDOK )
+	// a shape file or the tables of a database; a new database is created, an existing one gets more tables
+	CConvertDatabaseDlg dlg;
+	if(dlg.DoModal(m_hWnd) != IDOK)
 		return 0;
 
-	// a new database is created, an existing one gets one more table
-	CFileDialog dbDlg(FALSE, _T("sqlite"), NULL, OFN_HIDEREADONLY, _T("SQLite database (*.sqlite;*.db)\0*.sqlite;*.db\0All Files (*.*)\0*.*\0"), m_hWnd);
-	dbDlg.m_ofn.lpstrTitle = _T("SQLite database (new or existing)");
-	if ( dbDlg.DoModal() != IDOK )
-		return 0;
-
-	StartConvertToSQLite(shapeDlg.m_szFileName, dbDlg.m_szFileName);
+	StartConvertToDatabase(dlg.GetSourcePath(), dlg.GetSourceTable(), dlg.GetOutputPath(), dlg.GetOptions());
 	return 0;
 }
 
@@ -943,7 +955,8 @@ LRESULT CMapView::OnConvertFromOSM(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hW
 	Convertors::CLayerColumnExcludeList excludeList = dlg.GetExcludeList();
 	Convertors::SOSMConvertSettings settings = dlg.GetSettings();
 	std::wstring sOutput = dlg.GetOutputPath();
-	std::string sOutputUtf8 = ToUtf8(sOutput.c_str());   // SQLite opens files with UTF-8 names
+	std::string sOutputUtf8 = ToUtf8(sOutput.c_str());   // the databases open files with UTF-8 names
+	TestMapDraw::SDatabaseOptions dbOptions = dlg.GetDatabaseOptions();
 
 	std::wstring sName = sOutput.substr(sOutput.find_last_of(L"\\/") + 1);
 	size_t nDot = sName.find_last_of(L'.');
@@ -959,7 +972,8 @@ LRESULT CMapView::OnConvertFromOSM(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hW
 	COSMProgressDlg progressDlg(L"Converting OpenStreetMap",
 		[&](Convertors::IProgressUpdaterPtr ptrProgress, Display::ITrackCancelPtr ptrCancel)
 		{
-			ptrDb = GeoDatabase::CSQLiteWorkspace::Create(sNameUtf8.c_str(), sOutputUtf8.c_str(), CommonLib::CGuid::CreateNew());
+			// SQLite / BPtreeDB (with the spatial index of the dialog)
+			ptrDb = TestMapDraw::CMapProject::CreateDatabase(sOutputUtf8, dbOptions);
 			Convertors::COSMConvertor convertor(settings);
 			convertor.Convert(ptrOSMMap, excludeList, ptrNewMap, ptrDb, ptrProgress, ptrCancel);
 		},
@@ -990,8 +1004,8 @@ LRESULT CMapView::OnConvertFromOSM(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hW
 		// the conversion is rolled back, the new database is not needed
 		ptrNewMap.reset();
 		ptrDb.reset();
-		for(const wchar_t* pszSuffix : {L"", L"-wal", L"-shm", L"-journal"})
-			::DeleteFileW((sOutput + pszSuffix).c_str());
+		for(const std::string& sSuffix : TestMapDraw::CMapProject::DatabaseFileSuffixes())
+			::DeleteFileW((sOutput + ToWide(sSuffix)).c_str());
 
 		std::wstring sLogInfo = sLogPath.empty() ? std::wstring() : L"\n\nThe details of the stages: " + sLogPath;
 		if(nResult == IDCANCEL)
@@ -1040,7 +1054,8 @@ LRESULT CMapView::OnConvertFromOSM(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hW
 #endif
 }
 
-bool CMapView::StartConvertToSQLite(const wchar_t *pszShapeFile, const wchar_t *pszDatabase)
+bool CMapView::StartConvertToDatabase(const std::wstring& sSource, const std::string& sSourceTable, const std::wstring& sDatabase,
+                                      const TestMapDraw::SDatabaseOptions& options)
 {
 	if(m_bConverting)
 		return false;
@@ -1048,27 +1063,29 @@ bool CMapView::StartConvertToSQLite(const wchar_t *pszShapeFile, const wchar_t *
 	if(m_convertThread.joinable())
 		m_convertThread.join();
 
-	m_sConvertShapeFile = pszShapeFile;
-	m_sConvertDatabase = pszDatabase;
-	m_sConvertTable.clear();
+	m_sConvertSource = sSource;
+	m_sConvertDatabase = sDatabase;
+	m_vecConvertTables.clear();
 	m_sConvertError.clear();
 	m_nConverted = 0;
 	m_bConvertCancel = false;
 	m_bConverting = true;
 
-	std::string sShapeFile = ToFilePath(pszShapeFile);
-	std::string sDatabase = ToUtf8(pszDatabase);
+	// a shape file opens ANSI names, the databases UTF-8 ones
+	bool bShapefile = sSource.size() >= 4 && _wcsicmp(sSource.c_str() + sSource.size() - 4, L".shp") == 0;
+	std::string sSourcePath = bShapefile ? ToFilePath(sSource.c_str()) : ToUtf8(sSource.c_str());
+	std::string sDatabasePath = ToUtf8(sDatabase.c_str());
 	HWND hWnd = m_hWnd;
 
 	if(m_hWndStatusBar)
-		::SetWindowText(m_hWndStatusBar, L"Converting to SQLite...");
+		::SetWindowText(m_hWndStatusBar, L"Converting to database...");
 
-	m_convertThread = std::thread([this, hWnd, sShapeFile, sDatabase]()
+	m_convertThread = std::thread([this, hWnd, sSourcePath, sSourceTable, sDatabasePath, options]()
 	{
 		try
 		{
 			int64_t nCopied = 0;
-			m_sConvertTable = TestMapDraw::CMapProject::ConvertShapefileToSQLite(sShapeFile, sDatabase,
+			m_vecConvertTables = TestMapDraw::CMapProject::ConvertToDatabase(sSourcePath, sSourceTable, sDatabasePath, options,
 				[this, hWnd](int64_t nRows)
 				{
 					::PostMessage(hWnd, WM_CONVERT_PROGRESS, (WPARAM)nRows, 0);
@@ -1092,7 +1109,7 @@ LRESULT CMapView::OnConvertProgress(UINT /*uMsg*/, WPARAM wParam, LPARAM /*lPara
 	if(m_hWndStatusBar && m_bConverting)
 	{
 		wchar_t szText[128];
-		swprintf(szText, 128, L"Converting to SQLite: %llu features (Esc - cancel)", (unsigned long long)wParam);
+		swprintf(szText, 128, L"Converting to database: %llu features (Esc - cancel)", (unsigned long long)wParam);
 		::SetWindowText(m_hWndStatusBar, szText);
 	}
 	return 0;
@@ -1105,18 +1122,25 @@ LRESULT CMapView::OnConvertFinished(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*l
 	m_bConverting = false;
 	UpdateStatus(nullptr);
 
+	const wchar_t* pszCaption = L"Convert to Database";
 	if(!m_sConvertError.empty())
 	{
 		std::wstring sMsg = ToWide(m_sConvertError);
-		::MessageBox(m_hWnd, sMsg.c_str(), L"Convert to SQLite", MB_OK | MB_ICONERROR);
+		::MessageBox(m_hWnd, sMsg.c_str(), pszCaption, MB_OK | MB_ICONERROR);
 		return 0;
 	}
 
-	wchar_t szText[1024];
-	swprintf(szText, 1024, L"%lld features are copied into table '%s' of\n%s\n\nAdd the table to the map?",
-		(long long)m_nConverted, ToWide(m_sConvertTable).c_str(), m_sConvertDatabase.c_str());
-	if(::MessageBox(m_hWnd, szText, L"Convert to SQLite", MB_YESNO | MB_ICONQUESTION) == IDYES)
-		AddSQLiteDatabase(m_sConvertDatabase.c_str(), m_sConvertTable);
+	std::wstring sTables;
+	for(size_t i = 0; i < m_vecConvertTables.size() && i < 20; ++i)
+		sTables += (i == 0 ? L"" : L", ") + ToWide(m_vecConvertTables[i]);
+	if(m_vecConvertTables.size() > 20)
+		sTables += L", ...";
+
+	wchar_t szText[2048];
+	swprintf(szText, 2048, L"%lld features are copied into %d table(s) of\n%s\n\n%s\n\nAdd the tables to the map?",
+		(long long)m_nConverted, (int)m_vecConvertTables.size(), m_sConvertDatabase.c_str(), sTables.c_str());
+	if(::MessageBox(m_hWnd, szText, pszCaption, MB_YESNO | MB_ICONQUESTION) == IDYES)
+		AddDatabase(m_sConvertDatabase.c_str(), m_vecConvertTables);
 
 	return 0;
 }

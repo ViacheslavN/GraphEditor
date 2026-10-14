@@ -83,6 +83,7 @@ namespace bptreedb
 
 			uint8_t mode = nComp < nRaw ? 1 : 0;
 			uint32_t nSize = mode ? (uint32_t)nComp : (uint32_t)nRaw;
+			UpdateRatio(nRaw, nSize);      // the real ratio also when it doesn't fit: the split point is by the estimate
 			if (HeadSize + nSize > nFree)
 				return nSplit;
 

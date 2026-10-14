@@ -30,7 +30,11 @@ namespace GraphEngine {
                     ptrFields->AddField(ptrField);
                 };
 
-                addField(OIDField, GeoDatabase::dtInteger64, true);
+                // BPtreeDB: the rows are identified by the row id (1, 2, 3, ... as the OID would be), no OID column
+                bool bOIDColumn = ptrWorkspace->GetWorkspaceType() != GeoDatabase::wtBPtreeDB;
+                std::string sOIDField = bOIDColumn ? std::string(OIDField) : std::string();
+                if(bOIDColumn)
+                    addField(OIDField, GeoDatabase::dtInteger64, true);
                 for(size_t i = 0; i < m_vecFields.size(); ++i)
                 {
                     if(!m_vecFields[i].bExcluded)
@@ -41,13 +45,14 @@ namespace GraphEngine {
                 if(bSpatial)
                 {
                     addField(ShapeField, GeoDatabase::dtGeometry, false);
-                    m_ptrTable = ptrWorkspace->CreateTableWithSpatialIndex(sTableName, sTableName, sTableName + "_sidx", ShapeField, OIDField, ptrFields,
+                    m_ptrTable = ptrWorkspace->CreateTableWithSpatialIndex(sTableName, sTableName, sTableName + "_sidx", ShapeField, sOIDField, ptrFields,
                                                                          shapeType, Geometry::IEnvelopePtr(), ptrSpatRef);
                 }
                 else
                 {
                     m_ptrTable = ptrWorkspace->CreateTable(sTableName, sTableName, ptrFields);
-                    m_ptrTable->SetOIDFieldName(OIDField);
+                    if(bOIDColumn)
+                        m_ptrTable->SetOIDFieldName(OIDField);
                 }
 
                 m_ptrInsert = ptrTransaction->CreateInsertCusor(m_ptrTable);
@@ -56,7 +61,7 @@ namespace GraphEngine {
                 for(int32_t col = 0; col < m_ptrInsert->ColumnCount(); ++col)
                 {
                     std::string sName = m_ptrInsert->ColumnName(col);
-                    if(sName == OIDField)
+                    if(bOIDColumn && sName == OIDField)
                         m_nOIDColumn = col;
                     else if(bSpatial && sName == ShapeField)
                         m_nShapeColumn = col;

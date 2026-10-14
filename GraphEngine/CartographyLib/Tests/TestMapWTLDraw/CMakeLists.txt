@@ -23,6 +23,8 @@ set(SOURCE_FILES
         AddShapeFileDlg.cpp
         AddSQLiteDlg.h
         AddSQLiteDlg.cpp
+        ConvertDatabaseDlg.h
+        ConvertDatabaseDlg.cpp
         DialogUtils.h
         SymbologyModel.h
         SymbologyModel.cpp
