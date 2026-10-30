@@ -221,13 +221,14 @@
 #define ID_LAYER_REMOVE                 32796
 #define ID_NEW_GROUP_LAYER              32797
 #define ID_MAP_PROPERTIES               32798
+#define ID_CONVERT_OSM_BPTREE           32800
 
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        201
-#define _APS_NEXT_COMMAND_VALUE         32800
+#define _APS_NEXT_COMMAND_VALUE         32801
 #define _APS_NEXT_CONTROL_VALUE         1272
 #define _APS_NEXT_SYMED_VALUE           115
 #endif

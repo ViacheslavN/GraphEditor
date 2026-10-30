@@ -17,7 +17,7 @@ endif()
 
 set(BIN_NAME OSMConvertorLibCatchTests)
 
-add_executable(${BIN_NAME} TestOSMMap.cpp TestOSMConvert.cpp TestOSMPbf.cpp TestOSMStores.cpp)
+add_executable(${BIN_NAME} TestOSMMap.cpp TestOSMConvert.cpp TestOSMPbf.cpp TestOSMStores.cpp TestOSMBPTree.cpp)
 target_link_libraries(${BIN_NAME} PRIVATE OSMConvertorLib Catch2::Catch2WithMain)
 
 include(CTest)

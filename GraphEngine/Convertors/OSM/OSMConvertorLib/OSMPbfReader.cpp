@@ -2,6 +2,7 @@
 #include "../../../../CommonLib/filesystem/File.h"
 #include <zlib.h>
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <condition_variable>
 #include <cstring>
@@ -832,48 +833,117 @@ namespace GraphEngine {
                 return true;
             };
 
-            bool bEnd = false;
-            try
+            // The file is read by its own thread (the disk never waits for the handler): it submits the blocks to the
+            // decoders in the file order while there are fewer than nMaxInFlight of them in flight; the calling thread
+            // takes them in the same order, waits for their decoding and dispatches them to the handler.
+            std::mutex mutex;
+            std::condition_variable cvRead;      // a block is taken by the calling thread / stop
+            std::condition_variable cvBlocks;    // a block is submitted / the reading is done
+            bool bReadDone = false;
+            bool bStopRead = false;
+            std::exception_ptr readError;
+            std::atomic<uint64_t> nReadNs{0};
+            std::atomic<uint64_t> nBytesRead{0};
+
+            auto readLoop = [&]()
             {
-                for(;;)
+                try
                 {
-                    while(!bEnd && inFlight.size() < nMaxInFlight)
+                    for(;;)
                     {
                         SBlock* pBlock = nullptr;
-                        if(!vecFree.empty())
                         {
-                            pBlock = vecFree.back();
-                            vecFree.pop_back();
-                        }
-                        else
-                        {
-                            vecBlocks.push_back(std::unique_ptr<SBlock>(new SBlock()));
-                            pBlock = vecBlocks.back().get();
+                            std::unique_lock<std::mutex> lock(mutex);
+                            cvRead.wait(lock, [&]() { return bStopRead || inFlight.size() < nMaxInFlight; });
+                            if(bStopRead)
+                                break;
+                            if(!vecFree.empty())
+                            {
+                                pBlock = vecFree.back();
+                                vecFree.pop_back();
+                            }
+                            else
+                            {
+                                vecBlocks.push_back(std::unique_ptr<SBlock>(new SBlock()));
+                                pBlock = vecBlocks.back().get();
+                            }
                         }
                         pBlock->Reset();
                         pBlock->nObjects = wanted;
                         TClock::time_point readStart = TClock::now();
                         bool bRead = readNext(*pBlock);
-                        stats.dReadSeconds += seconds(readStart);
+                        nReadNs += (uint64_t)std::chrono::duration_cast<std::chrono::nanoseconds>(TClock::now() - readStart).count();
                         if(!bRead)
                         {
+                            std::lock_guard<std::mutex> lock(mutex);
                             vecFree.push_back(pBlock);
-                            bEnd = true;
                             break;
                         }
-                        stats.nBytesRead += pBlock->info.nSize;
+                        nBytesRead += pBlock->info.nSize;
                         pool.Submit(pBlock);
-                        inFlight.push_back(pBlock);
+                        {
+                            std::lock_guard<std::mutex> lock(mutex);
+                            inFlight.push_back(pBlock);
+                        }
+                        cvBlocks.notify_one();
                     }
-                    if(inFlight.empty())
-                        break;
+                }
+                catch (...)
+                {
+                    std::lock_guard<std::mutex> lock(mutex);
+                    readError = std::current_exception();
+                }
+                {
+                    std::lock_guard<std::mutex> lock(mutex);
+                    bReadDone = true;
+                }
+                cvBlocks.notify_all();
+            };
 
-                    SBlock* pBlock = inFlight.front();
+            // the reading thread stops and the submitted blocks are decoded before the blocks / the pool are destroyed
+            std::thread readThread;
+            auto stopReading = [&]()
+            {
+                {
+                    std::lock_guard<std::mutex> lock(mutex);
+                    bStopRead = true;
+                }
+                cvRead.notify_all();
+                if(readThread.joinable())
+                    readThread.join();
+                for(SBlock* pWait : inFlight)
+                    pool.Wait(pWait);
+            };
+
+            try
+            {
+                readThread = std::thread(readLoop);
+                for(;;)
+                {
+                    SBlock* pBlock = nullptr;
+                    {
+                        std::unique_lock<std::mutex> lock(mutex);
+                        TClock::time_point waitStart = TClock::now();
+                        cvBlocks.wait(lock, [&]() { return !inFlight.empty() || bReadDone; });
+                        stats.dWaitSeconds += seconds(waitStart);
+                        if(inFlight.empty())
+                        {
+                            if(readError)
+                                std::rethrow_exception(readError);
+                            break;   // the file is read
+                        }
+                        pBlock = inFlight.front();
+                    }
+
                     TClock::time_point waitStart = TClock::now();
                     pool.Wait(pBlock);
                     stats.dWaitSeconds += seconds(waitStart);
                     stats.dDecodeSeconds += pBlock->dDecodeSeconds;
-                    inFlight.pop_front();
+                    {
+                        std::lock_guard<std::mutex> lock(mutex);
+                        inFlight.pop_front();
+                    }
+                    cvRead.notify_one();
                     if(pBlock->ptrError)
                         std::rethrow_exception(pBlock->ptrError);
 
@@ -889,31 +959,34 @@ namespace GraphEngine {
                     stats.dDispatchSeconds += seconds(dispatchStart);
                     ++stats.nBlocks;
                     nBytesDone += pBlock->info.nSize;
-                    vecFree.push_back(pBlock);
+                    {
+                        std::lock_guard<std::mutex> lock(mutex);
+                        vecFree.push_back(pBlock);
+                    }
                     if(bContinue)
                     {
+                        stats.dReadSeconds = nReadNs.load() / 1e9;
+                        stats.nBytesRead = nBytesRead.load();
                         handler.OnReaderStats(stats);
                         bContinue = handler.OnProgress((std::min)(nBytesDone, nBytesTotal), nBytesTotal);
                     }
                     if(!bContinue)
                     {
-                        for(SBlock* pWait : inFlight)
-                            pool.Wait(pWait);
+                        stopReading();
                         return false;
                     }
                 }
+                stopReading();
             }
             catch (std::exception& exc)
             {
-                for(SBlock* pWait : inFlight)
-                    pool.Wait(pWait);
+                stopReading();
                 CommonLib::CExcBase::RegenExcT("Failed to read OSM file {0}", sPath, exc);
                 throw;
             }
             catch (...)
             {
-                for(SBlock* pWait : inFlight)
-                    pool.Wait(pWait);
+                stopReading();
                 throw;
             }
 

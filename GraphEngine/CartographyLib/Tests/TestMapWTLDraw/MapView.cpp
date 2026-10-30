@@ -17,6 +17,7 @@
 #include "../../Map.h"
 #include "../../../GeoDatabase/GeoDatabaseSQlite/SQLiteWorkspace.h"
 #include "../../../Convertors/OSM/OSMConvertorLib/OSMConvertor.h"
+#include "../../../Convertors/OSM/OSMConvertorLib/BPTree/OSMBPTreeConvertor.h"
 #endif
 #include "../../../../CommonLib/str/StringEncoding.h"
 
@@ -1049,6 +1050,93 @@ LRESULT CMapView::OnConvertFromOSM(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hW
 	}
 	if(!sLogPath.empty())
 		sMessage += L"\n\nThe details of the stages: " + sLogPath;
+	::MessageBox(m_hWnd, sMessage.c_str(), pszCaption, MB_OK | MB_ICONINFORMATION);
+	return 0;
+#endif
+}
+
+LRESULT CMapView::OnConvertOSMToBPTree(WORD /*wNotifyCode*/, WORD /*wID*/, HWND /*hWndCtl*/, BOOL& /*bHandled*/)
+{
+	const wchar_t* pszCaption = L"OSM to B+ tree";
+#ifndef HAVE_OSM_CONVERTOR
+	::MessageBox(m_hWnd, L"The OSM converter isn't built (expat was not found by CMake).", pszCaption, MB_OK | MB_ICONINFORMATION);
+	return 0;
+#else
+	if(m_bConverting)
+	{
+		::MessageBox(m_hWnd, L"A conversion is already running.", pszCaption, MB_OK | MB_ICONINFORMATION);
+		return 0;
+	}
+
+	// the OSM file
+	CFileDialog osmDlg(TRUE, _T("pbf"), NULL, OFN_HIDEREADONLY | OFN_FILEMUSTEXIST,
+		_T("OpenStreetMap (*.osm;*.pbf)\0*.osm;*.pbf\0All Files (*.*)\0*.*\0"), m_hWnd);
+	osmDlg.m_ofn.lpstrTitle = _T("OSM file (.osm / .pbf)");
+	if(osmDlg.DoModal() != IDOK)
+		return 0;
+	std::wstring sOSMPath = osmDlg.m_szFileName;
+
+	// the node file: <OSM file without .osm / .pbf>.osmnodes
+	std::wstring sDefault = sOSMPath;
+	for(const wchar_t* pszSuffix : { L".pbf", L".osm" })
+	{
+		size_t nLen = wcslen(pszSuffix);
+		if(sDefault.size() > nLen && _wcsicmp(sDefault.c_str() + sDefault.size() - nLen, pszSuffix) == 0)
+			sDefault.resize(sDefault.size() - nLen);
+	}
+	sDefault += L".osmnodes";
+	CFileDialog outDlg(FALSE, _T("osmnodes"), sDefault.c_str(), OFN_HIDEREADONLY | OFN_OVERWRITEPROMPT,
+		_T("OSM nodes B+ tree (*.osmnodes)\0*.osmnodes\0All Files (*.*)\0*.*\0"), m_hWnd);
+	outDlg.m_ofn.lpstrTitle = _T("Node file (B+ tree)");
+	if(outDlg.DoModal() != IDOK)
+		return 0;
+	std::wstring sOutput = outDlg.m_szFileName;
+
+	std::string sOSMPathUtf8 = ToUtf8(sOSMPath.c_str());
+	std::string sOutputUtf8 = ToUtf8(sOutput.c_str());
+	Convertors::bptree::SOSMBPTreeResult result;
+
+	// the nodes (+ their tags), then the ways: shapes (+ their tags), see BPTree/OSMBPTreeConvertor.h
+	COSMProgressDlg progressDlg(L"OSM into the B+ trees (nodes, ways)",
+		[&](Convertors::IProgressUpdaterPtr ptrProgress, Display::ITrackCancelPtr ptrCancel)
+		{
+			Convertors::bptree::COSMBPTreeConvertor convertor;
+			result = convertor.Convert(sOSMPathUtf8, sOutputUtf8, ptrProgress, ptrCancel);
+		});
+
+	m_bConverting = true;
+	INT_PTR nResult = progressDlg.DoModal(m_hWnd);
+	m_bConverting = false;
+
+	// the report next to the node file: <output>.log
+	std::string sResult = nResult == IDOK ? "done" : (nResult == IDCANCEL ? "canceled" : "failed: " + ToUtf8(progressDlg.GetError().c_str()));
+	std::string sReport = Convertors::COSMConvertor::FormatReport(progressDlg.GetLastProgress(), sResult);
+	if(nResult == IDOK)
+		sReport += "\n" + Convertors::bptree::COSMBPTreeConvertor::FormatResult(result);
+	std::wstring sLogPath = sOutput + L".log";
+	FILE* pFile = _wfopen(sLogPath.c_str(), L"wb");
+	if(pFile)
+	{
+		fwrite(sReport.data(), 1, sReport.size(), pFile);
+		fclose(pFile);
+	}
+	else
+		sLogPath.clear();
+	std::wstring sLogInfo = sLogPath.empty() ? std::wstring() : L"\n\nThe details: " + sLogPath;
+
+	if(nResult != IDOK)
+	{
+		for(const std::string& sFile : Convertors::bptree::ConversionFiles(sOutputUtf8))   // incomplete
+			::DeleteFileW(ToWide(sFile).c_str());
+		if(nResult == IDCANCEL)
+			::MessageBox(m_hWnd, (L"The conversion is canceled." + sLogInfo).c_str(), pszCaption, MB_OK | MB_ICONINFORMATION);
+		else
+			::MessageBox(m_hWnd, (L"The conversion failed:\n" + progressDlg.GetError() + sLogInfo).c_str(), pszCaption, MB_OK | MB_ICONERROR);
+		return 0;
+	}
+
+	std::wstring sMessage = L"The nodes and the ways are converted into\n" + sOutput + L" (.osmtags, .osmways, .osmwaytags)\n\n" +
+		ToWide(Convertors::bptree::COSMBPTreeConvertor::FormatResult(result)) + sLogInfo;
 	::MessageBox(m_hWnd, sMessage.c_str(), pszCaption, MB_OK | MB_ICONINFORMATION);
 	return 0;
 #endif

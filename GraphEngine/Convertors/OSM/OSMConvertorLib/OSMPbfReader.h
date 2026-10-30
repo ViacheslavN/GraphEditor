@@ -1,7 +1,7 @@
 #pragma once
 // Reader of .osm.pbf files (replaces readosm for PBF):
-//  - the blocks are inflated and decoded by a pool of threads, the handler gets the objects in the file order
-//    on the calling thread;
+//  - the file is read by its own thread (the disk doesn't wait for the handler), the blocks are inflated and decoded
+//    by a pool of threads, the handler gets the objects in the file order on the calling thread;
 //  - no allocation per object: the block arrays are reused, the metadata (version, user, timestamp) isn't decoded;
 //  - an index of the blocks (offset, size, object types) is built while a file is read and kept for the process:
 //    the next passes over the same file read only the blocks with the requested objects

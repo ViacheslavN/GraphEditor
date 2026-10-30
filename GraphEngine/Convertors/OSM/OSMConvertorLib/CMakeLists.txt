@@ -59,6 +59,58 @@ set(SOURCE_FILES
         OSMSplitter.cpp
         OSMSplitExport.h
         OSMSplitExport.cpp
+
+        # the new conversion into bptreedb B+ trees (the nodes first)
+        BPTree/OSMPointE7.h
+        BPTree/OSMPointCompressor.h
+        BPTree/OSMNodeLeafEncoder.h
+        BPTree/OSMNodeLeafCompressor.h
+        BPTree/OSMBPTreeTypes.h
+        BPTree/OSMBPTreeSettings.h
+        BPTree/OSMBPTreeUtils.h
+        BPTree/OSMBPTreeUtils.cpp
+        BPTree/OSMBPTreeNodeFile.h
+        BPTree/OSMBPTreeNodeFile.cpp
+        BPTree/OSMNodeQueue.h
+        BPTree/OSMNodeQueue.cpp
+        BPTree/OSMReaderThread.h
+        BPTree/OSMBulkSource.h
+        BPTree/OSMNodeTreeBuilder.h
+        BPTree/OSMNodeTreeBuilder.cpp
+        BPTree/OSMParallelLeafBuilder.h
+        BPTree/OSMParallelLeafBuilder.cpp
+        BPTree/OSMTagTreeTypes.h
+        BPTree/OSMTagWriter.h
+        BPTree/OSMTagWriter.cpp
+        BPTree/OSMBPTreeTagFile.h
+        BPTree/OSMBPTreeTagFile.cpp
+        BPTree/OSMWayTreeTypes.h
+        BPTree/OSMSharedLeafCache.h
+        BPTree/OSMJobPipeline.h
+        BPTree/OSMBlobSource.h
+        BPTree/OSMBPTreeProgress.h
+        BPTree/OSMSharedNodeReader.h
+        BPTree/OSMSharedNodeReader.cpp
+        BPTree/OSMWayResolver.h
+        BPTree/OSMWayResolver.cpp
+        BPTree/OSMWayReader.h
+        BPTree/OSMWayReader.cpp
+        BPTree/OSMBPTreeWayFile.h
+        BPTree/OSMBPTreeWayFile.cpp
+        BPTree/OSMSharedWayReader.h
+        BPTree/OSMSharedWayReader.cpp
+        BPTree/OSMRelationRecord.h
+        BPTree/OSMRingBuilder.h
+        BPTree/OSMRingBuilder.cpp
+        BPTree/OSMRelationResolver.h
+        BPTree/OSMRelationResolver.cpp
+        BPTree/OSMRelationReader.h
+        BPTree/OSMRelationReader.cpp
+        BPTree/OSMBPTreeRelationFile.h
+        BPTree/OSMBPTreeRelationFile.cpp
+        BPTree/OSMBPTreeRelationConvertor.cpp
+        BPTree/OSMBPTreeConvertor.h
+        BPTree/OSMBPTreeConvertor.cpp
 )
 
 add_library(OSMConvertorLib ${SOURCE_FILES})
@@ -68,6 +120,7 @@ target_link_libraries(${PROJECT_NAME} PUBLIC CartographyLib)
 target_link_libraries(${PROJECT_NAME} PUBLIC DisplayLib)
 target_link_libraries(${PROJECT_NAME} PUBLIC GeoDatabase)
 target_link_libraries(${PROJECT_NAME} PUBLIC GisGeometry)
+target_link_libraries(${PROJECT_NAME} PUBLIC BPtreeLib)   # BPTree/: the B+ trees of bptreedb
 target_link_libraries(${PROJECT_NAME} PRIVATE expat::expat)
 
 if(GRAPHENGINE_BUILD_TESTS)

@@ -12,8 +12,8 @@ namespace GraphEngine {
             uint64_t nBlocks = 0;           // the blocks handed to the handler
             uint64_t nBytesRead = 0;        // read from the file
             double   dReadSeconds = 0.;     // reading the file on the reading thread (the disk)
-            double   dWaitSeconds = 0.;     // the reading thread waits for the decoding threads
-            double   dDispatchSeconds = 0.; // the handler (the objects) on the reading thread
+            double   dWaitSeconds = 0.;     // the handler thread waits for the read / decoded blocks
+            double   dDispatchSeconds = 0.; // the handler (the objects) on the calling thread, the file is read meanwhile
             double   dDecodeSeconds = 0.;   // inflating / decoding, summed over the decoding threads
         };
 

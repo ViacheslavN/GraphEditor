@@ -110,10 +110,10 @@ namespace GraphEngine {
                 item.bThreads = bThreads;
                 vecItems.push_back(item);
             };
-            add("Reading the file", sPath + " (the reading thread)", stats.nBlocks, stats.nBytesRead, stats.dReadSeconds, false);
+            add("Reading the file", sPath + " (the reading thread: only reads)", stats.nBlocks, stats.nBytesRead, stats.dReadSeconds, false);
             add("Decoding blocks", std::to_string(stats.nThreads) + " threads, CPU time of all of them", stats.nBlocks, 0, stats.dDecodeSeconds, true);
-            add("Waiting for decoded blocks", "the reading thread waits for the decoding threads", 0, 0, stats.dWaitSeconds, false);
-            add("Processing objects", "the handler on the reading thread (the file isn't read meanwhile): the items below", 0, 0, stats.dDispatchSeconds, false);
+            add("Waiting for blocks", "the handler thread waits for the read / decoded blocks", 0, 0, stats.dWaitSeconds, false);
+            add("Processing objects", "the handler thread (the file is read meanwhile): the items below", 0, 0, stats.dDispatchSeconds, false);
         }
     }
 }

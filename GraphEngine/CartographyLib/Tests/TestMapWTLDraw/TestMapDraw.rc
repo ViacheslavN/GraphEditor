@@ -108,6 +108,7 @@ BEGIN
     POPUP "&Conversions"
     BEGIN
         MENUITEM "Convert from &OSM (.osm / .pbf)...", ID_CONVERT_FROM_OSM
+        MENUITEM "OSM to &B+ trees (new conversion: nodes, ways, relations)...", ID_CONVERT_OSM_BPTREE
         MENUITEM "Convert Shape File / &Database to Database...", ID_CONVERT_TO_DATABASE
     END
     POPUP "&Map"
