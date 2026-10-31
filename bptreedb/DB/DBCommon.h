@@ -11,6 +11,7 @@
 #include "../../CommonLib/stream/FixedMemoryStream.h"
 #include "../StorageLib/Storage.h"
 #include "../StorageLib/FilePager.h"
+#include "../StorageLib/FreeSpaceMap.h"
 #include "../BPtreeLib/Compressor/CompressorParams.h"
 
 #include <algorithm>
@@ -43,6 +44,10 @@ namespace bptreedb
 			uint32_t m_nTranMemoryPages{ 4096 };
 			std::atomic<bool> m_bOpen{ false };
 			std::atomic<uint64_t> m_nCommits{ 0 };       // commits since open: the shared trees of the tables follow it
+			// the free pages of the committed file (the pages dropped by the committed transactions): a write transaction
+			// takes them for its new pages, saves the map with its commit (the stream at m_nFreeSpacePage)
+			storage::CFreeSpaceMapPtr m_ptrFreeSpace;
+			int64_t m_nFreeSpacePage{ -1 };
 
 			void CheckOpen() const
 			{

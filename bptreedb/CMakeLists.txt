@@ -21,6 +21,7 @@ endif()
 
 # the Catch2 test options of the modules follow BPTREEDB_BUILD_TESTS
 set(UTILSLIB_BUILD_TESTS ${BPTREEDB_BUILD_TESTS} CACHE BOOL "Build UtilsLib Catch2 tests")
+set(STORAGELIB_BUILD_TESTS ${BPTREEDB_BUILD_TESTS} CACHE BOOL "Build StorageLib Catch2 tests")
 set(SPATIALLIB_BUILD_TESTS ${BPTREEDB_BUILD_TESTS} CACHE BOOL "Build SpatialLib Catch2 tests")
 set(BPTREELIB_BUILD_CATCH_TESTS ${BPTREEDB_BUILD_TESTS} CACHE BOOL "Build BPtreeLib Catch2 tests")
 

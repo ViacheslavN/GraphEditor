@@ -4,6 +4,7 @@
 #include "../UtilsLib/CacheLRU_2Q.h"
 #include "Storage.h"
 #include "FilePage.h"
+#include "PagerBase.h"
 
 namespace bptreedb
 {
@@ -11,7 +12,10 @@ namespace bptreedb
 	{
 		// Provides file pages on top of an IStorage, with a write-back page cache.
 		// Dirty pages reach the underlying storage on eviction or on Flush().
-		class CFilePager : public IFilePager
+		// The pages have different sizes (PageRef): the cache keeps whole pages by their block addresses, its limit is
+		// in bytes - nCacheSize pages of the default size. A big page (over an eighth of the cache, at least 64 KB: the
+		// big blobs) isn't cached: it would push out many tree nodes, it is read and written directly.
+		class CFilePager : public CPagerBase
 		{
 		private:
 			CFilePager(const CFilePager&);
@@ -23,26 +27,17 @@ namespace bptreedb
 			CFilePager(CommonLib::IAllocPtr ptrAlloc, IStoragePtr ptrStorage, uint32_t nCacheSize);
 			virtual ~CFilePager();
 
-			// IFilePager
-			virtual int64_t GetNewFilePageAddr();
-			virtual IFilePagePtr GetNewPage(int64_t nAddr);
-			virtual IFilePagePtr ReadPage(int64_t nAddr);
-			virtual void ReadPage(IFilePagePtr ptrPage, int64_t nAddr);
-			virtual void SavePage(IFilePagePtr ptrPage);
-			// Frees the page: removes it from the cache and releases it in the storage.
-			virtual void DropFilePage(int64_t nAddr);
-
 			// Writes all dirty pages to the storage and flushes it.
-			void Flush();
+			virtual void Flush();
 			// Drops every cached page without writing (dirty data is lost).
 			void ClearCache();
 
 			IStoragePtr GetStorage() const;
 			// the cached page IO (pages of other pagers can read and write through the same cache)
 			IStorageIOPtr GetStorageIO() const;
-			uint32_t GetPageSize() const;
-			uint32_t GetCacheSize() const;
+			uint32_t GetCacheSize() const;        // in the pages of the default size
 			uint32_t GetCachedPageCount() const;
+			uint64_t GetCachedBytes() const;
 
 		private:
 
@@ -56,8 +51,7 @@ namespace bptreedb
 			{
 				SCacheFilePage(int64_t _nAddr, const byte_t* pByte, size_t size) : nAddr(_nAddr)
 				{
-					pageData.resize(size);
-					memcpy(pageData.data(), pByte, pageData.size());
+					pageData.assign(pByte, pByte + size);
 				}
 
 				int64_t	nAddr;
@@ -73,14 +67,6 @@ namespace bptreedb
 				{
 					memcpy(pageData.data(), pData, pageData.size());
 					pageState = DIRTY;
-				}
-
-				void Reset(int64_t _nAddr, const byte_t* pData, size_t size, EFilePageState state)
-				{
-					nAddr = _nAddr;
-					pageData.resize(size);
-					memcpy(pageData.data(), pData, pageData.size());
-					pageState = state;
 				}
 			};
 
@@ -106,19 +92,23 @@ namespace bptreedb
 				IStoragePtr GetStorage() const;
 				uint32_t GetCacheSize() const;
 				uint32_t GetCachedPageCount() const;
+				uint64_t GetCachedBytes() const;
 
 			private:
-				void _ReadData(int64_t nAddr, byte_t* pData);
-				void _WriteData(int64_t nAddr, const byte_t* pData);
-				void _DropData(int64_t nAddr);
 				void _CheckSize(uint32_t nSize) const;
-				// Puts a page into the cache, evicting (and writing back if dirty) the
-				// least recently used one when the cache is full.
-				void _AddToCache(int64_t nAddr, const byte_t* pData, EFilePageState state);
+				// the cached page of nAddr; a page cached with another size is written back (dirty) and dropped
+				TCacheFilePagePtr _Find(int64_t nAddr, uint32_t nSize);
+				void _Remove(int64_t nAddr);
+				// Puts a page into the cache, evicting (and writing back if dirty) the least recently used
+				// ones while the cache is over its bytes.
+				void _AddToCache(int64_t nAddr, const byte_t* pData, uint32_t nSize, EFilePageState state);
 
 			private:
 				IStoragePtr m_ptrStorage;
 				uint32_t m_cacheSize{ 0 };
+				uint64_t m_nMaxBytes{ 0 };
+				uint64_t m_nBytes{ 0 };
+				uint32_t m_nBigPage{ 0 };      // the pages over it aren't cached
 				mutable std::recursive_mutex m_mutex;
 				utils::TCacheLRU_2Q<int64_t, TCacheFilePagePtr> m_pageCache;
 			};
@@ -126,7 +116,6 @@ namespace bptreedb
 			typedef std::shared_ptr<CCachedStorageIO> TCachedStorageIOPtr;
 
 		private:
-			CommonLib::IAllocPtr m_ptrAlloc;
 			TCachedStorageIOPtr m_ptrIO;
 		};
 

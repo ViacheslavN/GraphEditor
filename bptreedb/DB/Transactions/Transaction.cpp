@@ -49,7 +49,7 @@ namespace bptreedb
 
 						const SDBContextPtr& ptrContext = m_ptrDB->Context();
 						m_ptrIO = std::make_shared<CTranStorageIO>(ptrContext->m_ptrPager->GetStorageIO(), ptrContext->m_nTranMemoryPages, ptrContext->m_sPath + L"-tran");
-						m_ptrPager = std::make_shared<CTransactionPager>(ptrContext->m_ptrAlloc, m_ptrIO);
+						m_ptrPager = std::make_shared<CTransactionPager>(ptrContext->m_ptrAlloc, m_ptrIO, ptrContext->m_ptrFreeSpace);
 					}
 					else
 					{
@@ -131,8 +131,12 @@ namespace bptreedb
 								return it != m_trees.end() ? it->second.get() : nullptr;
 							});
 						}
+						// the free pages after the commit (the taken ones out, the dropped ones in): in the redo log too
+						if (m_ptrPager->HasFreeSpaceChanges())
+							m_ptrPager->SaveFreeSpace(m_ptrPager, Context()->m_nFreeSpacePage);
 
 						m_ptrDB->ApplyCommit(*m_ptrIO, m_exclusiveLock.owns_lock());
+						m_ptrPager->Committed();
 					}
 					catch (...)
 					{
@@ -170,6 +174,7 @@ namespace bptreedb
 						m_trees.clear();
 					}
 					m_ptrIO->Clear();
+					m_ptrPager->RolledBack();
 					if (m_type == eTT_DDL)
 					{
 						try

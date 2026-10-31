@@ -3,6 +3,8 @@
 // The page IO of a write transaction: the pages it wrote are private (memory; above a limit they spill to a
 // temporary file), the other pages are read from the committed pages (the shared page cache). The database
 // file isn't touched until the commit applies the private pages (CRedoLog).
+// The pages have different sizes (the block addresses and the sizes of storage::IStorageIO): a page is kept with its
+// size, the memory limit is in bytes (nMemoryPages pages of the default size).
 
 #include "../DBCommon.h"
 #include "../../../CommonLib/filesystem/File.h"
@@ -29,10 +31,10 @@ namespace bptreedb
 			virtual void DropData(int64_t nAddr, uint32_t nSize);
 
 			size_t PrivatePageCount() const;
-			// calls func(addr, data) for every private page: the pages in memory in the order of the addresses, then
+			// calls func(addr, data, size) for every private page: the pages in memory in the order of the addresses, then
 			// the spilled ones in the order of the temporary file (read sequentially by big blocks: in the order of
 			// the addresses a big transaction would read its file at random, on an HDD the commit takes ages)
-			void ForEachPage(const std::function<void(int64_t, const byte_t*)>& func);
+			void ForEachPage(const std::function<void(int64_t, const byte_t*, uint32_t)>& func);
 			void Clear();          // drops the private pages and the temporary file
 
 		private:
@@ -43,7 +45,8 @@ namespace bptreedb
 		private:
 			storage::IStorageIOPtr m_ptrCommitted;
 			uint32_t m_nPageSize;
-			uint32_t m_nMemoryPages;
+			uint64_t m_nMemoryBytes;
+			uint64_t m_nBytes{ 0 };                          // the pages in memory
 			std::wstring m_sTempPath;
 
 			struct SMemPage
@@ -51,10 +54,15 @@ namespace bptreedb
 				std::vector<byte_t> m_data;
 				std::list<int64_t>::iterator m_lru;
 			};
+			struct SSpilled
+			{
+				uint64_t m_nPos;                             // in the temporary file
+				uint32_t m_nSize;
+			};
 			std::unordered_map<int64_t, SMemPage> m_memory;
 			std::list<int64_t> m_lru;                        // front - the last written
-			std::unordered_map<int64_t, uint64_t> m_spilled; // page -> slot in the temporary file
-			uint64_t m_nSlots{ 0 };
+			std::unordered_map<int64_t, SSpilled> m_spilled; // page -> its place in the temporary file
+			uint64_t m_nFileEnd{ 0 };                        // the temporary file is appended
 			CommonLib::file::TFilePtr m_ptrTempFile;
 			std::vector<byte_t> m_buffer;
 			mutable std::recursive_mutex m_mutex;

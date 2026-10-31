@@ -11,7 +11,9 @@ namespace bptreedb
 	//
 	// A blob up to nMaxInlineSize bytes (default 1024) is kept in the leaf node; a bigger one is written
 	// to a chain of stream pages (TWriteStreamPage: int64 size, then the bytes) and the leaf keeps only
-	// its address, see BlobValue.
+	// the reference of its first page, see BlobValue. The stream pages are of the size classes (TWriteStreamPage::Create:
+	// 512 bytes times a power of two up to MaxBlobPageSize(), 1 MB by default) planned for the blob: few pages, little
+	// space lost (9 KB -> 8K + 2K, 3 MB -> 3 x 1M + 512); the page sizes are in the page references.
 	// Values are read through IBlob (GetBlob): an inline blob gives a memory stream, a big one TReadStreamPage.
 	//
 	// The leaves encode the values with CBlobValueEncoder:
@@ -33,6 +35,7 @@ namespace bptreedb
 		typedef typename TBase::iterator iterator;
 
 		static constexpr uint32_t DefaultMaxInlineSize = 1024;
+		static constexpr uint32_t DefaultMaxBlobPageSize = 1024 * 1024;
 
 		TBPBlobValueMap(int64_t nPageBTreeInfo, std::shared_ptr<TStorage> pStorage, CommonLib::IAllocPtr pAlloc, uint32_t nCacheSize, uint32_t nNodesPageSize,
 			uint32_t nMaxInlineSize = DefaultMaxInlineSize, bool bMinSplit = false) :
@@ -110,6 +113,25 @@ namespace bptreedb
 			return nCount;
 		}
 
+		// the default page size of the storage
+		uint32_t StoragePageSize() const { return this->m_pStorage->GetPageSize(); }
+
+		// the bytes of the stream pages of a big blob (the sizes of its pages)
+		uint64_t StreamPageBytes(const BlobValue& value) const
+		{
+			uint64_t nBytes = 0, nCount = 0;
+			int64_t nAddr = value.IsInline() ? -1 : value.Addr();
+			while (nAddr > 0)
+			{
+				nBytes += this->m_pStorage->GetPageSize(nAddr);
+				storage::IFilePagePtr ptrPage = this->m_pStorage->ReadPage(nAddr);
+				nAddr = ptrPage->GetReadStream()->ReadInt64();
+				if (++nCount > ((uint64_t)1 << 40))
+					throw CommonLib::CExcBase("TBPBlobValueMap: the page chain of blob {0} has a loop", value.Addr());
+			}
+			return nBytes;
+		}
+
 		IBlobPtr GetBlob(const BlobValue& value) const
 		{
 			if (value.IsInline())
@@ -150,9 +172,8 @@ namespace bptreedb
 
 			try
 			{
-				int64_t nAddr = NewBlobPageAddr();
 				storage::TWriteStreamPage stream(this->m_pStorage);
-				stream.Open(nAddr, true);
+				int64_t nAddr = stream.Create(sizeof(int64_t) + (uint64_t)nSize, m_nMaxBlobPageSize, true);
 				stream.Write(nSize);
 				stream.WriteBytes(pData, (size_t)nSize);
 				stream.Close();
@@ -182,9 +203,8 @@ namespace bptreedb
 			int64_t nAddr = -1;
 			try
 			{
-				nAddr = NewBlobPageAddr();
 				storage::TWriteStreamPage stream(this->m_pStorage);
-				stream.Open(nAddr, true);
+				nAddr = stream.Create(sizeof(int64_t) + (uint64_t)nSize, m_nMaxBlobPageSize, true);
 				stream.Write(nSize);
 
 				std::vector<byte_t> buf((size_t)std::min<int64_t>(nSize, ChunkSize));
@@ -216,6 +236,15 @@ namespace bptreedb
 
 		uint32_t MaxInlineSize() const { return m_nMaxInlineSize; }
 
+		// the biggest stream page of a blob (the biggest size class up to it is used)
+		uint32_t MaxBlobPageSize() const { return m_nMaxBlobPageSize; }
+		void SetMaxBlobPageSize(uint32_t nSize)
+		{
+			if (nSize < storage::BlockSize || nSize > storage::PageRef::MaxPageSize())
+				throw CommonLib::CExcBase("TBPBlobValueMap: wrong blob page size {0}", nSize);
+			m_nMaxBlobPageSize = storage::PageRef::RoundUp(nSize);
+		}
+
 	private:
 
 		static constexpr int64_t ChunkSize = 64 * 1024;
@@ -236,15 +265,6 @@ namespace bptreedb
 				}
 				throw;
 			}
-		}
-
-		// 0 means "inline" in the leaf format: skip it if the storage ever gives page 0
-		int64_t NewBlobPageAddr()
-		{
-			int64_t nAddr = this->m_pStorage->GetNewFilePageAddr();
-			if (nAddr == 0)
-				nAddr = this->m_pStorage->GetNewFilePageAddr();
-			return nAddr;
 		}
 
 		// walks the page chain written by TWriteStreamPage (page header: int64 next, int64 prev; next of the last page is -1)
@@ -281,6 +301,7 @@ namespace bptreedb
 
 	private:
 		uint32_t m_nMaxInlineSize;
+		uint32_t m_nMaxBlobPageSize{ DefaultMaxBlobPageSize };
 		CommonLib::IAllocPtr m_pBlobAlloc;
 	};
 }

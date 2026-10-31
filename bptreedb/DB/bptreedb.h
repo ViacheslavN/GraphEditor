@@ -169,7 +169,7 @@ namespace bptreedb
 		uint32_t m_nLevels{ 0 };            // the levels of the tree with the leaves
 		uint64_t m_nInnerPages{ 0 };
 		uint64_t m_nLeafPages{ 0 };
-		uint64_t m_nBlobPages{ 0 };         // the stream pages of the big blobs (values over 1 KB), with bBlobs
+		uint64_t m_nBlobPages{ 0 };         // the stream pages of the big blobs (values over 1 KB), with bBlobs: their bytes in the pages of the default size
 		uint64_t m_nInfoPages{ 0 };         // the info page of the tree
 		bool m_bBlobsCounted{ false };      // m_nBlobPages is counted (a blob tree with bBlobs)
 

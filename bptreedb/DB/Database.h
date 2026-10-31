@@ -1,8 +1,10 @@
 #pragma once
 
 // The database file:
-//   raw header (HeaderSize bytes): char[8] "BPTREEDB", uint32 version, uint32 page size, int64 schema page, uint32 crc32
-//   pages of the file storage (the schema stream, the trees)
+//   raw header (HeaderSize bytes): char[8] "BPTREEDB", uint32 version, uint32 page size, int64 schema page,
+//                                  int64 free space page, uint32 crc32
+//   pages of the file storage (the schema stream, the free space map - storage::CFreeSpaceMap, the trees); the addresses
+//   are in 512-byte blocks, the pages of the trees have the page size, the stream pages of the blobs their size classes
 // and while a write transaction runs / commits:
 //   "<file>-tran"  the private pages of the transaction that don't fit in memory (deleted at its end)
 //   "<file>-redo"  the redo log of a commit (CRedoLog; replayed by Open if a crash left a complete one)
@@ -50,15 +52,15 @@ namespace bptreedb
 
 		private:
 			void OpenStorage(const std::wstring& sPath, const SDatabaseParams& params, uint32_t nPageSize);
-			void WriteHeader(const std::wstring& sPath, uint32_t nPageSize, int64_t nSchemaPage);
-			static void ReadHeader(const std::wstring& sPath, uint32_t& nPageSize, int64_t& nSchemaPage);
+			void WriteHeader(const std::wstring& sPath, uint32_t nPageSize, int64_t nSchemaPage, int64_t nFreeSpacePage);
+			static void ReadHeader(const std::wstring& sPath, uint32_t& nPageSize, int64_t& nSchemaPage, int64_t& nFreeSpacePage);
 			void CloseStorage();
 
 		public:
 			static constexpr uint32_t HeaderSize = 4096;      // the raw header before the pages of the file
 
 		private:
-			static constexpr uint32_t FormatVersion = 1;
+			static constexpr uint32_t FormatVersion = 2;      // 2: the addresses in 512-byte blocks, the pages of different sizes, the free space map
 
 			std::wstring m_sPath;
 			SDBContextPtr m_ptrContext;

@@ -5,83 +5,71 @@ namespace bptreedb
 {
 	namespace db
 	{
-		CTransactionPager::CTransactionPager(CommonLib::IAllocPtr ptrAlloc, CTranStorageIOPtr ptrIO) : m_ptrAlloc(ptrAlloc), m_ptrIO(ptrIO)
+		CTransactionPager::CTransactionPager(CommonLib::IAllocPtr ptrAlloc, CTranStorageIOPtr ptrIO, storage::CFreeSpaceMapPtr ptrFreeSpace) :
+			storage::CPagerBase(ptrAlloc, ptrIO), m_ptrIO(ptrIO)
 		{
+			m_ptrFreeSpace = ptrFreeSpace;
 		}
 
 		CTransactionPager::~CTransactionPager()
 		{
 		}
 
-		int64_t CTransactionPager::GetNewFilePageAddr()
-		{
-			return m_ptrIO->GetNewFilePageAddr();
-		}
-
-		storage::IFilePagePtr CTransactionPager::GetNewPage(int64_t nAddr)
-		{
-			try
-			{
-				return std::make_shared<storage::CFilePage>(m_ptrAlloc, m_ptrIO->GetPageSize(), nAddr);
-			}
-			catch (std::exception& excSrc)
-			{
-				CommonLib::CExcBase::RegenExcT("[CTransactionPager] failed to create a new page, addr: {0}", nAddr, excSrc);
-				throw;
-			}
-		}
-
-		storage::IFilePagePtr CTransactionPager::ReadPage(int64_t nAddr)
-		{
-			try
-			{
-				return storage::CFilePage::Read(m_ptrIO, m_ptrAlloc, nAddr);
-			}
-			catch (std::exception& excSrc)
-			{
-				CommonLib::CExcBase::RegenExcT("[CTransactionPager] failed to read page {0}", nAddr, excSrc);
-				throw;
-			}
-		}
-
-		void CTransactionPager::ReadPage(storage::IFilePagePtr ptrPage, int64_t nAddr)
-		{
-			try
-			{
-				if (ptrPage.get() == nullptr)
-					throw CommonLib::CExcBase("the page is null");
-				ptrPage->Read(m_ptrIO, nAddr);
-				ptrPage->SetAddr(nAddr);
-			}
-			catch (std::exception& excSrc)
-			{
-				CommonLib::CExcBase::RegenExcT("[CTransactionPager] failed to read page {0}", nAddr, excSrc);
-				throw;
-			}
-		}
-
-		void CTransactionPager::SavePage(storage::IFilePagePtr ptrPage)
-		{
-			try
-			{
-				if (ptrPage.get() == nullptr)
-					throw CommonLib::CExcBase("the page is null");
-				ptrPage->Save(m_ptrIO);
-			}
-			catch (std::exception& excSrc)
-			{
-				CommonLib::CExcBase::RegenExcT("[CTransactionPager] failed to save page {0}", ptrPage.get() ? ptrPage->GetAddr() : -1, excSrc);
-				throw;
-			}
-		}
-
-		void CTransactionPager::DropFilePage(int64_t nAddr)
-		{
-			m_ptrIO->DropData(nAddr, m_ptrIO->GetPageSize());
-		}
-
 		void CTransactionPager::Flush()
 		{
+		}
+
+		int64_t CTransactionPager::AllocBlocks(uint32_t nSize)
+		{
+			int64_t nAddr = -1;
+			uint32_t nBlocks = nSize / storage::BlockSize;
+			if (m_ptrFreeSpace.get() != nullptr && m_ptrFreeSpace->Take(nBlocks, nAddr))
+			{
+				m_taken.emplace_back(nAddr, nBlocks);
+				return nAddr;
+			}
+			return m_ptrIO->GetNewFilePageAddr(nSize);
+		}
+
+		void CTransactionPager::ReleaseBlocks(int64_t nAddr, uint32_t nSize)
+		{
+			m_ptrIO->DropData(nAddr, nSize);      // its private copy isn't written
+			m_dropped.emplace_back(nAddr, nSize / storage::BlockSize);
+		}
+
+		void CTransactionPager::SaveFreeSpace(storage::IFilePagerPtr ptrPager, int64_t nRootPage)
+		{
+			try
+			{
+				if (m_ptrFreeSpace.get() == nullptr || nRootPage < 0)
+					throw CommonLib::CExcBase("no free space map");
+				if (ptrPager.get() != this)
+					throw CommonLib::CExcBase("the map is saved through its own pager");
+				m_ptrFreeSpace->Save(ptrPager, nRootPage, m_dropped);
+			}
+			catch (std::exception& excSrc)
+			{
+				CommonLib::CExcBase::RegenExc("[CTransactionPager] failed to save the free space map", excSrc);
+				throw;
+			}
+		}
+
+		void CTransactionPager::Committed()
+		{
+			if (m_ptrFreeSpace.get() != nullptr)
+				for (const auto& page : m_dropped)
+					m_ptrFreeSpace->Add(page.first, page.second);
+			m_dropped.clear();
+			m_taken.clear();
+		}
+
+		void CTransactionPager::RolledBack()
+		{
+			if (m_ptrFreeSpace.get() != nullptr)
+				for (const auto& page : m_taken)
+					m_ptrFreeSpace->Add(page.first, page.second);
+			m_dropped.clear();
+			m_taken.clear();
 		}
 	}
 }

@@ -84,13 +84,17 @@ namespace bptreedb
 				CRedoLog::Delete(RedoPath(sPath));
 				CRedoLog::Delete(TranPath(sPath));
 
-				// the header first (a new file), the storage keeps its pages after it: the schema is the first page
+				// the header first (a new file), the storage keeps its pages after it: the schema is the first page, the
+				// free space map the second one
 				const int64_t nSchemaPage = 0;
-				WriteHeader(sPath, params.m_nPageSize, nSchemaPage);
+				const int64_t nFreeSpacePage = params.m_nPageSize / storage::BlockSize;
+				WriteHeader(sPath, params.m_nPageSize, nSchemaPage, nFreeSpacePage);
 				OpenStorage(sPath, params, params.m_nPageSize);
 
-				if (m_ptrContext->m_ptrPager->GetNewFilePageAddr() != nSchemaPage)
+				if (m_ptrContext->m_ptrPager->GetNewFilePageAddr() != nSchemaPage || m_ptrContext->m_ptrPager->GetNewFilePageAddr() != nFreeSpacePage)
 					throw CommonLib::CExcBase("the storage of a new file isn't empty");
+				storage::CFreeSpaceMap::WriteEmpty(m_ptrContext->m_ptrPager, nFreeSpacePage);
+				m_ptrContext->m_nFreeSpacePage = nFreeSpacePage;
 				m_ptrSchema = std::make_shared<CSchema>(m_ptrContext, nSchemaPage);
 				m_ptrSchema->Save(m_ptrContext->m_ptrPager, true);
 				m_ptrContext->m_ptrPager->Flush();
@@ -114,13 +118,18 @@ namespace bptreedb
 				CheckParams(params);
 
 				uint32_t nPageSize = 0;
-				int64_t nSchemaPage = -1;
-				ReadHeader(sPath, nPageSize, nSchemaPage);
+				int64_t nSchemaPage = -1, nFreeSpacePage = -1;
+				ReadHeader(sPath, nPageSize, nSchemaPage, nFreeSpacePage);
 				OpenStorage(sPath, params, nPageSize);
 
 				// a redo log left by a crash: complete - the commit is replayed, incomplete - deleted
 				CRedoLog::Recover(m_ptrFileStorage, RedoPath(sPath));
 				CRedoLog::Delete(TranPath(sPath));
+
+				// the free pages; the ones at the end of the file (written by nobody) stay allocated
+				m_ptrContext->m_nFreeSpacePage = nFreeSpacePage;
+				m_ptrContext->m_ptrFreeSpace->Load(m_ptrContext->m_ptrPager, nFreeSpacePage);
+				m_ptrFileStorage->ReserveAddr(m_ptrContext->m_ptrFreeSpace->EndAddr());
 
 				m_ptrSchema = std::make_shared<CSchema>(m_ptrContext, nSchemaPage);
 				m_ptrSchema->Load();
@@ -150,10 +159,11 @@ namespace bptreedb
 			m_ptrFileStorage = std::make_shared<storage::CFileStorage>(ptrContext->m_ptrAlloc, 1, storage::IStorageCipherPtr());
 			m_ptrFileStorage->Open(sPath.c_str(), false, HeaderSize, nPageSize);
 			ptrContext->m_ptrPager = std::make_shared<storage::CFilePager>(ptrContext->m_ptrAlloc, m_ptrFileStorage, params.m_nPageCacheSize);
+			ptrContext->m_ptrFreeSpace = std::make_shared<storage::CFreeSpaceMap>();
 			m_ptrContext = ptrContext;
 		}
 
-		void CDatabase::WriteHeader(const std::wstring& sPath, uint32_t nPageSize, int64_t nSchemaPage)
+		void CDatabase::WriteHeader(const std::wstring& sPath, uint32_t nPageSize, int64_t nSchemaPage, int64_t nFreeSpacePage)
 		{
 			try
 			{
@@ -164,6 +174,7 @@ namespace bptreedb
 				memcpy(header + nPos, &nVersion, sizeof(nVersion)); nPos += sizeof(nVersion);
 				memcpy(header + nPos, &nPageSize, sizeof(nPageSize)); nPos += sizeof(nPageSize);
 				memcpy(header + nPos, &nSchemaPage, sizeof(nSchemaPage)); nPos += sizeof(nSchemaPage);
+				memcpy(header + nPos, &nFreeSpacePage, sizeof(nFreeSpacePage)); nPos += sizeof(nFreeSpacePage);
 				uint32_t nCrc = util::CCRC::Crc32(header, (uint32_t)nPos);
 				memcpy(header + nPos, &nCrc, sizeof(nCrc));
 
@@ -182,7 +193,7 @@ namespace bptreedb
 			}
 		}
 
-		void CDatabase::ReadHeader(const std::wstring& sPath, uint32_t& nPageSize, int64_t& nSchemaPage)
+		void CDatabase::ReadHeader(const std::wstring& sPath, uint32_t& nPageSize, int64_t& nSchemaPage, int64_t& nFreeSpacePage)
 		{
 			try
 			{
@@ -204,6 +215,7 @@ namespace bptreedb
 				memcpy(&nVersion, header + nPos, sizeof(nVersion)); nPos += sizeof(nVersion);
 				memcpy(&nPageSize, header + nPos, sizeof(nPageSize)); nPos += sizeof(nPageSize);
 				memcpy(&nSchemaPage, header + nPos, sizeof(nSchemaPage)); nPos += sizeof(nSchemaPage);
+				memcpy(&nFreeSpacePage, header + nPos, sizeof(nFreeSpacePage)); nPos += sizeof(nFreeSpacePage);
 				uint32_t nCrc = 0;
 				memcpy(&nCrc, header + nPos, sizeof(nCrc));
 
@@ -338,9 +350,9 @@ namespace bptreedb
 				try
 				{
 					storage::IStorageIOPtr ptrIO = m_ptrContext->m_ptrPager->GetStorageIO();
-					pages.ForEachPage([&ptrIO](int64_t nAddr, const byte_t* pData)
+					pages.ForEachPage([&ptrIO](int64_t nAddr, const byte_t* pData, uint32_t nSize)
 					{
-						ptrIO->WriteData(nAddr, pData, ptrIO->GetPageSize());
+						ptrIO->WriteData(nAddr, pData, nSize);
 					});
 					m_ptrContext->m_ptrPager->Flush();
 					CRedoLog::Delete(sRedo);

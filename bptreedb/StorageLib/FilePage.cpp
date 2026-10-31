@@ -12,8 +12,10 @@ namespace bptreedb
 		{
 			try
 			{
-				CPageMemoryBufferPtr ptrBuffer = std::make_shared<CPageMemoryBuffer>(ptrAlloc, ptrPageIO->GetPageSize());
-				ptrPageIO->ReadData(nAddr, ptrBuffer->GetFullData(), ptrBuffer->GetFullSize());
+				if (nAddr < 0)
+					throw CommonLib::CExcBase("Wrong page reference");
+				CPageMemoryBufferPtr ptrBuffer = std::make_shared<CPageMemoryBuffer>(ptrAlloc, PageRef::Size(nAddr, ptrPageIO->GetPageSize()));
+				ptrPageIO->ReadData(PageRef::Addr(nAddr), ptrBuffer->GetFullData(), ptrBuffer->GetFullSize());
 
 				CFilePagePtr ptrPage = std::make_shared<CFilePage>(ptrBuffer, nAddr);
 				ptrPage->CheckCRCAndThrow();

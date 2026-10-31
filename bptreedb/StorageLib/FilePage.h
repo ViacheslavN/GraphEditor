@@ -1,6 +1,8 @@
 #pragma once
 #include "../../CommonLib/CommonLib.h"
 #include "../../CommonLib/alloc/alloc.h"
+#include "../../CommonLib/stream/FixedMemoryStream.h"
+#include "../../CommonLib/stream/MemoryStream.h"
 #include "Storage.h"
 #include "PageMemoryBuffer.h"
 
@@ -58,6 +60,20 @@ namespace bptreedb
 				return m_ptrBuffer->GetSize();
 			}
 
+			virtual uint32_t GetFullSize() const
+			{
+				return m_ptrBuffer->GetFullSize();
+			}
+
+			virtual void Resize(uint32_t nFullSize)
+			{
+				if (nFullSize == m_ptrBuffer->GetFullSize())
+					return;
+				if (m_ptrBuffer->IsAttachedBuffer())
+					throw CommonLib::CExcBase("Failed to resize the page addr {0}: an attached buffer", m_nAddr);
+				m_ptrBuffer->Create(nFullSize);
+			}
+
 			virtual byte_t* GetPayLoadData() {
 				return m_ptrBuffer->GetData();
 			}
@@ -91,9 +107,10 @@ namespace bptreedb
 					if (nAddr == -1)
 						nAddr = GetAddr();
 
+					CheckRefSize(ptrPageIO, nAddr);
 					SaveAdditionalData();
 					WriteCRC(GetFullData(), GetFullPageSize());
-					ptrPageIO->WriteData(nAddr, GetFullData(), GetFullPageSize());
+					ptrPageIO->WriteData(PageRef::Addr(nAddr), GetFullData(), GetFullPageSize());
 				}
 				catch (std::exception& excSrc)
 				{
@@ -109,7 +126,8 @@ namespace bptreedb
 					if (nAddr == -1)
 						nAddr = GetAddr();
 
-					ptrPageIO->ReadData(nAddr, m_ptrBuffer->GetFullData(), m_ptrBuffer->GetFullSize());
+					CheckRefSize(ptrPageIO, nAddr);
+					ptrPageIO->ReadData(PageRef::Addr(nAddr), m_ptrBuffer->GetFullData(), m_ptrBuffer->GetFullSize());
 					CheckCRCAndThrow();
 					ReadAdditionalData();
 				}
@@ -126,6 +144,16 @@ namespace bptreedb
 			}
 
 		protected:
+			// the page has the size of its reference
+			void CheckRefSize(const IStorageIOPtr& ptrPageIO, int64_t nRef) const
+			{
+				if (nRef < 0)
+					throw CommonLib::CExcBase("Wrong page reference {0}", nRef);
+				uint32_t nSize = PageRef::Size(nRef, ptrPageIO->GetPageSize());
+				if (nSize != GetFullPageSize())
+					throw CommonLib::CExcBase("The page of {0} bytes, the reference {1} is to {2} bytes", GetFullPageSize(), nRef, nSize);
+			}
+
 			virtual void SaveAdditionalData() = 0;
 			virtual void ReadAdditionalData() = 0;
 
@@ -220,7 +248,8 @@ namespace bptreedb
 			virtual void SaveAdditionalData() {}
 			virtual void ReadAdditionalData() {}
 
-			static IFilePagePtr Read(IStorageIOPtr ptrPageIO, CommonLib::IAllocPtr ptrAlloc, int64_t nAddr);
+			// the page of the reference nRef
+			static IFilePagePtr Read(IStorageIOPtr ptrPageIO, CommonLib::IAllocPtr ptrAlloc, int64_t nRef);
 		};
 	}
 }

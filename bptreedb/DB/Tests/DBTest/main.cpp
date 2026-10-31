@@ -824,6 +824,125 @@ namespace
 	}
 
 	//--------------------------------------------------------------------------------------------
+	// the free pages: the pages of the deleted rows (the blob pages, the tree nodes) are taken by the new rows; the
+	// pages taken by a rolled back transaction are free again; the map survives the reopening
+
+	std::vector<byte_t> BlobOf(int64_t id)
+	{
+		std::mt19937_64 rng((uint64_t)id * 7919 + 1);
+		std::vector<byte_t> data(20000 + (size_t)(rng() % 60000));    // the stream pages of a few size classes
+		for (byte_t& b : data)
+			b = (byte_t)rng();
+		return data;
+	}
+
+	void InsertBlobs(IDatabasePtr db, int64_t nFirst, int nCount, bool bCommit)
+	{
+		ITransactionPtr tran = db->StartTransaction(eTT_MODIFY);
+		IInsertCursorPtr ins = tran->createInsertCursor("files", IFieldSet::Create({ "id", "data" }), false);
+		for (int i = 0; i < nCount; ++i)
+		{
+			std::vector<byte_t> data = BlobOf(nFirst + i);
+			ins->BindInt64(0, nFirst + i);
+			ins->BindBlob(1, data.data(), (int32_t)data.size(), true);
+			ins->Next();
+		}
+		if (bCommit)
+			tran->Commit();
+		else
+			tran->Rollback();
+	}
+
+	void DeleteAll(IDatabasePtr db)
+	{
+		std::vector<int64_t> rows;
+		ITransactionPtr tran = db->StartTransaction(eTT_MODIFY);
+		{
+			ISelectCursorPtr c = tran->executeSelectQuery("files", IFieldSet::Create({ "id" }));
+			while (c->Next())
+				rows.push_back(c->GetRowID());
+		}
+		IDeleteCursorPtr d = tran->createDeleteCursor("files");
+		for (int64_t nRow : rows)
+			Check(d->DeleteRow(nRow), "delete");
+		tran->Commit();
+	}
+
+	void CheckBlobs(IDatabasePtr db, int64_t nFirst, int nCount)
+	{
+		ITransactionPtr tran = db->StartTransaction(eTT_SELECT);
+		ISelectCursorPtr c = tran->executeSelectQuery("files", IFieldSet::Create({ "id", "data" }));
+		int n = 0;
+		while (c->Next())
+		{
+			int64_t id = c->ReadInt64(0);
+			const byte_t* pData = nullptr;
+			int32_t nSize = 0;
+			c->ReadBlob(1, &pData, nSize);
+			std::vector<byte_t> data = BlobOf(id);
+			Check(id >= nFirst && id < nFirst + nCount, "the id of a blob");
+			Check(nSize == (int32_t)data.size() && memcmp(pData, data.data(), data.size()) == 0, "the data of a blob");
+			++n;
+		}
+		tran->Commit();
+		Check(n == nCount, "the count of the blobs");
+	}
+
+	void TestFreePages()
+	{
+		std::cout << "free pages" << std::endl;
+		std::string sPath = g_path + ".free";
+		SDatabaseParams params;
+		params.m_nTranMemoryPages = 64;
+		auto fileSize = [&]() { return (uint64_t)std::filesystem::file_size(sPath); };
+		const int nRows = 300;
+
+		IDatabasePtr db = CreateDatabase();
+		db->Create(sPath, params);
+		{
+			ITransactionPtr tran = db->StartTransaction(eTT_DDL);
+			ITablePtr files = db->GetSchema()->CreateTable("files", tran);
+			files->CreateField(SFieldProp("id", dtInteger64), tran);
+			files->CreateField(SFieldProp("data", dtBlob), tran);
+			tran->Commit();
+		}
+
+		InsertBlobs(db, 0, nRows, true);
+		uint64_t nSize = fileSize();
+		CheckBlobs(db, 0, nRows);
+
+		DeleteAll(db);
+		CheckBlobs(db, 0, 0);
+		InsertBlobs(db, 1000, nRows, true);          // other blobs of the same size classes
+		CheckBlobs(db, 1000, nRows);
+		uint64_t nSize2 = fileSize();
+		std::cout << "  the file: " << nSize << " bytes, after delete + insert " << nSize2 << std::endl;
+		Check(nSize2 < nSize + nSize / 5, "the deleted pages are taken by the new rows");
+
+		// a rolled back insert: its pages are free again
+		DeleteAll(db);
+		InsertBlobs(db, 2000, nRows, false);
+		InsertBlobs(db, 3000, nRows, true);
+		CheckBlobs(db, 3000, nRows);
+		uint64_t nSize3 = fileSize();
+		Check(nSize3 < nSize2 + nSize / 5, "the pages of a rolled back transaction are free again");
+
+		// the map is saved with the commits
+		DeleteAll(db);
+		db->Close();
+		db = CreateDatabase();
+		db->Open(sPath, params);
+		InsertBlobs(db, 4000, nRows, true);
+		CheckBlobs(db, 4000, nRows);
+		uint64_t nSize4 = fileSize();
+		std::cout << "  after rollback, reopening: " << nSize3 << ", " << nSize4 << std::endl;
+		Check(nSize4 < nSize3 + nSize / 5, "the free pages after reopening");
+		db->Close();
+		std::filesystem::remove(sPath);
+		std::cout << "  ok" << std::endl;
+	}
+
+	//--------------------------------------------------------------------------------------------
 	// parallel read transactions; a write transaction waits for them
 
 	void TestParallelReads()
@@ -954,6 +1073,7 @@ int main(int argc, char* argv[])
 		Run("build indexes", [&] { TestBuildIndexes(nRows); });
 		Run("z-order", [&] { TestZOrder(nRows); });
 		Run("recovery", [&] { TestRecovery(); });
+		Run("free pages", [&] { TestFreePages(); });
 		Run("parallel reads", [&] { TestParallelReads(); });
 	}
 

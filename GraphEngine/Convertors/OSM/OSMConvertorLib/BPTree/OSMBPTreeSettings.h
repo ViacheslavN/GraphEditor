@@ -68,7 +68,7 @@ namespace GraphEngine {
             struct SOSMBPTreeNodeHeader
             {
                 static constexpr uint64_t Magic = 0x31444E5042534F4Dull;   // "MOSBPND1"
-                static constexpr uint32_t Version = 1;
+                static constexpr uint32_t Version = 2;     // 2: the storage addresses in 512-byte blocks
 
                 uint32_t    nPageSize = 0;
                 int64_t     nTreeInfoPage = -1;
@@ -103,7 +103,7 @@ namespace GraphEngine {
             struct SOSMBPTreeTagHeader
             {
                 static constexpr uint64_t Magic = 0x3147545042534F4Dull;   // "MOSBPTG1"
-                static constexpr uint32_t Version = 1;
+                static constexpr uint32_t Version = 2;     // 2: the storage addresses in 512-byte blocks
 
                 uint32_t nPageSize = 0;
                 int64_t  nTreeInfoPage = -1;
@@ -118,7 +118,7 @@ namespace GraphEngine {
             struct SOSMBPTreeWayHeader
             {
                 static constexpr uint64_t Magic = 0x3157575042534F4Dull;   // "MOSBPWW1"
-                static constexpr uint32_t Version = 1;
+                static constexpr uint32_t Version = 2;     // 2: the storage addresses in 512-byte blocks
 
                 uint32_t nPageSize = 0;
                 int64_t  nTreeInfoPage = -1;
@@ -136,7 +136,7 @@ namespace GraphEngine {
             struct SOSMBPTreeRelationHeader
             {
                 static constexpr uint64_t Magic = 0x314C525042534F4Dull;   // "MOSBPRL1"
-                static constexpr uint32_t Version = 1;
+                static constexpr uint32_t Version = 2;     // 2: the storage addresses in 512-byte blocks
 
                 uint32_t nPageSize = 0;
                 int64_t  nTreeInfoPage = -1;

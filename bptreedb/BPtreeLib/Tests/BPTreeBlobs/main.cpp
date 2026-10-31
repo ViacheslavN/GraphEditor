@@ -11,6 +11,7 @@
 //   storage file - default F:\BPBlobTest.btdb (Windows), /tmp/BPBlobTest.btdb (other)
 //   node cache   - nodes kept in memory, default 1000
 
+#include "../../../StorageLib/FreeSpaceMap.h"
 #include <iostream>
 #include <string>
 #include <vector>
@@ -68,7 +69,9 @@ namespace
 	public:
 		CDropRecordingPager(bptreedb::storage::IFilePagerPtr pPager, std::set<int64_t>& dropped) : m_pPager(pPager), m_dropped(dropped) {}
 
+		virtual uint32_t GetPageSize() const { return m_pPager->GetPageSize(); }
 		virtual int64_t GetNewFilePageAddr() { return m_pPager->GetNewFilePageAddr(); }
+		virtual int64_t GetNewFilePageRef(uint32_t nSize) { return m_pPager->GetNewFilePageRef(nSize); }
 		virtual bptreedb::storage::IFilePagePtr GetNewPage(int64_t nAddr) { return m_pPager->GetNewPage(nAddr); }
 		virtual bptreedb::storage::IFilePagePtr ReadPage(int64_t nAddr) { return m_pPager->ReadPage(nAddr); }
 		virtual void ReadPage(bptreedb::storage::IFilePagePtr ptrPage, int64_t nAddr) { m_pPager->ReadPage(ptrPage, nAddr); }
@@ -268,9 +271,8 @@ namespace
 				if (!it.Value().IsInline())
 				{
 					chain = ChainOf(pPager, it.Value().Addr());
-					int64_t nPayload = (int64_t)pPager->ReadPage(chain[0])->GetSize() - 2 * sizeof(int64_t);   // page header: next, prev
 					int64_t nStreamSize = tree.GetBlob(it)->Size() + (int64_t)sizeof(int64_t);                  // size header + bytes
-					size_t nExpected = (size_t)((nStreamSize + nPayload - 1) / nPayload);
+					size_t nExpected = bptreedb::storage::TWriteStreamPage::PlanPages(nStreamSize, tree.MaxBlobPageSize()).size();
 					if (chain.size() != nExpected)
 						throw CommonLib::CExcBase("key {0}: {1} pages in the chain, expected {2}", key, (uint64_t)chain.size(), (uint64_t)nExpected);
 				}
@@ -303,13 +305,17 @@ namespace
 			std::vector<int64_t> firstHalf(insertOrder.begin(), insertOrder.begin() + nCount / 2);
 			std::vector<int64_t> secondHalf(insertOrder.begin() + nCount / 2, insertOrder.end());
 			std::set<int64_t> dropped;
+			// the dropped pages are taken again by the new ones (the map lives across the steps of the test)
+			bptreedb::storage::CFreeSpaceMapPtr pFreeSpace = std::make_shared<bptreedb::storage::CFreeSpaceMap>();
+			int64_t nEndAddr = 0;
 
 			auto runStep = [&](const char* name, bool bCreate, const std::function<void(TBlobTree&, bptreedb::storage::IFilePagerPtr)>& step)
 			{
 				auto start = std::chrono::steady_clock::now();
 				bptreedb::storage::CFileStoragePtr pStorage(new bptreedb::storage::CFileStorage(pAlloc, 1, bptreedb::storage::IStorageCipherPtr()));
 				pStorage->Open(storagePath.c_str(), bCreate, 0, nPageSize);
-				bptreedb::storage::IFilePagerPtr pFilePager = std::make_shared<bptreedb::storage::CFilePager>(pAlloc, pStorage, 100);
+				std::shared_ptr<bptreedb::storage::CFilePager> pFilePager = std::make_shared<bptreedb::storage::CFilePager>(pAlloc, pStorage, 100);
+				pFilePager->SetFreeSpaceMap(pFreeSpace);
 				bptreedb::storage::IFilePagerPtr pPager = std::make_shared<CDropRecordingPager>(pFilePager, dropped);
 
 				if (bCreate)
@@ -329,6 +335,7 @@ namespace
 				}
 
 				pPager->Flush();
+				nEndAddr = pStorage->GetEndAddr();
 				pStorage->Close();
 				Log.InfoT("{0}: {1} s", std::string(name), Seconds(start));
 			};
@@ -342,16 +349,48 @@ namespace
 
 			runStep("duplicate key", false, [&](TBlobTree& tree, bptreedb::storage::IFilePagerPtr) {
 				// an existing key: rejected, the pages of the new blob are dropped, the old blob is intact
-				std::vector<byte_t> big(3 * nPageSize, 0xAB);   // 4 stream pages (a page has less than nPageSize for data)
+				// a blob of 3 MB: 3 pages of 1 MB (a page has less than its size for data) and a small one for the rest
+				std::vector<byte_t> big(3 * (size_t)TBlobTree::DefaultMaxBlobPageSize, 0xAB);
+				size_t nExpected = bptreedb::storage::TWriteStreamPage::PlanPages(big.size() + sizeof(int64_t), tree.MaxBlobPageSize()).size();
 				size_t nDropped = dropped.size();
 				bool bThrown = false;
 				try { tree.insert(insertOrder[0], big); }
 				catch (std::exception&) { bThrown = true; }
 				if (!bThrown)
 					throw CommonLib::CExcBase("duplicate key was accepted");
-				if (dropped.size() != nDropped + 4)
-					throw CommonLib::CExcBase("duplicate key: {0} pages dropped, expected 4", (uint64_t)(dropped.size() - nDropped));
+				if (nExpected != 4 || dropped.size() != nDropped + nExpected)
+					throw CommonLib::CExcBase("duplicate key: {0} pages dropped, expected {1}", (uint64_t)(dropped.size() - nDropped), (uint64_t)nExpected);
 				CheckBlob(tree.GetBlob(insertOrder[0]), insertOrder[0]);
+			});
+
+			runStep("page sizes", false, [&](TBlobTree& tree, bptreedb::storage::IFilePagerPtr) {
+				// the stream pages of the size classes planned for the blobs: few pages, at most an eighth lost
+				uint64_t nBlobs = 0, nPages = 0, nBytes = 0, nData = 0;
+				for (TBlobTree::iterator it = tree.begin(); !it.IsNull(); it.Next())
+				{
+					const bptreedb::BlobValue& value = it.Value();
+					if (value.IsInline())
+						continue;
+					uint64_t nSize = (uint64_t)BlobSizeOf(it.Key()) + sizeof(int64_t);
+					uint64_t nBlobPages = tree.StreamPageCount(value);
+					uint64_t nBlobBytes = tree.StreamPageBytes(value);
+					std::vector<uint32_t> plan = bptreedb::storage::TWriteStreamPage::PlanPages(nSize, tree.MaxBlobPageSize());
+					uint64_t nPlanBytes = 0;
+					for (uint32_t nPage : plan)
+					{
+						if ((nPage & (nPage - 1)) != 0 || nPage < bptreedb::storage::BlockSize)
+							throw CommonLib::CExcBase("blob {0}: a page of {1} bytes isn't a size class", it.Key(), nPage);
+						nPlanBytes += nPage;
+					}
+					uint64_t nOverhead = nBlobPages * bptreedb::storage::TWriteStreamPage::PageOverhead;
+					if (nBlobPages != plan.size() || nBlobBytes != nPlanBytes || nBlobBytes > nSize + nOverhead + bptreedb::storage::TWriteStreamPage::WasteBudget(nSize))
+						throw CommonLib::CExcBase("blob of {0} bytes: {1} pages of {2} bytes, planned {3} bytes", nSize, nBlobPages, nBlobBytes, nPlanBytes);
+					++nBlobs;
+					nPages += nBlobPages;
+					nBytes += nBlobBytes;
+					nData += nSize;
+				}
+				Log.InfoT("stream blobs: {0}, pages: {1}, page bytes: {2}, data: {3}", nBlobs, nPages, nBytes, nData);
 			});
 
 			runStep("find all", false, [&](TBlobTree& tree, bptreedb::storage::IFilePagerPtr) { FindAll(tree, insertOrder, true); });
@@ -368,10 +407,16 @@ namespace
 			runStep("travel empty", false, [&](TBlobTree& tree, bptreedb::storage::IFilePagerPtr) { Travel(tree, std::vector<int64_t>()); });
 
 			std::vector<int64_t> reinsert(insertOrder.begin(), insertOrder.begin() + std::min<size_t>(nCount, 5000));
+			int64_t nEndBefore = nEndAddr;
+			uint64_t nFreeBefore = pFreeSpace->FreeBlocks();
 			runStep("re-insert", false, [&](TBlobTree& tree, bptreedb::storage::IFilePagerPtr) {
 				for (int64_t key : reinsert)
 					InsertBlob(tree, key);
 			});
+			// everything was removed: the blobs and the nodes of the new tree took the free pages
+			Log.InfoT("free blocks: {0} before the re-insert, {1} after; the file grew by {2} blocks", nFreeBefore, pFreeSpace->FreeBlocks(), nEndAddr - nEndBefore);
+			if (pFreeSpace->FreeBlocks() >= nFreeBefore || nEndAddr - nEndBefore > (nEndBefore / 100))
+				throw CommonLib::CExcBase("the free pages weren't reused: the file grew from {0} to {1} blocks", nEndBefore, nEndAddr);
 			runStep("find re-inserted", false, [&](TBlobTree& tree, bptreedb::storage::IFilePagerPtr) {
 				FindAll(tree, reinsert, true);
 				Travel(tree, Sorted(reinsert));

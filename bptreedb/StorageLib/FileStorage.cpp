@@ -16,25 +16,24 @@ namespace bptreedb
 
 		}
 
-		void CFileStorage::Open(const char* pszNameUtf8, bool bCreate, uint64_t offset, uint32_t nMinPageSize)
+		void CFileStorage::Open(const char* pszNameUtf8, bool bCreate, uint64_t offset, uint32_t nPageSize)
 		{
 			try
 			{
-				if ((nMinPageSize % MIN_PAGE_SIZE) != 0)
-					throw CommonLib::CExcBase("Wrong page size: {0}", nMinPageSize);
+				if (nPageSize == 0 || (nPageSize % BlockSize) != 0 || nPageSize > PageRef::MaxPageSize())
+					throw CommonLib::CExcBase("Wrong page size: {0} (a multiple of {1})", nPageSize, BlockSize);
 
 				m_offset = offset;
 				CommonLib::file::enOpenFileMode nOpenMode = bCreate ? CommonLib::file::ofmCreateAlways : CommonLib::file::ofmOpenExisting;
 				CommonLib::file::enAccesRights nReadWrite = CommonLib::file::aeReadWrite;
 
-				m_minPageSize = nMinPageSize;
+				m_nPageSize = nPageSize;
 				m_file.OpenFileA(pszNameUtf8, nOpenMode, nReadWrite, CommonLib::file::smNoMode, CommonLib::file::oftBinary);
 
-				// the pages start after the offset; a partly written last page counts
+				// the blocks start after the offset; a partly written last block counts
 				uint64_t nSize = m_file.GetFileSize();
 				uint64_t nDataSize = nSize > m_offset ? nSize - m_offset : 0;
-				m_lastAddr = (nDataSize + m_minPageSize - 1) / m_minPageSize;
-
+				m_lastAddr = (int64_t)((nDataSize + BlockSize - 1) / BlockSize);
 			}
 			catch (std::exception& excSrc)
 			{
@@ -43,9 +42,9 @@ namespace bptreedb
 			}
 		}
 
-		void CFileStorage::Open(const wchar_t* pszName, bool bCreate, uint64_t offset, uint32_t nMinPageSize)
+		void CFileStorage::Open(const wchar_t* pszName, bool bCreate, uint64_t offset, uint32_t nPageSize)
 		{
-			Open(CommonLib::StringEncoding::str_w2utf8_safe(pszName).c_str(), bCreate, offset, nMinPageSize);
+			Open(CommonLib::StringEncoding::str_w2utf8_safe(pszName).c_str(), bCreate, offset, nPageSize);
 		}
 
 		void CFileStorage::Close()
@@ -61,27 +60,34 @@ namespace bptreedb
 			}
 		}
 
+		// caller holds m_mutex
+		void CFileStorage::CheckRange(int64_t nAddr, uint32_t nSize) const
+		{
+			if (nSize == 0 || (nSize % BlockSize) != 0)
+				throw CommonLib::CExcBase("Wrong size: {0} (a multiple of {1})", nSize, BlockSize);
+			if (nAddr < 0 || nAddr + (int64_t)(nSize / BlockSize) > m_lastAddr)
+				throw CommonLib::CExcBase("Outrange addr {0}, size {1}, lastAddr: {2}", nAddr, nSize, m_lastAddr);
+		}
+
 		void CFileStorage::ReadData(int64_t nAddr, byte_t* pData, uint32_t nSize)
 		{
 			try
 			{
-				if ((nSize % m_minPageSize) != 0)
-					throw CommonLib::CExcBase("Wrong size: {0}", nSize);
-
 				std::lock_guard<std::recursive_mutex> locker(m_mutex);
+				CheckRange(nAddr, nSize);
 				{
-					int64_t nStartAddr = nAddr;
-					byte_t* pStartData = pData;
+					CommonLib::CPrefCounterHolder holder(m_ptrStoragePerformer, eReadData, nSize);
+					m_file.SetFilePos64(m_offset + (uint64_t)nAddr * BlockSize, CommonLib::soFromBegin);
+					uint32_t nCnt = (uint32_t)m_file.Read(pData, nSize);
+					if (nCnt != nSize)
+						throw CommonLib::CExcBase("Can't read the requested size: {0}, returned size: {1}", nSize, nCnt);
+				}
 
-					int32_t nPageCnt = nSize / m_minPageSize;
-
-					for (int32_t i = 0; i < nPageCnt; ++i)
-					{
-						_ReadData(nStartAddr, pStartData);
-
-						++nStartAddr;
-						pStartData += m_minPageSize;
-					}
+				if (m_ptrStorageCipher.get())
+				{
+					CommonLib::CPrefCounterHolder holder(m_ptrStoragePerformer, eDecryptData, nSize);
+					for (uint32_t i = 0; i < nSize / BlockSize; ++i)
+						m_ptrStorageCipher->Decrypt(nAddr + i, pData + (size_t)i * BlockSize, BlockSize);
 				}
 			}
 			catch (std::exception& excSrc)
@@ -91,49 +97,29 @@ namespace bptreedb
 			}
 		}
 
-		void CFileStorage::_ReadData(int64_t nAddr, byte_t* pData)
-		{
-			CommonLib::CPrefCounterHolder holder(m_ptrStoragePerformer, eReadData, m_minPageSize);
-
-			if (nAddr >= m_lastAddr)
-				throw CommonLib::CExcBase("Failed to read data, outrange addr {0}, lastAddr: {1}", nAddr, m_lastAddr);
-
-
-			m_file.SetFilePos64(m_offset + (nAddr * m_minPageSize), CommonLib::soFromBegin);
-			uint32_t nWCnt = (uint32_t)m_file.Read(pData, m_minPageSize);
-
-			if (nWCnt != m_minPageSize)
-				throw CommonLib::CExcBase("Can't read the requested size, page size: {0}, returned size: {1}", m_minPageSize, nWCnt);
-
-			if (m_ptrStorageCipher.get())
-			{
-				CommonLib::CPrefCounterHolder holder(m_ptrStoragePerformer, eDecryptData, m_minPageSize);
-				m_ptrStorageCipher->Decrypt(nAddr, pData, m_minPageSize);
-			}
-		}
-
 		void CFileStorage::WriteData(int64_t nAddr, const byte_t* pData, uint32_t nSize)
 		{
 			try
 			{
-				if ((nSize % m_minPageSize) != 0)
-					throw CommonLib::CExcBase("Wrong size: {0}", nSize);
-
 				std::lock_guard<std::recursive_mutex> locker(m_mutex);
+				CheckRange(nAddr, nSize);
+
+				const byte_t* pWrite = pData;
+				if (m_ptrStorageCipher.get() != nullptr)
 				{
-					int64_t nStartAddr = nAddr;
-					const byte_t* pStartData = pData;
-
-					int32_t nPageCnt = nSize / m_minPageSize;
-
-					for (int32_t i = 0; i < nPageCnt; ++i)
-					{
-						_WriteData(nStartAddr, pStartData);
-
-						++nStartAddr;
-						pStartData += m_minPageSize;
-					}
+					if (m_bufForChiper.size() < nSize)
+						m_bufForChiper.resize(nSize);
+					CommonLib::CPrefCounterHolder holder(m_ptrStoragePerformer, eEncryptData, nSize);
+					for (uint32_t i = 0; i < nSize / BlockSize; ++i)
+						m_ptrStorageCipher->Encrypt(nAddr + i, pData + (size_t)i * BlockSize, BlockSize, &m_bufForChiper[(size_t)i * BlockSize], BlockSize);
+					pWrite = m_bufForChiper.data();
 				}
+
+				CommonLib::CPrefCounterHolder holder(m_ptrStoragePerformer, eWriteData, nSize);
+				m_file.SetFilePos64(m_offset + (uint64_t)nAddr * BlockSize, CommonLib::soFromBegin);
+				uint32_t nCnt = (uint32_t)m_file.Write(pWrite, nSize);
+				if (nCnt != nSize)
+					throw CommonLib::CExcBase("Can't write the data, size: {0}, written bytes {1}", nSize, nCnt);
 			}
 			catch (std::exception& excSrc)
 			{
@@ -146,26 +132,15 @@ namespace bptreedb
 		{
 			try
 			{
-				if ((nSize % m_minPageSize) != 0)
-					throw CommonLib::CExcBase("Wrong size: {0}", nSize);
-
 				std::lock_guard<std::recursive_mutex> locker(m_mutex);
-				{
-					int32_t nPageCnt = nSize / m_minPageSize;
-					uint64_t nStartAddr = nAddr;
-					for (int32_t i = 0; i < nPageCnt; ++i)
-					{
-						_DeleteData(nStartAddr);
-						++nStartAddr;
-					}
-				}
+				CheckRange(nAddr, nSize);
+				// the space isn't reused yet (no free space management)
 			}
 			catch (std::exception& excSrc)
 			{
 				CommonLib::CExcBase::RegenExcT("Failed to drop data, addr: {0}, size {1}", nAddr, nSize, excSrc);
 				throw;
 			}
-
 		}
 
 		void CFileStorage::ReserveAddr(int64_t nEndAddr)
@@ -175,41 +150,10 @@ namespace bptreedb
 				m_lastAddr = nEndAddr;
 		}
 
-		void CFileStorage::_WriteData(int64_t nAddr, const byte_t* pData)
+		int64_t CFileStorage::GetEndAddr() const
 		{
-			if (nAddr >= m_lastAddr)
-				throw CommonLib::CExcBase("Failed to write data, outrange addr {0}, lastAddr: {1}", nAddr, m_lastAddr);
-
-			int64_t nFileAddr = nAddr * m_minPageSize;
-			m_file.SetFilePos64(m_offset + nFileAddr, CommonLib::soFromBegin);
-
-			uint32_t nCnt = 0;
-			if (m_ptrStorageCipher.get() != nullptr)
-			{
-				if (m_bufForChiper.size() < m_minPageSize)
-					m_bufForChiper.resize(m_minPageSize);
-				{
-					CommonLib::CPrefCounterHolder holder(m_ptrStoragePerformer, eEncryptData, m_minPageSize);
-					m_ptrStorageCipher->Encrypt(nAddr, pData, m_minPageSize,  &m_bufForChiper[0], m_minPageSize);
-				}
-				{
-					CommonLib::CPrefCounterHolder holder(m_ptrStoragePerformer, eWriteData, m_minPageSize);
-					nCnt = (uint32_t)m_file.Write(&m_bufForChiper[0], m_minPageSize);
-				}
-			}
-			else
-			{
-				CommonLib::CPrefCounterHolder holder(m_ptrStoragePerformer, eWriteData, m_minPageSize);
-				nCnt = (uint32_t)m_file.Write(pData, m_minPageSize);
-			}
-
-			if (nCnt != m_minPageSize)
-				throw CommonLib::CExcBase(L"Can't write page, page size: {0}, written bytes {1}", m_minPageSize, nCnt);		
-		}
-
-		void  CFileStorage::_DeleteData(int64_t nAddr)
-		{
-
+			std::lock_guard<std::recursive_mutex> locker(m_mutex);
+			return m_lastAddr;
 		}
 
 		void CFileStorage::Flush()
@@ -242,18 +186,14 @@ namespace bptreedb
 				std::lock_guard<std::recursive_mutex> locker(m_mutex);
 
 				if (nSize == 0)
-					nSize = m_minPageSize;
+					nSize = m_nPageSize;
 
-				if ((nSize % m_minPageSize) != 0)
-					throw CommonLib::CExcBase("Wrong page size: {0}", nSize);
-
-				uint32_t nCount = nSize / m_minPageSize;
+				if ((nSize % BlockSize) != 0)
+					throw CommonLib::CExcBase("Wrong page size: {0} (a multiple of {1})", nSize, BlockSize);
 
 				int64_t nAddr = m_lastAddr;
-				m_lastAddr += nCount;
-
+				m_lastAddr += nSize / BlockSize;
 				return nAddr;
-
 			}
 			catch (std::exception& excSrc)
 			{
@@ -264,7 +204,7 @@ namespace bptreedb
 
 		uint32_t CFileStorage::GetPageSize() const
 		{
-			return m_minPageSize;
+			return m_nPageSize;
 		}
 
 		void CFileStorage::Lock()

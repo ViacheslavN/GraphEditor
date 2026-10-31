@@ -1,104 +1,34 @@
 #include "pch.h"
 #include "FilePager.h"
+#include <algorithm>
 
 namespace bptreedb
 {
 	namespace storage
 	{
+		namespace
+		{
+			IStoragePtr CheckStorage(IStoragePtr ptrStorage)
+			{
+				if (ptrStorage.get() == nullptr)
+					throw CommonLib::CExcBase("CFilePager: storage is null");
+				return ptrStorage;
+			}
+		}
+
 		//
 		// CFilePager
 		//
 
 		CFilePager::CFilePager(CommonLib::IAllocPtr ptrAlloc, IStoragePtr ptrStorage, uint32_t nCacheSize) :
-			m_ptrAlloc(ptrAlloc)
+			CPagerBase(ptrAlloc, std::make_shared<CCachedStorageIO>(ptrAlloc, CheckStorage(ptrStorage), nCacheSize))
 		{
-			if (ptrStorage.get() == nullptr)
-				throw CommonLib::CExcBase("CFilePager: storage is null");
-
-			m_ptrIO = std::make_shared<CCachedStorageIO>(ptrAlloc, ptrStorage, nCacheSize);
+			m_ptrIO = std::static_pointer_cast<CCachedStorageIO>(m_ptrPageIO);
 		}
 
 		CFilePager::~CFilePager()
 		{
 			// Flush must be called explicitly; a destructor cannot safely propagate I/O errors.
-		}
-
-		int64_t CFilePager::GetNewFilePageAddr()
-		{
-			return m_ptrIO->GetNewFilePageAddr();
-		}
-
-		IFilePagePtr CFilePager::GetNewPage(int64_t nAddr)
-		{
-			try
-			{
-				CFilePagePtr ptrPage = std::make_shared<CFilePage>(m_ptrAlloc, m_ptrIO->GetPageSize(), nAddr);
-				return std::static_pointer_cast<IFilePage>(ptrPage);
-			}
-			catch (std::exception& excSrc)
-			{
-				CommonLib::CExcBase::RegenExcT("Failed to create new page addr: {0}", nAddr, excSrc);
-				throw;
-			}
-		}
-
-		IFilePagePtr CFilePager::ReadPage(int64_t nAddr)
-		{
-			try
-			{
-				return CFilePage::Read(m_ptrIO, m_ptrAlloc, nAddr);
-			}
-			catch (std::exception& excSrc)
-			{
-				CommonLib::CExcBase::RegenExcT("Failed to read page addr: {0}", nAddr, excSrc);
-				throw;
-			}
-		}
-
-		void CFilePager::ReadPage(IFilePagePtr ptrPage, int64_t nAddr)
-		{
-			try
-			{
-				if (ptrPage.get() == nullptr)
-					throw CommonLib::CExcBase("Page is null");
-
-				ptrPage->Read(m_ptrIO, nAddr);
-				ptrPage->SetAddr(nAddr);
-			}
-			catch (std::exception& excSrc)
-			{
-				CommonLib::CExcBase::RegenExcT("Failed to read page addr: {0}", nAddr, excSrc);
-				throw;
-			}
-		}
-
-		void CFilePager::SavePage(IFilePagePtr ptrPage)
-		{
-			try
-			{
-				if (ptrPage.get() == nullptr)
-					throw CommonLib::CExcBase("Page is null");
-
-				ptrPage->Save(m_ptrIO);
-			}
-			catch (std::exception& excSrc)
-			{
-				CommonLib::CExcBase::RegenExcT("Failed to save page addr: {0}", ptrPage.get() ? ptrPage->GetAddr() : -1, excSrc);
-				throw;
-			}
-		}
-
-		void CFilePager::DropFilePage(int64_t nAddr)
-		{
-			try
-			{
-				m_ptrIO->DropData(nAddr, m_ptrIO->GetPageSize());
-			}
-			catch (std::exception& excSrc)
-			{
-				CommonLib::CExcBase::RegenExcT("Failed to drop page addr: {0}", nAddr, excSrc);
-				throw;
-			}
 		}
 
 		void CFilePager::Flush()
@@ -121,11 +51,6 @@ namespace bptreedb
 			return m_ptrIO;
 		}
 
-		uint32_t CFilePager::GetPageSize() const
-		{
-			return m_ptrIO->GetPageSize();
-		}
-
 		uint32_t CFilePager::GetCacheSize() const
 		{
 			return m_ptrIO->GetCacheSize();
@@ -136,6 +61,11 @@ namespace bptreedb
 			return m_ptrIO->GetCachedPageCount();
 		}
 
+		uint64_t CFilePager::GetCachedBytes() const
+		{
+			return m_ptrIO->GetCachedBytes();
+		}
+
 		//
 		// CFilePager::CCachedStorageIO
 		//
@@ -143,6 +73,8 @@ namespace bptreedb
 		CFilePager::CCachedStorageIO::CCachedStorageIO(CommonLib::IAllocPtr ptrAlloc, IStoragePtr ptrStorage, uint32_t nCacheSize) :
 			m_ptrStorage(ptrStorage), m_cacheSize(nCacheSize), m_pageCache(ptrAlloc)
 		{
+			m_nMaxBytes = (uint64_t)nCacheSize * ptrStorage->GetPageSize();
+			m_nBigPage = (uint32_t)(std::min)((uint64_t)UINT32_MAX, (std::max)((uint64_t)64 * 1024, m_nMaxBytes / 8));
 		}
 
 		CFilePager::CCachedStorageIO::~CCachedStorageIO()
@@ -161,9 +93,8 @@ namespace bptreedb
 
 		void CFilePager::CCachedStorageIO::_CheckSize(uint32_t nSize) const
 		{
-			uint32_t nPageSize = GetPageSize();
-			if (nPageSize == 0 || (nSize % nPageSize) != 0)
-				throw CommonLib::CExcBase("Wrong size: {0}, page size: {1}", nSize, nPageSize);
+			if (nSize == 0 || (nSize % BlockSize) != 0)
+				throw CommonLib::CExcBase("Wrong size: {0}, block size: {1}", nSize, BlockSize);
 		}
 
 		void CFilePager::CCachedStorageIO::ReadData(int64_t nAddr, byte_t* pData, uint32_t nSize)
@@ -171,14 +102,18 @@ namespace bptreedb
 			try
 			{
 				_CheckSize(nSize);
-
 				std::lock_guard<std::recursive_mutex> locker(m_mutex);
 
-				uint32_t nPageSize = GetPageSize();
-				uint32_t nPageCnt = nSize / nPageSize;
+				TCacheFilePagePtr ptrPage = _Find(nAddr, nSize);
+				if (ptrPage.get() != nullptr)
+				{
+					ptrPage->CopyTo(pData);
+					return;
+				}
 
-				for (uint32_t i = 0; i < nPageCnt; ++i)
-					_ReadData(nAddr + i, pData + (size_t)i * nPageSize);
+				m_ptrStorage->ReadData(nAddr, pData, nSize);
+				if (nSize <= m_nBigPage)
+					_AddToCache(nAddr, pData, nSize, CLEAN);
 			}
 			catch (std::exception& excSrc)
 			{
@@ -192,14 +127,25 @@ namespace bptreedb
 			try
 			{
 				_CheckSize(nSize);
-
 				std::lock_guard<std::recursive_mutex> locker(m_mutex);
 
-				uint32_t nPageSize = GetPageSize();
-				uint32_t nPageCnt = nSize / nPageSize;
+				if (nSize > m_nBigPage)
+				{
+					// a big page: directly
+					_Remove(nAddr);
+					m_ptrStorage->WriteData(nAddr, pData, nSize);
+					return;
+				}
 
-				for (uint32_t i = 0; i < nPageCnt; ++i)
-					_WriteData(nAddr + i, pData + (size_t)i * nPageSize);
+				TCacheFilePagePtr ptrPage = _Find(nAddr, nSize);
+				if (ptrPage.get() != nullptr)
+				{
+					ptrPage->CopyFrom(pData);
+					return;
+				}
+
+				// Write-back: keep the page in the cache, it reaches the storage on eviction or Flush().
+				_AddToCache(nAddr, pData, nSize, DIRTY);
 			}
 			catch (std::exception& excSrc)
 			{
@@ -213,14 +159,10 @@ namespace bptreedb
 			try
 			{
 				_CheckSize(nSize);
-
 				std::lock_guard<std::recursive_mutex> locker(m_mutex);
 
-				uint32_t nPageCnt = nSize / GetPageSize();
-
-				for (uint32_t i = 0; i < nPageCnt; ++i)
-					_DropData(nAddr + i);
-
+				// Dropped pages are discarded, dirty or not.
+				_Remove(nAddr);
 				m_ptrStorage->DropData(nAddr, nSize);
 			}
 			catch (std::exception& excSrc)
@@ -232,68 +174,64 @@ namespace bptreedb
 
 		// Cache internals (caller holds m_mutex)
 
-		void CFilePager::CCachedStorageIO::_ReadData(int64_t nAddr, byte_t* pData)
+		CFilePager::TCacheFilePagePtr CFilePager::CCachedStorageIO::_Find(int64_t nAddr, uint32_t nSize)
 		{
 			TCacheFilePagePtr ptrPage = m_pageCache.GetElem(nAddr);
-			if (ptrPage.get() != nullptr)
-			{
-				ptrPage->CopyTo(pData);
-				return;
-			}
+			if (ptrPage.get() == nullptr || ptrPage->pageData.size() == nSize)
+				return ptrPage;
 
-			m_ptrStorage->ReadData(nAddr, pData, GetPageSize());
-			_AddToCache(nAddr, pData, CLEAN);
+			// the space was dropped and taken by a page of another size
+			if (ptrPage->pageState == DIRTY)
+				m_ptrStorage->WriteData(ptrPage->nAddr, ptrPage->pageData.data(), (uint32_t)ptrPage->pageData.size());
+			_Remove(nAddr);
+			return TCacheFilePagePtr();
 		}
 
-		void CFilePager::CCachedStorageIO::_WriteData(int64_t nAddr, const byte_t* pData)
+		void CFilePager::CCachedStorageIO::_Remove(int64_t nAddr)
 		{
-			TCacheFilePagePtr ptrPage = m_pageCache.GetElem(nAddr);
-			if (ptrPage.get() != nullptr)
-			{
-				ptrPage->CopyFrom(pData);
+			TCacheFilePagePtr ptrPage = m_pageCache.GetElem(nAddr, true);
+			if (ptrPage.get() == nullptr)
 				return;
-			}
-
-			// Write-back: keep the page in the cache, it reaches the storage on eviction or Flush().
-			_AddToCache(nAddr, pData, DIRTY);
-		}
-
-		void CFilePager::CCachedStorageIO::_DropData(int64_t nAddr)
-		{
-			// Dropped pages are discarded, dirty or not.
+			m_nBytes -= ptrPage->pageData.size();
 			m_pageCache.Remove(nAddr);
 		}
 
-		void CFilePager::CCachedStorageIO::_AddToCache(int64_t nAddr, const byte_t* pData, EFilePageState state)
+		void CFilePager::CCachedStorageIO::_AddToCache(int64_t nAddr, const byte_t* pData, uint32_t nSize, EFilePageState state)
 		{
-			uint32_t nPageSize = GetPageSize();
-
 			if (m_cacheSize == 0)
 			{
 				// Cache disabled: write-through.
 				if (state == DIRTY)
-					m_ptrStorage->WriteData(nAddr, pData, nPageSize);
+					m_ptrStorage->WriteData(nAddr, pData, nSize);
 				return;
 			}
 
-			if (m_pageCache.Size() >= m_cacheSize)
+			TCacheFilePagePtr ptrReuse;
+			while (m_pageCache.Size() != 0 && m_nBytes + nSize > m_nMaxBytes)
 			{
 				TCacheFilePagePtr ptrEvicted = m_pageCache.RemoveBack();
-				if (ptrEvicted.get() != nullptr)
-				{
-					if (ptrEvicted->pageState == DIRTY)
-						m_ptrStorage->WriteData(ptrEvicted->nAddr, ptrEvicted->pageData.data(), (uint32_t)ptrEvicted->pageData.size());
-
-					// Reuse the evicted buffer instead of reallocating.
-					ptrEvicted->Reset(nAddr, pData, nPageSize, state);
-					m_pageCache.AddElem(nAddr, ptrEvicted);
-					return;
-				}
+				if (ptrEvicted.get() == nullptr)
+					break;
+				m_nBytes -= ptrEvicted->pageData.size();
+				if (ptrEvicted->pageState == DIRTY)
+					m_ptrStorage->WriteData(ptrEvicted->nAddr, ptrEvicted->pageData.data(), (uint32_t)ptrEvicted->pageData.size());
+				ptrReuse = ptrEvicted;
 			}
 
-			TCacheFilePagePtr ptrPage = std::make_shared<SCacheFilePage>(nAddr, pData, nPageSize);
+			TCacheFilePagePtr ptrPage;
+			if (ptrReuse.get() != nullptr)
+			{
+				// Reuse the evicted buffer instead of reallocating.
+				ptrPage = ptrReuse;
+				ptrPage->nAddr = nAddr;
+				ptrPage->pageData.assign(pData, pData + nSize);
+			}
+			else
+				ptrPage = std::make_shared<SCacheFilePage>(nAddr, pData, nSize);
+
 			ptrPage->pageState = state;
 			m_pageCache.AddElem(nAddr, ptrPage);
+			m_nBytes += nSize;
 		}
 
 		void CFilePager::CCachedStorageIO::Flush()
@@ -302,17 +240,21 @@ namespace bptreedb
 			{
 				std::lock_guard<std::recursive_mutex> locker(m_mutex);
 
+				// the dirty pages in the order of the addresses (the file is written forward)
+				std::vector<TCacheFilePagePtr> dirty;
 				auto it = m_pageCache.Begin();
 				while (!it.IsNull())
 				{
 					TCacheFilePagePtr& ptrPage = it.Object();
 					if (ptrPage->pageState == DIRTY)
-					{
-						m_ptrStorage->WriteData(ptrPage->nAddr, ptrPage->pageData.data(), (uint32_t)ptrPage->pageData.size());
-						ptrPage->pageState = CLEAN;
-					}
-
+						dirty.push_back(ptrPage);
 					it.Next();
+				}
+				std::sort(dirty.begin(), dirty.end(), [](const TCacheFilePagePtr& a, const TCacheFilePagePtr& b) { return a->nAddr < b->nAddr; });
+				for (TCacheFilePagePtr& ptrPage : dirty)
+				{
+					m_ptrStorage->WriteData(ptrPage->nAddr, ptrPage->pageData.data(), (uint32_t)ptrPage->pageData.size());
+					ptrPage->pageState = CLEAN;
 				}
 
 				m_ptrStorage->Flush();
@@ -328,6 +270,7 @@ namespace bptreedb
 		{
 			std::lock_guard<std::recursive_mutex> locker(m_mutex);
 			m_pageCache.Clear();
+			m_nBytes = 0;
 		}
 
 		IStoragePtr CFilePager::CCachedStorageIO::GetStorage() const
@@ -344,6 +287,12 @@ namespace bptreedb
 		{
 			std::lock_guard<std::recursive_mutex> locker(m_mutex);
 			return m_pageCache.Size();
+		}
+
+		uint64_t CFilePager::CCachedStorageIO::GetCachedBytes() const
+		{
+			std::lock_guard<std::recursive_mutex> locker(m_mutex);
+			return m_nBytes;
 		}
 	}
 }

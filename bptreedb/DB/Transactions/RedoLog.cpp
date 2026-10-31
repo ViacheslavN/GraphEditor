@@ -28,18 +28,18 @@ namespace bptreedb
 				CommonLib::file::TFilePtr ptrFile = CommonLib::file::CFileCreator::OpenFile(sPath.c_str(), CommonLib::file::ofmCreateAlways,
 					CommonLib::file::aeReadWrite, CommonLib::file::smNoMode, CommonLib::file::oftBinary);
 
-				uint32_t nPageSize = pages.GetPageSize();
-				uint32_t header[3] = { Magic, Version, nPageSize };
+				uint32_t header[3] = { Magic, Version, storage::BlockSize };
 				WriteAll(ptrFile, header, sizeof(header));
 
 				uint32_t nCount = 0;
 				std::vector<uint32_t> crcs;
-				pages.ForEachPage([&](int64_t nAddr, const byte_t* pData)
+				pages.ForEachPage([&](int64_t nAddr, const byte_t* pData, uint32_t nSize)
 				{
-					uint32_t nCrc = util::CCRC::Crc32(pData, nPageSize);
+					uint32_t nCrc = util::CCRC::Crc32(pData, nSize);
 					WriteAll(ptrFile, &nAddr, sizeof(nAddr));
+					WriteAll(ptrFile, &nSize, sizeof(nSize));
 					WriteAll(ptrFile, &nCrc, sizeof(nCrc));
-					WriteAll(ptrFile, pData, nPageSize);
+					WriteAll(ptrFile, pData, nSize);
 					crcs.push_back(nCrc);
 					++nCount;
 				});
@@ -73,15 +73,22 @@ namespace bptreedb
 
 					uint32_t header[3] = { 0, 0, 0 };
 					bool bComplete = false;
-					std::vector<std::pair<int64_t, uint64_t> > pages;     // address, position of the data
-					if (ReadAll(ptrFile, header, sizeof(header)) && header[0] == Magic && header[1] == Version)
+					struct SLogPage
 					{
-						uint32_t nPageSize = header[2];
-						if (nPageSize != ptrStorage->GetPageSize())
-							throw CommonLib::CExcBase("the log has pages of {0} bytes, the database {1}", nPageSize, ptrStorage->GetPageSize());
+						int64_t  nAddr;
+						uint32_t nSize;
+						uint64_t nPos;      // of the data
+					};
+					std::vector<SLogPage> pages;
+					if (ReadAll(ptrFile, header, sizeof(header)) && header[0] == Magic)
+					{
+						if (header[1] != Version)
+							throw CommonLib::CExcBase("the redo log of version {0}, supported {1}", header[1], Version);
+						if (header[2] != storage::BlockSize)
+							throw CommonLib::CExcBase("the log has blocks of {0} bytes, the database {1}", header[2], storage::BlockSize);
 
 						// the pages up to the commit record; a torn or missing commit record: not committed
-						std::vector<byte_t> data(nPageSize);
+						std::vector<byte_t> data;
 						std::vector<uint32_t> crcs;
 						for (;;)
 						{
@@ -98,32 +105,35 @@ namespace bptreedb
 								}
 								break;
 							}
-							uint32_t nCrc = 0;
-							uint64_t nPos = ptrFile->GetFilePos() + sizeof(nCrc);
-							if (!ReadAll(ptrFile, &nCrc, sizeof(nCrc)) || !ReadAll(ptrFile, data.data(), nPageSize))
+							uint32_t nSize = 0, nCrc = 0;
+							if (!ReadAll(ptrFile, &nSize, sizeof(nSize)) || nSize == 0 || (nSize % storage::BlockSize) != 0 || nSize > storage::PageRef::MaxPageSize())
 								break;
-							if (util::CCRC::Crc32(data.data(), nPageSize) != nCrc)
+							uint64_t nPos = ptrFile->GetFilePos() + sizeof(nCrc);
+							data.resize(nSize);
+							if (!ReadAll(ptrFile, &nCrc, sizeof(nCrc)) || !ReadAll(ptrFile, data.data(), nSize))
+								break;
+							if (util::CCRC::Crc32(data.data(), nSize) != nCrc)
 								break;
 							crcs.push_back(nCrc);
-							pages.emplace_back(nAddr, nPos);
+							pages.push_back(SLogPage{ nAddr, nSize, nPos });
 						}
 
 						if (bComplete)
 						{
 							// the pages allocated by the commit may lie past the end of the file
 							int64_t nEnd = 0;
-							uint32_t nMinPage = ptrStorage->GetPageSize();
 							for (const auto& page : pages)
-								nEnd = (std::max)(nEnd, page.first + (int64_t)((nPageSize + nMinPage - 1) / nMinPage));
+								nEnd = (std::max)(nEnd, page.nAddr + (int64_t)(page.nSize / storage::BlockSize));
 							if (storage::CFileStorage* pFile = dynamic_cast<storage::CFileStorage*>(ptrStorage.get()))
 								pFile->ReserveAddr(nEnd);
 
 							for (const auto& page : pages)
 							{
-								ptrFile->SetFilePos64(page.second, CommonLib::soFromBegin);
-								if (!ReadAll(ptrFile, data.data(), nPageSize))
-									throw CommonLib::CExcBase("failed to read the page {0} of the log", page.first);
-								ptrStorage->WriteData(page.first, data.data(), nPageSize);
+								data.resize(page.nSize);
+								ptrFile->SetFilePos64(page.nPos, CommonLib::soFromBegin);
+								if (!ReadAll(ptrFile, data.data(), page.nSize))
+									throw CommonLib::CExcBase("failed to read the page {0} of the log", page.nAddr);
+								ptrStorage->WriteData(page.nAddr, data.data(), page.nSize);
 							}
 							bReplayed = true;
 						}

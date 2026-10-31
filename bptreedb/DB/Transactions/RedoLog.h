@@ -3,8 +3,8 @@
 // Redo log of a commit: the pages of a write transaction are written to "<database>-redo" and flushed, then
 // copied into the database file; the log is deleted when the file is flushed.
 //
-//   header: uint32 magic, uint32 version, uint32 page size
-//   page:   int64 address, uint32 crc32 of the data, data (page size)
+//   header: uint32 magic, uint32 version, uint32 block size (storage::BlockSize)
+//   page:   int64 block address, uint32 size (a multiple of the block), uint32 crc32 of the data, data (size)
 //   commit: int64 -1, uint32 page count, uint32 crc32 of the page crcs
 //
 // The transaction is committed when the commit record is in the log. Open replays a complete log (a crash
@@ -32,7 +32,7 @@ namespace bptreedb
 
 		private:
 			static constexpr uint32_t Magic = 0x4C525042;     // "BPRL"
-			static constexpr uint32_t Version = 1;
+			static constexpr uint32_t Version = 2;     // 2: the pages of different sizes
 			static constexpr int64_t CommitMark = -1;
 		};
 	}

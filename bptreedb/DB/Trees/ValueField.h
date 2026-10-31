@@ -119,15 +119,19 @@ namespace bptreedb
 					else
 						value = ptrData;
 				}
-				// the stream pages of the big blobs (the leaves are read)
+				// the stream pages of the big blobs (the leaves are read): the space in the pages of the default size (the
+				// stream pages are sized for their blobs)
 				static bool BlobPages(TTree& tree, STreeSpace& space)
 				{
+					uint64_t nBytes = 0;
 					for (typename TTree::iterator it = tree.begin(); !it.IsNull(); it.Next())
 					{
 						const BlobValue& value = it.Value();
 						if (!value.IsInline())
-							space.m_nBlobPages += tree.StreamPageCount(value);
+							nBytes += tree.StreamPageBytes(value);
 					}
+					uint32_t nPageSize = tree.StoragePageSize();
+					space.m_nBlobPages += (nBytes + nPageSize - 1) / nPageSize;
 					return true;
 				}
 			};

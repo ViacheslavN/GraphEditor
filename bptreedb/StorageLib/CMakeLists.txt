@@ -5,8 +5,10 @@ project(StorageLib)
 set(SOURCE_FILES
      FilePage.cpp
      FilePager.cpp
+     FreeSpaceMap.cpp
      FileStorage.cpp
      PageMemoryBuffer.cpp
+     PagerBase.cpp
      ReadStreamPage.cpp
      storage.cpp
      WriteStreamPage.cpp
@@ -20,3 +22,8 @@ target_link_libraries(${PROJECT_NAME} PUBLIC CommonLib)
 target_link_libraries(${PROJECT_NAME} PUBLIC UtilsLib)
 target_include_directories(${PROJECT_NAME} PRIVATE ./)
 
+
+option(STORAGELIB_BUILD_TESTS "Build StorageLib Catch2 tests" ON)
+if(STORAGELIB_BUILD_TESTS)
+    add_subdirectory(Tests/Catch)
+endif()

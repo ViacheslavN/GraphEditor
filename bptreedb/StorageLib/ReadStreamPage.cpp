@@ -24,9 +24,9 @@ namespace bptreedb
 			{
 				OpenNextPage(nPageAddr);
 			}
-			catch (CommonLib::CExcBase& excSrc)
+			catch (std::exception& excSrc)
 			{
-				excSrc.AddMsgT("Failed open ReadStreamPage addr: {0}", nPageAddr);
+				CommonLib::CExcBase::RegenExcT("Failed open ReadStreamPage addr: {0}", nPageAddr, excSrc);
 				throw;
 			}
 
@@ -140,6 +140,7 @@ namespace bptreedb
 			catch (std::exception& excSrc)
 			{
 				CommonLib::CExcBase::RegenExcT("ReadStreamPage: Failed openpage addr: {0}", nPageAddr, excSrc);
+				throw;
 			}
 		}
  
