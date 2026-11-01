@@ -23,6 +23,7 @@ namespace CommonLib
                 std::string ColumnName(int32_t col) const override;
 				bool ColumnIsNull(int32_t col) const override;
 				EDBFieldType GetColumnType(int32_t col) const override;
+				std::string GetColumnDeclType(int32_t col) const override;
 				int32_t GetColumnBytes(int32_t col) const override;
 
 				int16_t ReadInt16(int32_t col) const override;

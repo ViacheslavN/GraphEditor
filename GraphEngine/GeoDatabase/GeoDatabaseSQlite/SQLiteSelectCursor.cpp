@@ -73,9 +73,10 @@ namespace GraphEngine {
                     ptrField = ptrSourceFields->GetField(nIndex)->Clone();
                 else
                 {
+                    // not a field of the table (f.e. a column of a join, "prefix.field"): the declared type of its source column
                     ptrField = std::make_shared<CField>();
                     ptrField->SetName(sName);
-                    ptrField->SetType(dtUnknown);
+                    ptrField->SetType(CSQLiteUtils::SQLiteType2FieldType(m_ptrStatment->GetColumnDeclType(i)));
                 }
 
                 if(!m_sShapeFieldName.empty() && sName == m_sShapeFieldName)

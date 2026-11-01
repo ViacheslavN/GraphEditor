@@ -83,6 +83,12 @@ namespace CommonLib
 				return ftNull;
 			}
 
+			std::string CStatement::GetColumnDeclType(int32_t col) const
+			{
+				const char* pszType = sqlite3_column_decltype(m_pStmt, col);
+				return pszType ? std::string(pszType) : std::string();
+			}
+
 			int32_t CStatement::GetColumnBytes(int32_t col) const
 			{
 				return sqlite3_column_bytes(m_pStmt, col);

@@ -645,7 +645,11 @@ TEST_CASE("Raster: CTIFF wrapper writes and reads through the CommonLib file", "
         REQUIRE(ptrTif->SetField(TIFFTAG_SAMPLESPERPIXEL, (uint16_t)1));
         REQUIRE(ptrTif->SetField(TIFFTAG_SAMPLEFORMAT, (uint16_t)SAMPLEFORMAT_INT));
         REQUIRE(ptrTif->SetField(TIFFTAG_PHOTOMETRIC, (uint16_t)PHOTOMETRIC_MINISBLACK));
+#ifdef ZIP_SUPPORT
         REQUIRE(ptrTif->SetField(TIFFTAG_COMPRESSION, (uint16_t)COMPRESSION_DEFLATE));
+#else
+        REQUIRE(ptrTif->SetField(TIFFTAG_COMPRESSION, (uint16_t)COMPRESSION_LZW));   // libtiff built without zlib
+#endif
         REQUIRE(ptrTif->SetField(TIFFTAG_TILEWIDTH, (uint32_t)64));
         REQUIRE(ptrTif->SetField(TIFFTAG_TILELENGTH, (uint32_t)64));
         REQUIRE(ptrTif->SetField(TIFFTAG_GDAL_NODATA, std::string("-9999")));

@@ -204,8 +204,8 @@ namespace GraphEngine
                         {
                             if(jointPrefix.empty())
                                 gueryFields.push_back(ptrJointFieldsSet->Get(i));
-                            else
-                                gueryFields.push_back(jointPrefix + "." + ptrJointFieldsSet->Get(i));
+                            else  // the column is named "prefix.field": a joined table may have the same field names as the main one
+                                gueryFields.push_back(jointPrefix + "." + ptrJointFieldsSet->Get(i) + " AS \"" + jointPrefix + "." + ptrJointFieldsSet->Get(i) + "\"");
                         }
                     }
                     /*else

@@ -17,7 +17,8 @@ namespace GraphEngine {
             UndefineSymbolSelectorID,
             SimpleSymbolSelectorID,
             UniqueValueSymbolSelectorID,
-            RangeSymbolSelectorID
+            RangeSymbolSelectorID,
+            ExpressionSymbolSelectorID
         };
 
         enum eFeatureRendererID
@@ -202,7 +203,7 @@ namespace GraphEngine {
         typedef std::shared_ptr<class IRasterRenderer> IRasterRendererPtr;
         typedef std::shared_ptr<class IAnnotationRender> IAnnotationRenderPtr;
         typedef std::shared_ptr<class ILabelRenderer> ILabelRendererPtr;
-
+        typedef std::shared_ptr<class IExpressionSymbolSelector> IExpressionSymbolSelectorPtr;
 
 
 
@@ -637,6 +638,31 @@ namespace GraphEngine {
             virtual bool                   GetUseDefaultSymbol() const = 0;
             virtual void                   SetUseDefaultSymbol(bool bUse) = 0;
         };
+
+
+        class IExpressionSymbolSelector: public ISymbolSelector {
+            public:
+            IExpressionSymbolSelector(){}
+            virtual ~IExpressionSymbolSelector(){}
+
+            virtual const std::string&     GetExpression(int index) const = 0;
+            virtual void                   SetExpression(int index, const std::string& expr) = 0;
+            virtual int                    GetExpressionCount() const = 0;
+            virtual void                   SetExpressionCount(int count) = 0;
+            virtual const std::string&     GetLabel(int index) const = 0;
+            virtual void                   SetLabel(int index, const std::string& val) = 0;
+            virtual const std::string&     GetDescription(int index) const = 0;
+            virtual void                   SetDescription(int index, const std::string& val) = 0;
+            virtual Display::ISymbolPtr    GetSymbol(int index) const = 0;
+            virtual void                   SetSymbol(int index, Display::ISymbolPtr ) = 0;
+            virtual Display::ISymbolPtr    GetDefaultSymbol() const = 0;
+            virtual void                   SetDefaultSymbol(Display::ISymbolPtr ) = 0;
+            virtual const std::string&     GetDefaultLabel() const = 0;
+            virtual void                   SetDefaultLabel(const std::string& val) = 0;
+            virtual bool                   GetUseDefaultSymbol() const = 0;
+            virtual void                   SetUseDefaultSymbol(bool use) = 0;
+        };
+
 
         // Legend (ported from UniGIS GisDev ILegendInfo / ILegendGroup / ILegendClass).
         // An object which draws with symbols (symbol selector, feature layer) describes them as groups of classes,

@@ -28,6 +28,7 @@ set(SOURCE_FILES
         TestMapDrawer.cpp
         TestRasterLayer.cpp
         TestSelectors.cpp
+        TestExpressionSymbolSelector.cpp
         TestSymbologyModel.cpp
         TestLabeling.cpp
         TestGroupLayer.cpp

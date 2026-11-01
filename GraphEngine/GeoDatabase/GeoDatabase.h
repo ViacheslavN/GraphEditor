@@ -131,6 +131,7 @@ namespace GraphEngine
         typedef std::shared_ptr<class ISpatialFilter> ISpatialFilterPtr;
         typedef std::shared_ptr<class IGeometryDefinition> IGeometryDefinitionPtr;
         typedef std::shared_ptr<class IJoin> IJoinPtr;
+        typedef std::shared_ptr<class ISQLRowFilter> ISQLRowFilterPtr;
         typedef std::shared_ptr<class IRasterBlock> IRasterBlockPtr;
         typedef std::shared_ptr<class IRasterDataset> IRasterDatasetPtr;
         typedef std::shared_ptr<class IRasterCursor> IRasterCursorPtr;
@@ -618,6 +619,27 @@ namespace GraphEngine
             virtual void SetFirstField(const std::string& field)  = 0;
             virtual const std::string& GetSecondField() const = 0;
             virtual void SetSecondField(const std::string& field)  = 0;
+        };
+
+        // a SQL condition (the syntax of a WHERE clause) checked on rows in memory, f.e. by a symbol selector:
+        //   POP > 1000 AND NAME LIKE 'A%', t2.TYPE IN ('road', 'rail'), COALESCE(NOTE, '') = ''
+        // A field qualified by a prefix (prefix.name) is a field of a join with that prefix (IJoin::GetTablePrefix),
+        // or of the main table queried with the prefix (IQueryFilter::GetTablePrefix). NULL (unknown) doesn't pass;
+        // an empty expression passes every row. Implemented by CSQLRowFilter (SQLRowFilter/SQLRowFilter.h).
+        class ISQLRowFilter
+        {
+        public:
+            ISQLRowFilter(){}
+            virtual ~ISQLRowFilter(){}
+
+            virtual bool               EvaluateRow(IRowPtr row) const = 0;
+            virtual const std::string& GetSQLExpression() const = 0;
+            virtual void               SetSQLExpression(const std::string& expr) = 0;   // throws on a wrong expression
+
+            // the fields the expression references (to add them to the query): the name and the prefix (empty if not qualified)
+            virtual int                GetFieldCount() const = 0;
+            virtual const std::string& GetFieldName(int index) const = 0;
+            virtual const std::string& GetFieldPrefix(int index) const = 0;
         };
 
 

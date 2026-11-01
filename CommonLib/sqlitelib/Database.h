@@ -112,6 +112,8 @@ namespace CommonLib
 			virtual std::string ColumnName(int32_t col) const = 0;
 			virtual bool ColumnIsNull(int32_t col) const = 0;
 			virtual EDBFieldType GetColumnType(int32_t col) const = 0;
+			// the declared type of the table column the result column comes from ("INTEGER", "TEXT"...), empty for an expression
+			virtual std::string GetColumnDeclType(int32_t col) const = 0;
 			virtual int32_t GetColumnBytes(int32_t col) const = 0;
 			
 			virtual int16_t ReadInt16(int32_t col) const = 0;

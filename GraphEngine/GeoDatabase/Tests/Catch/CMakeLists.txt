@@ -28,6 +28,7 @@ set(SOURCE_FILES
         TestTableCopier.cpp
         TestRTreeBuilder.cpp
         TestRaster.cpp
+        TestSQLRowFilter.cpp
 )
 
 add_executable(${BIN_NAME} ${SOURCE_FILES})

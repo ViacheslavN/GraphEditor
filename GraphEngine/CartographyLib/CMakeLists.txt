@@ -47,6 +47,8 @@ set(SOURCE_FILES
         selectors/UniqueValueSymbolSelector.cpp
         selectors/RangeSymbolSelector.h
         selectors/RangeSymbolSelector.cpp
+        selectors/ExpressionSymbolSelector/ExpressionSymbolSelector.h
+        selectors/ExpressionSymbolSelector/ExpressionSymbolSelector.cpp
         selection/Selection.h
         selection/Selection.cpp
         drawer/TrackCancel.h

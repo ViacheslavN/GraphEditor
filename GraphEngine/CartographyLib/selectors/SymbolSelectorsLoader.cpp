@@ -2,6 +2,7 @@
 #include "SimpleSymbolSelector.h"
 #include "UniqueValueSymbolSelector.h"
 #include "RangeSymbolSelector.h"
+#include "ExpressionSymbolSelector/ExpressionSymbolSelector.h"
 
 namespace GraphEngine {
     namespace Cartography {
@@ -27,6 +28,9 @@ namespace GraphEngine {
                         break;
                     case RangeSymbolSelectorID:
                         ptrSelector = std::make_shared<CRangeSymbolSelector>();
+                        break;
+                    case ExpressionSymbolSelectorID:
+                        ptrSelector = std::make_shared<CExpressionSymbolSelector>();
                         break;
                 }
 
